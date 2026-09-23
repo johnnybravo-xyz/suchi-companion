@@ -29,6 +29,16 @@ page edges, straightens perspective, corrects rotation, improves lighting and
 lets you crop, filter, retake or remove pages before saving. Review the
 result and retake a page when glare or deep curvature still hides content.
 
+The **Scan** header also offers **Files** and **Photos** imports. Files accepts
+PDF, JPEG, PNG and HEIC/HEIF through the system document picker; Photos uses the
+system photo picker for images. Select up to 20 items at a time; each staged
+file is limited to 64 MiB. Selections enter the same protected upload queue as
+camera captures and OS shares. The app saves the originating account before
+opening either picker: switching accounts while the picker is open never sends
+its selected files to the new account. Unsupported items are reported, and
+failed queue files remain available for retry or explicit discard. The app
+does not request broad photo-library or storage access.
+
 The activity strip distinguishes checking a share, secure staging, real file-byte
 transfer and server processing. **View** opens the upload queue without starting
 the camera. Failures and files needing an account remain visible until resolved;
@@ -51,6 +61,12 @@ system. **More → Account details** shows the filing system bound to this devic
 Codes expire after
 five minutes and can be used once. Manual server/password or scoped API-token
 pairing remains available below these actions.
+
+Production, profile and release builds require HTTPS for every server origin,
+including saved credentials restored after an update. Localhost and private
+LAN HTTP work only in debug builds for self-hosted development. A release build
+refuses an older saved HTTP origin before sending its token; existing queued
+files remain protected. Redirects never carry mobile credentials.
 
 Document detail can open the full file or share a copy through the device's
 viewer/share sheet. Sensitive documents ask for confirmation first. Downloads
@@ -98,12 +114,30 @@ Saved searches are available to every signed-in user: save a named query, run it
 again, or remove it on this device. They are stored privately for the current
 server, user, and filing system; another account cannot access them.
 
+**More → Privacy policy** opens the public `https://suchi.page/privacy/` route
+in the browser, separate from the paired server. **Privacy & storage** explains
+device-local behavior in the app. The public route currently needs deployment
+and an owner-designated monitored privacy contact before it can serve as a
+completed store policy. No support link is presented as monitored until the
+owner supplies a real channel.
+
 The exact compatible server revision and API version are recorded in
 [`tool/toolchain.json`](tool/toolchain.json). The mirrored response fixtures in
 `test/fixtures/api/v1` keep the two implementations on the same wire contract.
 
-The app is not approved for public distribution yet. Signed release builds,
-physical-device capture/share cycles, and public privacy and support details
-remain release gates.
+The first release candidate is `1.0.0+1`, not a published store version. Signed
+physical-device capture/share checks, public privacy/support/security contacts,
+a stable HTTPS reviewer server/account, store declarations and asset rights
+remain release gates. The source is AGPL-3.0; public corresponding-source
+delivery and Apple store EULA compatibility need owner/license-counsel approval
+before any binary distribution. The owner has not yet selected a public mobile
+source location; the current Forgejo remote remains private.
+
+For server vulnerabilities, use the private GitHub Security Advisory form named
+in the [server security policy](https://github.com/johnnybravo-xyz/suchi/blob/main/SECURITY.md);
+public issues must not carry
+tokens or document data. That server route is **not** a designated monitored
+mobile-security contact. The owner must name one before releasing the
+companion; do not send mobile reports to a guessed address.
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for pinned tools and project checks.

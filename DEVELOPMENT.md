@@ -47,7 +47,12 @@ integration. SDK-selected test packages and dependency-constrained analyzer,
 archive, and CLI utility versions stay with their owners; do not add overrides
 just to raise transitive version numbers.
 
-Install full Xcode 26.6 from the App Store, select it with `xcode-select`, run first-launch setup, and install the iOS runtimes. Command Line Tools alone cannot build the iOS target.
+Install full Xcode 26.6 or later from the App Store, select it with
+`xcode-select`, run first-launch setup, and install iOS runtimes. Command Line
+Tools alone cannot build the iOS target. The iOS deployment floor is explicitly
+15.0 for the app, share extension and native tests; do not silently inherit a
+higher Xcode-recommended target. Xcode 27.0/iOS 26.5 simulator was exercised,
+but does not establish iOS 15 or physical-device behavior.
 
 ## Verify the host
 
@@ -92,3 +97,61 @@ flutter build apk --debug
 ```
 
 Large-text behavior is covered by each feature's widget tests.
+
+## First release candidate: `1.0.0+1`
+
+This is an **unpublished**, free build. Do not sign, upload, or change store
+metadata as part of ordinary development. The Flutter debug APK and unsigned
+iOS Simulator build are diagnostic artifacts, not store packages. An unsigned
+iOS Simulator app lacks the Keychain application identity: Security framework
+returns `-34018` and the app correctly refuses to read credentials. Do not
+disable secure storage to make that artifact appear paired; provision the app
+and extension properly for an actual signed-device check.
+
+Run `make api-check SERVER_ROOT=../suchi` against the pinned server commit,
+exercise handshake, pairing, upload and search with disposable accounts, then
+`make check`. Focused Dart checks include `test/auth`, `test/share`, `test/scan`,
+`test/shell` and `test/search`; native adapters need `RunnerTests` on iOS and
+connected Android instrumentation tests. Capture a fresh debug and a signed
+release-like build separately. Only debug permits private-LAN/localhost HTTP;
+release must refuse it before any saved token is used. Check merged packaged
+manifests rather than inferring permissions or ATS from source files.
+
+The owner must supply and verify these gates **before** claiming store readiness:
+
+- Register the existing Runner and ShareExtension bundle IDs and shared App
+  Group with the paid Apple team, provision both targets, and exercise a
+  physically signed iOS 15+ build. Test document scanner, Files/iCloud,
+  Photos, cold/warm share extension, large batches, account switching and
+  locked-device/background recovery. An unsigned simulator cannot prove them.
+- Build a newly signed Android App Bundle with the intended upload key, inspect
+  target API 36, merged permissions, 64-bit libraries, 16 KiB ELF/ZIP alignment
+  and bundle-delivered APKs on a 16 KiB emulator. Existing generated release
+  packages predating the HTTPS manifest change are stale; never submit them.
+  Test native camera, file/photo picker fallback and OS shares across API 24–36.
+- Provide a stable HTTPS reviewer server and a non-expiring disposable reviewer
+  account with sample documents and the needed scopes. Give reviewer pairing,
+  Files/Photos, search and sign-out instructions privately in the App Store and
+  Play Console; never commit credentials or use a private real archive.
+- Designate monitored privacy, support and **mobile-specific security** routes,
+  approve the website's `/privacy/` disclosure and deploy it so the public
+  HTTPS URL serves that page rather than the old landing fallback. The paired
+  self-hosted server's operator controls its own logs, integrations, deletion,
+  Trash and backups. The mobile client keeps device-bound tokens, per-account
+  saved searches and protected queue payloads; temporary export copies may
+  leave the app at a user's explicit share action. Verify platform SDK and
+  processor disclosures rather than selecting “no data collected” by default.
+- In the store consoles, approve App Store privacy labels and EULA, Play Data
+  safety, advertising/target-audience/content-rating answers and reviewer
+  access. Do not link download badges until actual approved URLs exist. If a
+  new personal Play developer account needs production access, complete its
+  closed-test requirement with the owner.
+- Audit artwork/trademark rights and dependency notices; obtain
+  owner/license-counsel approval for AGPL-3.0 corresponding-source delivery and
+  Apple's standard-versus-custom EULA before any distribution. Select a public
+  mobile source location and keep its corresponding source available with
+  released binaries. The current private Forgejo remote is not that location.
+
+Document the signed physical-device matrix, reviewer credentials exchange and
+store decisions outside this repository's public source; no simulator or local
+mock makes those gates pass.

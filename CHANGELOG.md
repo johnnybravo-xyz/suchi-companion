@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Prepare free `1.0.0+1` release candidate without payments, purchases,
+  upgrades or saved-search entitlement gates. Public store approval and source
+  publication remain separate owner decisions.
+- Require HTTPS for all non-debug server origins, including restored tokens.
+  Debug-only localhost/private-LAN HTTP remains available for development;
+  redirects never receive credentials, and refused origins leave queued files.
+
 - Rename the mobile app to **Suchi Companion** across Android/iOS app labels,
   Flutter branding and accessibility, permission descriptions and the iOS share
   extension. Suchi remains the server/web product name. Package and bundle IDs,
@@ -20,6 +27,14 @@
 
 ### Added
 
+- Import PDF or image files directly from **Scan → Files** and images from
+  **Scan → Photos** through the system pickers. Native staging, durable
+  per-account claims, receipts, partial rejection and explicit retry reuse the
+  existing protected queue; account changes cannot adopt an open picker batch.
+  Controls stay usable at large text without covering upload recovery.
+- Add a visible **More → Privacy policy** link to the public HTTPS website.
+  That draft needs deployment and a monitored owner privacy contact before
+  any store submission; it is not a claim of store approval.
 - Tap the centre camera button to use the last mode; long-press for a nearby
   Scanner/Photo picker that remembers the choice and starts capture. An up
   chevron, haptic hold feedback and short mode descriptions make the choice
@@ -74,6 +89,8 @@
 
 ### Fixed
 
+- Detect PDF/HEIC signatures without decoding binary PNG/JPEG header bytes as
+  ASCII, so supported picker images can enter the protected queue.
 - QR/link pairing fills in the device name and lets it be edited before
   connecting, so the server shows that name under Mobile app. iOS can
   provide a generic name; unavailable name lookup keeps pairing usable.

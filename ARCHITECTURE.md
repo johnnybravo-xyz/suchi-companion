@@ -16,7 +16,7 @@ and pins one exact compatible server revision.
 | QR and pasted pairing links | `lib/auth/pairing_link.dart`, `pair_screen.dart`; Android/iOS `PairingChannel` adapters |
 | HTTP requests, bounds and wire validation | `lib/api/suchi_client.dart`, `api_models.dart`, `api_error.dart` |
 | Capture and durable queue | `lib/scan/scan_capture_controller.dart`, `scan_queue_store.dart`, `upload_coordinator.dart` |
-| Native share intake | `lib/share/`, Android share adapter, iOS Share Extension and `ios/Shared/` |
+| Native share and explicit Files/Photos intake | `lib/share/`, `ScanQueueScreen`, Android `ShareChannel`, iOS `ShareChannel`/Share Extension and `ios/Shared/` |
 | Archive browsing, filing and retrieval | `lib/documents/`, `lib/inbox/`, `lib/search/`, `lib/detail/` |
 | Archive-bound local saved searches | `lib/search/saved_searches.dart`, owned by the shell |
 | Common presentation | `lib/widgets/suchi_widgets.dart`, `lib/theme/suchi_theme.dart` |
@@ -62,6 +62,11 @@ Pairing checks `/api/handshake` without credentials, then verifies a scoped
 token with `/api/whoami`. The client accepts only supported origins and refuses
 redirects. Password exchange obtains a mobile token; the app stores the token
 in platform secure storage, never a password or a browser credential.
+
+`ServerOrigin` permits localhost/private-LAN HTTP only in debug builds. Profile
+and release pairing, manual entry and stored-credential restoration require
+HTTPS before any token-bearing request. The first unauthenticated handshake
+precedes credential exchange; redirect responses are refused.
 
 The `app.suchi.page/pairing` method channel's `scan` operation returns a QR
 string or null on cancellation. Android uses the Google Play services code
@@ -148,12 +153,21 @@ input must be a regular, non-symlink file in that same resolved directory;
 native manifest recovery retains its root-containment checks. Receipts still
 commit atomically with queue staging before native files are discarded.
 
-Share import is single-flight and starts after the first app frame. Each pass
-captures its account before native lookup, exposes checking/staging phases and
-commits receipts before discard. Empty follow-up checks retain meaningful
-attention notices; dismissal clears presentation only. Account concealment clears
-those notices without rebinding durable staging. Service shutdown awaits import
-completion before closing the queue.
+Share import is single-flight and starts after the first app frame. OS share
+batches use the account captured at lookup. In-app Files/Photos pickers first
+allocate a UUIDv4 in Dart and persist its original account identity in the
+queue database's existing `AppSettings` table; only then can the native picker
+open. `app.suchi.page/share` handles `pick` with `{source: files|photos,
+batch_id: UUIDv4}`, returning the same ID after protected staging or null on
+cancel. Native adapters enforce 20 items and 64 MiB per item, with no broad
+photo/storage permission. On resume/restart, claimed batches stage only for
+their owner, remain hidden from other accounts, and remove their claim only
+after each receipt is durable and native files are discarded. Corrupt claims
+fail closed; unsupported items are reported, never silently counted as filed.
+Each pass exposes checking/staging phases and commits receipts before discard.
+Empty follow-up checks retain meaningful attention notices; dismissal clears
+presentation only. Service shutdown awaits import completion before closing
+the queue.
 
 The upload coordinator uses durable idempotency keys and polls server work to
 distinguish accepted bytes from finished processing. It respects connectivity,
@@ -211,6 +225,12 @@ and its share sheet. Downloads are bounded to 64 MiB and partials are removed on
 failure or cancellation. Sign-out and cold startup remove export copies;
 otherwise the next export prunes copies older than 24 hours. Another app can
 retain a copy after the user shares it; Suchi Companion cannot remove that external copy.
+
+More's privacy-policy action opens the fixed public HTTPS
+`https://suchi.page/privacy/` address, never the paired origin or credentials.
+That page is an owner-controlled release dependency, not a server operator's
+policy; until it is deployed with a monitored contact, store privacy approval
+is blocked.
 
 ## Verification
 

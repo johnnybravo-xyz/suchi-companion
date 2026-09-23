@@ -1,7 +1,7 @@
 name: suchi_mobile
 description: Suchi Companion, a camera-first mobile client for a self-hosted Suchi archive.
 publish_to: none
-version: 0.1.0+1
+version: 1.0.0+1
 
 environment:
   sdk: '>=3.13.2 <4.0.0'

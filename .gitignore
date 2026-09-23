@@ -1,0 +1,50 @@
+# Local planning inputs
+/suchi-mobile-camera-first-plan.md
+/suchi-mobile-ui-mockups.html
+
+# Dart and Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Application source must remain visible even with a global lib/ ignore rule.
+!/lib/
+!/lib/**
+
+# Design tooling
+/node_modules/
+/design/screenshots/
+/test/goldens/
+
+# Android
+/android/.gradle/
+/android/captures/
+/android/local.properties
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+
+# iOS and Xcode
+/ios/Pods/
+/ios/.symlinks/
+/ios/Flutter/ephemeral/
+/ios/Flutter/.last_build_id
+**/DerivedData/
+*.xcuserstate
+
+# Editors and host files
+.DS_Store
+.idea/
+.vscode/
+*.iml
+*.log
+*.swp
+
+# Local secrets
+.env
+.env.*
+!.env.sample

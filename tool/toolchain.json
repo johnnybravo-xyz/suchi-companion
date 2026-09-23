@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "host": {
+    "os": "macOS",
+    "version": "26.5.1",
+    "architecture": "arm64"
+  },
+  "shared_tools": {
+    "git_version": "2.55.0",
+    "bun_version": "1.3.14",
+    "go_version": "1.27.0",
+    "gnu_make_version": "4.4.1"
+  },
+  "flutter": {
+    "version": "3.47.2",
+    "channel": "stable",
+    "installation": "Homebrew cask",
+    "archive_url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.47.2-stable.zip",
+    "archive_sha256": "f456fd6733053d9301828a2e702d6cbec872923126809aa8c48eb0a696d6cc01",
+    "revision": "d3b14c876900e553bc736ca19295fc09e3853e8e",
+    "engine_revision": "a804b261645ef8c13eb3d5c44a5c2fb0340c5539",
+    "dart_version": "3.13.2",
+    "devtools_version": "2.60.0"
+  },
+  "java": {
+    "distribution": "Homebrew OpenJDK",
+    "version": "17.0.20.1",
+    "build": "17.0.20.1+0"
+  },
+  "android": {
+    "command_line_tools_version": "22.0",
+    "platform_tools_version": "37.0.1",
+    "emulator_version": "37.1.11",
+    "platforms": ["35", "36", "37.0"],
+    "build_tools": ["36.0.0"],
+    "cmake": ["3.22.1"],
+    "ndk": ["28.2.13676358"],
+    "system_images": [
+      "android-24;google_apis;arm64-v8a",
+      "android-36;google_apis_playstore;arm64-v8a"
+    ],
+    "build": {
+      "min_sdk": 24,
+      "compile_sdk": 36,
+      "target_sdk": 36,
+      "agp": "9.1.0",
+      "gradle": "9.3.1",
+      "kotlin": "2.4.0"
+    },
+    "licenses": "accepted",
+    "deferred_packages": ["platforms;android-37.0"],
+    "dependency_constraints": {
+      "flutter_secure_storage": "10.3.1",
+      "reason": "11.0.0 requires compile SDK 37; AGP 9.1.0 is tested through API 36.1"
+    }
+  },
+  "ios": {
+    "deployment_target": "15.0",
+    "xcode_version": "26.6",
+    "xcode_build": "17F113",
+    "swift_version": "6.3.3",
+    "swift_driver_version": "1.148.6",
+    "simulator_runtimes": ["iOS 26.5"],
+    "cocoapods": "not installed; Swift Package Manager build path verified"
+  },
+  "server": {
+    "path": "../suchi",
+    "compatible_ref": "4fbd3f97088f506c28accefc49705233de23f506",
+    "api_version": 1
+  }
+}

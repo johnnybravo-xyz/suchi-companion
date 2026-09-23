@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">@color/suchi_paper</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/launch_mark</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/suchi_paper</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+    </style>
+</resources>

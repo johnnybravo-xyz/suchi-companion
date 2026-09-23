@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <provider
+            android:name="app.suchi.page.TestShareProvider"
+            android:authorities="app.suchi.page.test.share"
+            android:exported="true"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>

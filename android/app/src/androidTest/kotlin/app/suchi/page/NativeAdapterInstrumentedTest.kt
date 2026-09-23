@@ -1,0 +1,362 @@
+package app.suchi.page
+
+import android.content.ClipData
+import android.content.Intent
+import android.net.Uri
+import android.os.SystemClock
+import android.provider.MediaStore
+import androidx.core.content.FileProvider
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import org.json.JSONArray
+import org.json.JSONObject
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.File
+import java.util.UUID
+
+@RunWith(AndroidJUnit4::class)
+class NativeAdapterInstrumentedTest {
+    private val instrumentation = InstrumentationRegistry.getInstrumentation()
+    private val targetContext = instrumentation.targetContext
+    private val shareRoot by lazy { File(targetContext.filesDir, "suchi-share-imports") }
+
+    @Before
+    fun clearShareStore() {
+        shareRoot.deleteRecursively()
+    }
+
+    @After
+    fun removeShareStore() {
+        shareRoot.deleteRecursively()
+    }
+
+    @Test
+    fun nativeResultSerializationPreservesOrderAndCancellation() {
+        val completed =
+            ScanResultPayload.completed(
+                pdfPath = "/capture/document.pdf",
+                pageCount = 3,
+                pagePaths = listOf("/capture/page-000.jpg", "/capture/page-001.jpg"),
+            )
+        @Suppress("UNCHECKED_CAST")
+        val pages = completed["pages"] as List<Map<String, String>>
+
+        assertEquals(false, completed["cancelled"])
+        assertEquals("/capture/document.pdf", completed["pdf_path"])
+        assertEquals(3, completed["page_count"])
+        assertEquals(
+            listOf("/capture/page-000.jpg", "/capture/page-001.jpg"),
+            pages.map { it.getValue("path") },
+        )
+
+        val cancelled = ScanResultPayload.cancelled()
+        assertEquals(true, cancelled["cancelled"])
+        assertNull(cancelled["pdf_path"])
+        assertEquals(0, cancelled["page_count"])
+        assertTrue((cancelled["pages"] as List<*>).isEmpty())
+
+        val unavailable =
+            ScanResultPayload.recognitionUnavailable(
+                listOf("/capture/page-000.jpg", "/capture/page-001.jpg"),
+            )
+        assertEquals(
+            listOf("/capture/page-000.jpg", "/capture/page-001.jpg"),
+            unavailable.map { it["path"] },
+        )
+        assertTrue(unavailable.all { it["error_code"] == "recognition_unavailable" })
+        assertTrue(unavailable.all { it["confidence"] == null })
+    }
+
+    @Test
+    fun photoCaptureUsesFullSizeOutputAndOnlyTemporaryUriGrants() {
+        val uri = Uri.parse("content://app.suchi.page.photo-capture/photo/pending.jpg")
+        val intent = PhotoCapture.intent(uri)
+        assertEquals(MediaStore.ACTION_IMAGE_CAPTURE, intent.action)
+        assertEquals(uri, intent.getParcelableExtra<Uri>(MediaStore.EXTRA_OUTPUT))
+        assertEquals(uri, intent.clipData?.getItemAt(0)?.uri)
+        assertEquals(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION, intent.flags)
+        assertFalse(intent.hasExtra("data"))
+        assertThrows(IllegalArgumentException::class.java) {
+            FileProvider.getUriForFile(
+                targetContext,
+                "${targetContext.packageName}.photo-capture",
+                File(targetContext.filesDir, "suchi-scanner-captures/private.jpg"),
+            )
+        }
+    }
+
+    @Test
+    fun documentHandoffGrantsOnlyReadAccessToOneFile() {
+        val uri = Uri.parse("content://app.suchi.page.document-exports/documents/document-test/document-91.pdf")
+        for (share in listOf(true, false)) {
+            val intent = DocumentExport.intent(uri, "application/pdf", share)
+            assertEquals(if (share) Intent.ACTION_SEND else Intent.ACTION_VIEW, intent.action)
+            assertEquals("application/pdf", intent.type)
+            assertEquals(uri, intent.clipData?.getItemAt(0)?.uri)
+            assertEquals(Intent.FLAG_GRANT_READ_URI_PERMISSION, intent.flags)
+            if (share) assertEquals(uri, intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))
+            else assertEquals(uri, intent.data)
+        }
+    }
+
+    @Test
+    fun documentHandoffRejectsFilesOutsideExportDirectory() {
+        val root = File(targetContext.cacheDir, "document-export-test-${UUID.randomUUID()}")
+        try {
+            val operation = File(root, "document-test").apply { mkdirs() }
+            val file = File(operation, "document-91.pdf").apply { writeText("%PDF-test") }
+            assertEquals(file.canonicalFile, DocumentExport.file(root, file.path))
+            val outside = File(root, "private.pdf").apply { writeText("private") }
+            assertThrows(IllegalArgumentException::class.java) {
+                DocumentExport.file(root, outside.path)
+            }
+            val link = File(operation, "linked.pdf")
+            android.system.Os.symlink(outside.path, link.path)
+            assertThrows(IllegalArgumentException::class.java) {
+                DocumentExport.file(root, link.path)
+            }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun sharedFilenameIsBoundedByUtf8Bytes() {
+        val name = sanitizedShareName("文".repeat(200) + ".pdf", "application/pdf", 0)
+
+        assertTrue(name.toByteArray(Charsets.UTF_8).size <= 255)
+        assertTrue(name.endsWith(".pdf"))
+        assertTrue(sanitizedShareName("capture", "image/heic", 1).endsWith(".heic"))
+        assertTrue(sanitizedShareName("capture", "image/heif", 2).endsWith(".heif"))
+        val retainedPath = retainedSharePath(0)
+        assertTrue(retainedPath.toByteArray(Charsets.UTF_8).size <= 255)
+        assertTrue("$retainedPath.part".toByteArray(Charsets.UTF_8).size <= 255)
+    }
+
+    @Test
+    fun nativeByteBudgetRejectsBeforeWritingPastItsLimit() {
+        val budget = BoundedByteCounter(8)
+        budget.add(6)
+
+        try {
+            budget.add(3)
+            throw AssertionError("Expected native intake limit failure")
+        } catch (_: IntakeLimitExceededException) {
+            assertEquals(6L, budget.consumed)
+        }
+    }
+
+    @Test
+    fun shareIntentRetainsGrantedUrisOnceAndClearsLaunchIntent() {
+        val intent = shareIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        assertTrue(intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+        assertEquals(2, intent.clipData?.itemCount)
+        instrumentation.context.startActivity(intent)
+        val activity = waitForActivity()
+        try {
+            val manifestFile = waitForManifest()
+            val manifest = JSONObject(manifestFile.readText())
+            val batchId = manifest.getString("batch_id")
+            val parsedBatchId = UUID.fromString(batchId)
+            val items = manifest.getJSONArray("items")
+
+            assertEquals(4, parsedBatchId.version())
+            assertEquals(parsedBatchId.toString(), batchId)
+            assertEquals(2, items.length())
+            assertEquals("duplicate.pdf", items.getJSONObject(0).getString("name"))
+            assertEquals("duplicate.pdf", items.getJSONObject(1).getString("name"))
+            assertNotEquals(
+                items.getJSONObject(0).getString("path"),
+                items.getJSONObject(1).getString("path"),
+            )
+            assertNotEquals(
+                items.getJSONObject(0).getString("sha256"),
+                items.getJSONObject(1).getString("sha256"),
+            )
+            assertTrue(File(manifestFile.parentFile, items.getJSONObject(0).getString("path")).isFile)
+            assertTrue(File(manifestFile.parentFile, items.getJSONObject(1).getString("path")).isFile)
+            assertLaunchIntentCleared(activity)
+
+            instrumentation.context.startActivity(
+                shareIntent(batchId).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            SystemClock.sleep(300)
+            assertEquals(1, shareRoot.listFiles().orEmpty().filter(File::isDirectory).size)
+            assertLaunchIntentCleared(activity)
+
+            manifest.put("unexpected", true)
+            manifestFile.writeText(manifest.toString())
+            instrumentation.context.startActivity(
+                shareIntent(batchId).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            waitForShareIntent(activity)
+            SystemClock.sleep(500)
+            instrumentation.runOnMainSync {
+                assertEquals(Intent.ACTION_SEND_MULTIPLE, activity.intent.action)
+                assertTrue(activity.intent.hasExtra("app.suchi.page.share.BATCH_ID"))
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finishAndRemoveTask() }
+        }
+    }
+
+    @Test
+    fun pendingTerminalizesInterruptedAndCorruptShareBatches() {
+        instrumentation.context.startActivity(
+            Intent(targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+        val activity = waitForActivity()
+        val interruptedId = UUID.randomUUID().toString()
+        val corruptId = UUID.randomUUID().toString()
+        try {
+            val interrupted = File(shareRoot, interruptedId)
+            assertTrue(interrupted.mkdirs())
+            File(interrupted, "manifest.json").writeText(
+                JSONObject()
+                    .put("version", 1)
+                    .put("batch_id", interruptedId)
+                    .put("created_at", System.currentTimeMillis())
+                    .put("input_count", 3)
+                    .put("rejected_count", 0)
+                    .put("rejected_indices", JSONArray())
+                    .put("complete", false)
+                    .put("items", JSONArray())
+                    .toString(),
+            )
+            val corrupt = File(shareRoot, corruptId)
+            assertTrue(corrupt.mkdirs())
+            File(corrupt, "manifest.json").writeText("{not-json")
+
+            val intake = ShareChannel(activity)
+            val batches = try {
+                intake.loadPendingBatches()
+            } finally {
+                intake.close()
+            }
+
+            assertEquals(setOf(interruptedId, corruptId), batches.map { it["batch_id"] }.toSet())
+            assertTrue(batches.all { it["complete"] == true })
+            assertEquals(
+                3,
+                batches.single { it["batch_id"] == interruptedId }["rejected_count"],
+            )
+            assertEquals(
+                1,
+                batches.single { it["batch_id"] == corruptId }["rejected_count"],
+            )
+            assertTrue(batches.all { (it["items"] as List<*>).isEmpty() })
+        } finally {
+            instrumentation.runOnMainSync { activity.finishAndRemoveTask() }
+        }
+    }
+
+    @Test
+    fun invalidSharedItemsAreRejectedWithoutLosingValidItems() {
+        val intent = shareIntent(segments = listOf("first", "empty", "spoof"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        instrumentation.context.startActivity(intent)
+        val activity = waitForActivity()
+        try {
+            val manifest = JSONObject(waitForManifest().readText())
+
+            assertEquals(1, manifest.getJSONArray("items").length())
+            assertEquals(2, manifest.getInt("rejected_count"))
+            assertTrue(manifest.getBoolean("complete"))
+            assertLaunchIntentCleared(activity)
+        } finally {
+            instrumentation.runOnMainSync { activity.finishAndRemoveTask() }
+        }
+    }
+
+    private fun shareIntent(
+        batchId: String? = null,
+        segments: List<String> = listOf("first", "second"),
+    ): Intent {
+        val uris = segments.map { Uri.parse("content://app.suchi.page.test.share/$it") }
+        val clip = ClipData.newUri(instrumentation.context.contentResolver, "first", uris.first())
+        uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
+        return Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            setClass(targetContext, MainActivity::class.java)
+            type = "application/pdf"
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+            clipData = clip
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (batchId != null) putExtra("app.suchi.page.share.BATCH_ID", batchId)
+        }
+    }
+
+    private fun waitForManifest(): File {
+        var result: File? = null
+        waitUntil {
+            result =
+                shareRoot.listFiles().orEmpty()
+                    .filter(File::isDirectory)
+                    .singleOrNull()
+                    ?.resolve("manifest.json")
+                    ?.takeIf(File::isFile)
+            result?.let { JSONObject(it.readText()).optBoolean("complete") } == true
+        }
+        return requireNotNull(result)
+    }
+
+    private fun waitForActivity(): MainActivity {
+        var result: MainActivity? = null
+        waitUntil {
+            instrumentation.runOnMainSync {
+                result =
+                    ActivityLifecycleMonitorRegistry.getInstance()
+                        .getActivitiesInStage(Stage.RESUMED)
+                        .filterIsInstance<MainActivity>()
+                        .firstOrNull()
+            }
+            result != null
+        }
+        return requireNotNull(result)
+    }
+
+    private fun waitForShareIntent(activity: MainActivity) {
+        waitUntil {
+            var received = false
+            instrumentation.runOnMainSync {
+                received =
+                    activity.intent.action == Intent.ACTION_SEND_MULTIPLE &&
+                        activity.intent.hasExtra(Intent.EXTRA_STREAM)
+            }
+            received
+        }
+    }
+
+    private fun assertLaunchIntentCleared(activity: MainActivity) {
+        waitUntil {
+            var cleared = false
+            instrumentation.runOnMainSync {
+                cleared = activity.intent.action == null && !activity.intent.hasExtra(Intent.EXTRA_STREAM)
+            }
+            cleared
+        }
+        instrumentation.runOnMainSync {
+            assertNull(activity.intent.action)
+            assertFalse(activity.intent.hasExtra("app.suchi.page.share.BATCH_ID"))
+        }
+    }
+
+    private fun waitUntil(condition: () -> Boolean) {
+        val deadline = SystemClock.uptimeMillis() + 10_000
+        while (SystemClock.uptimeMillis() < deadline) {
+            if (condition()) return
+            SystemClock.sleep(40)
+        }
+        throw AssertionError("Timed out waiting for native adapter state")
+    }
+}

@@ -1,0 +1,109 @@
+# Suchi Companion
+
+Suchi Companion is the pre-release Flutter client for a user-owned Suchi document archive. It includes
+native document capture and sharing, an offline-safe upload queue, Inbox filing,
+document browsing, search, and privacy-gated previews.
+
+The Android/iOS app and share surfaces use **Suchi Companion**. The repository
+and Dart package remain `suchi-mobile` and `suchi_mobile`; bundle IDs, app groups,
+pairing links and private storage identities are unchanged.
+
+The first tap on the centre camera button opens Scanner directly. Later taps
+use your last-picked mode. The up chevron beside **Scan / Photo** signals the
+mode picker: touch and hold the icon or label for a light haptic cue and nearby
+choices. Release, then tap **Scanner** (clean up pages) or **Photo** (keep the
+full frame) to save the mode and open the camera. Releasing the hold alone
+does not start capture. Tap outside to cancel. **More → Camera mode** changes
+the same device preference in a bottom sheet, like Appearance and Document view,
+without opening the camera. Scanner detects and cleans up pages; Photo keeps the
+full frame as a one-page PDF without document cropping or cleanup. Both use the
+same protected queue, OCR and retry flow. Queue payloads, OCR text and the SQLite
+state that identifies their archive stay together in the device-protected,
+backup-excluded queue directory. Unresolved captures must be retried or discarded
+before starting another capture. An older pre-release queue database is detected
+before recovery starts; the app leaves its database and queue files untouched and
+asks for a reset or reinstall.
+
+Scanner mode opens the platform document scanner. It detects
+page edges, straightens perspective, corrects rotation, improves lighting and
+lets you crop, filter, retake or remove pages before saving. Review the
+result and retake a page when glare or deep curvature still hides content.
+
+The activity strip distinguishes checking a share, secure staging, real file-byte
+transfer and server processing. **View** opens the upload queue without starting
+the camera. Failures and files needing an account remain visible until resolved;
+an empty background share check does not dismiss them. Uploads resume while
+Suchi Companion is open and the archive is reachable; closing the app does not
+guarantee progress.
+
+Tap an accepted upload in **Scan → Uploads** to open its document. Split uploads
+show their remaining child documents by title, never the superseded parent.
+Retry, account assignment and discard remain separate actions.
+
+Pair from the Suchi web app's Settings: generate a mobile pairing code, then
+choose **Scan QR code** in the mobile app. **Paste pairing link** also works
+when the camera is unavailable; you can paste or enter the copied link.
+Review the displayed server address and **Device name** before confirming.
+The app fills in the platform-provided name; edit it to recognize this phone
+under **Mobile app** in the web settings. iOS may return only “iPhone” or “iPad.”
+Re-pair an existing connection to update its recorded name or change its filing
+system. **More → Account details** shows the filing system bound to this device.
+Codes expire after
+five minutes and can be used once. Manual server/password or scoped API-token
+pairing remains available below these actions.
+
+Document detail can open the full file or share a copy through the device's
+viewer/share sheet. Sensitive documents ask for confirmation first. Downloads
+are limited to 64 MiB; use the web app for larger files. Temporary copies are
+removed when signing out or on the next cold launch, and older copies are
+pruned during later exports.
+
+The detail workspace keeps the first-page preview and file actions together.
+**Document information** expands file type, size, sources and tags. Sensitive
+previews still require **Reveal preview**; **Hide** removes them immediately.
+If a refresh fails, the last loaded information stays labelled with an error
+and Retry rather than appearing current.
+
+Choose **Read text** in document detail to read or select recognized
+text without exporting a file. Sensitive text requires confirmation. The reader
+clears when you leave or background the app; copied text can remain in the system
+clipboard. Empty text can mean processing is unfinished or no readable text was
+found. Long text is paged, and API responses are limited to 8 MiB including JSON;
+use the original document or web app if a response exceeds that limit.
+
+Open **More → Trash** to restore recently deleted documents. The server checks
+the 30-day recovery window; restoration refreshes the archive and Inbox.
+
+Use **Edit** in document detail to update its title, sensitivity or language
+override. The Documents sort control keeps the current filing category.
+Viewing a document and returning keeps your Documents or Inbox scroll position
+and loaded pages, including the Documents category and sort order. Successful
+edits, filing changes, Trash and restoration refresh the archive and Inbox.
+
+Choose **More → Appearance** for System, Light or Dark. This device preference
+survives sign-out; both themes retain Suchi's paper, ink and manila palette.
+More groups appearance and capture preferences separately from Trash, account
+details and privacy information. Compact rows show preference values inline;
+larger text stacks values and keeps the menu scrollable. Explanations stay in
+the detail sheets rather than repeating beneath every menu item.
+The **Suchi Companion** header keeps the brand mark, with
+“Capture on your phone. Keep it in your archive.” in muted text beneath the title.
+
+**More → Document view** selects Standard (the original cards), Compact, or
+Detailed for Documents and Inbox. It changes presentation without refetching or
+resetting your browsing position. Detailed uses existing summary metadata;
+sensitive previews remain hidden.
+
+Saved searches are available to every signed-in user: save a named query, run it
+again, or remove it on this device. They are stored privately for the current
+server, user, and filing system; another account cannot access them.
+
+The exact compatible server revision and API version are recorded in
+[`tool/toolchain.json`](tool/toolchain.json). The mirrored response fixtures in
+`test/fixtures/api/v1` keep the two implementations on the same wire contract.
+
+The app is not approved for public distribution yet. Signed release builds,
+physical-device capture/share cycles, and public privacy and support details
+remain release gates.
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for pinned tools and project checks.

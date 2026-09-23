@@ -9,12 +9,20 @@ plugins {
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
-val releaseRequested = gradle.startParameter.taskNames.any {
-    it.contains("Release", ignoreCase = true)
-}
-
-require(!releaseRequested || keystorePropertiesFile.isFile) {
-    "Release signing requires android/key.properties"
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.project == project && it.name.contains("Release", ignoreCase = true) }) {
+        require(keystorePropertiesFile.isFile) {
+            "Release signing requires android/key.properties"
+        }
+        for (property in listOf("keyAlias", "keyPassword", "storeFile", "storePassword")) {
+            require(!keystoreProperties.getProperty(property).isNullOrBlank()) {
+                "Release signing requires $property in android/key.properties"
+            }
+        }
+        require(file(keystoreProperties.getProperty("storeFile")).isFile) {
+            "Release signing requires an existing storeFile"
+        }
+    }
 }
 
 if (keystorePropertiesFile.isFile) {

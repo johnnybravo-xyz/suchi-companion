@@ -59,6 +59,33 @@ class _ScanQueueScreenState extends State<ScanQueueScreen> {
     super.dispose();
   }
 
+  Widget _importAction({
+    required String source,
+    required String label,
+    required IconData icon,
+    required bool compact,
+  }) {
+    final onPressed =
+        widget.session.identity != null && !widget.shareImport.isPicking
+        ? () => widget.shareImport.pick(source)
+        : null;
+    final style = TextButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      minimumSize: const Size(48, 48),
+    );
+    return Tooltip(
+      message: 'Import from $label',
+      child: compact
+          ? TextButton(onPressed: onPressed, style: style, child: Text(label))
+          : TextButton.icon(
+              onPressed: onPressed,
+              style: style,
+              icon: Icon(icon, size: 20),
+              label: Text(label),
+            ),
+    );
+  }
+
   Future<void> _openUpload(ScanUpload upload) async {
     final session = widget.session;
     final client = session.client;
@@ -171,6 +198,8 @@ class _ScanQueueScreenState extends State<ScanQueueScreen> {
                 snapshot.data ?? const [],
                 identity,
               );
+              final compactImportActions =
+                  MediaQuery.textScalerOf(context).scale(1) >= 1.6;
               return CustomScrollView(
                 slivers: [
                   SliverToBoxAdapter(
@@ -181,47 +210,31 @@ class _ScanQueueScreenState extends State<ScanQueueScreen> {
                           Expanded(
                             child: Text(
                               'Scan',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.headlineMedium,
                             ),
                           ),
-                          Tooltip(
-                            message: 'Import from Files',
-                            child: TextButton.icon(
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                ),
-                                minimumSize: const Size(48, 48),
+                          Flexible(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              reverse: true,
+                              child: Row(
+                                children: [
+                                  _importAction(
+                                    source: 'files',
+                                    label: 'Files',
+                                    icon: Icons.folder_open_outlined,
+                                    compact: compactImportActions,
+                                  ),
+                                  _importAction(
+                                    source: 'photos',
+                                    label: 'Photos',
+                                    icon: Icons.photo_library_outlined,
+                                    compact: compactImportActions,
+                                  ),
+                                ],
                               ),
-                              onPressed:
-                                  identity != null && !shareImport.isPicking
-                                  ? () => shareImport.pick('files')
-                                  : null,
-                              icon: const Icon(
-                                Icons.folder_open_outlined,
-                                size: 20,
-                              ),
-                              label: const Text('Files'),
-                            ),
-                          ),
-                          Tooltip(
-                            message: 'Import from Photos',
-                            child: TextButton.icon(
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                ),
-                                minimumSize: const Size(48, 48),
-                              ),
-                              onPressed:
-                                  identity != null && !shareImport.isPicking
-                                  ? () => shareImport.pick('photos')
-                                  : null,
-                              icon: const Icon(
-                                Icons.photo_library_outlined,
-                                size: 20,
-                              ),
-                              label: const Text('Photos'),
                             ),
                           ),
                         ],

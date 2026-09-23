@@ -26,6 +26,12 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Keep all keys in sync with Info.plist; only Debug allows local HTTP. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Suchi Companion scans documents, takes photos for your archive, and reads pairing QR codes.</string>
 	<key>NSLocalNetworkUsageDescription</key>

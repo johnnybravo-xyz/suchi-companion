@@ -38,6 +38,7 @@ void main() {
     });
     final controller = SessionController(
       vault: vault,
+      allowDevelopmentHttp: false,
       clientFactory: (origin, token) =>
           SuchiClient(origin: origin, token: token, httpClient: transport),
     );
@@ -217,6 +218,50 @@ void main() {
     expect(vault.clearCount, 1);
     expect(controller.client, isNull);
   });
+
+  test(
+    'restored HTTP token is retained for HTTPS repair without any request',
+    () async {
+      final stored = StoredCredentials(
+        origin: Uri.parse('http://192.168.4.2:8000'),
+        token: _token,
+      );
+      final vault = _MemoryVault(initial: stored);
+      var clientCreations = 0;
+      final controller = SessionController(
+        vault: vault,
+        allowDevelopmentHttp: false,
+        clientFactory: (origin, token) {
+          clientCreations++;
+          throw StateError('No HTTP client may be created.');
+        },
+      );
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+      expect(controller.state, SessionState.signedOut);
+      expect(controller.errorMessage, contains('HTTPS'));
+      expect(controller.canRetryStoredCredentials, isTrue);
+      expect(vault.initial, same(stored));
+      expect(vault.clearCount, 0);
+      expect(clientCreations, 0);
+
+      await controller.retryStoredCredentials();
+      expect(controller.errorMessage, contains('HTTPS'));
+      expect(clientCreations, 0);
+      expect(
+        await controller.verifyServerAddress(stored.origin.toString()),
+        isFalse,
+      );
+      await controller.pairWithToken(
+        serverAddress: stored.origin.toString(),
+        token: _token,
+      );
+      expect(controller.errorMessage, contains('HTTPS'));
+      expect(clientCreations, 0);
+      expect(vault.clearCount, 0);
+    },
+  );
 
   test(
     'sign out pauses work, attempts logout, and clears local state',

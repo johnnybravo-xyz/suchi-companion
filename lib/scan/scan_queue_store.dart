@@ -1212,7 +1212,7 @@ final class _StagingManifest {
 
 bool _validQueueOrigin(String value) {
   try {
-    return ServerOrigin.parse(value).toString() == value;
+    return ServerOrigin.canonicalizeStoredIdentity(value).toString() == value;
   } on ServerOriginException {
     return false;
   }

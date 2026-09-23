@@ -17,6 +17,7 @@ final class SessionController extends ChangeNotifier {
     required this.vault,
     SuchiClientFactory? clientFactory,
     this.onPauseUploads,
+    this.allowDevelopmentHttp = true,
     this.onClearMemoryCaches,
     this.onResumeUploads,
   }) : _clientFactory =
@@ -27,6 +28,8 @@ final class SessionController extends ChangeNotifier {
   final Future<void> Function()? onPauseUploads;
   final VoidCallback? onClearMemoryCaches;
   final Future<void> Function()? onResumeUploads;
+  // The production policy always rejects HTTP outside debug, even if true.
+  final bool allowDevelopmentHttp;
   final SuchiClientFactory _clientFactory;
 
   SessionState _state = SessionState.loading;
@@ -89,7 +92,10 @@ final class SessionController extends ChangeNotifier {
   Future<bool> verifyServerAddress(String serverAddress) async {
     final Uri origin;
     try {
-      origin = ServerOrigin.parse(serverAddress);
+      origin = ServerOrigin.parse(
+        serverAddress,
+        allowDevelopmentHttp: allowDevelopmentHttp,
+      );
     } on ServerOriginException catch (error) {
       _preparedOrigin = null;
       _setState(SessionState.signedOut, error: error.message);
@@ -257,7 +263,10 @@ final class SessionController extends ChangeNotifier {
   }) async {
     final Uri origin;
     try {
-      origin = ServerOrigin.parse(serverAddress);
+      origin = ServerOrigin.parse(
+        serverAddress,
+        allowDevelopmentHttp: allowDevelopmentHttp,
+      );
     } on ServerOriginException catch (error) {
       _setState(SessionState.signedOut, error: error.message);
       return;
@@ -312,9 +321,21 @@ final class SessionController extends ChangeNotifier {
   }) async {
     _setState(SessionState.verifying);
     SuchiClient? client;
+    final Uri origin;
+    try {
+      origin = ServerOrigin.parse(
+        credentials.origin.toString(),
+        allowDevelopmentHttp: allowDevelopmentHttp,
+      );
+    } on ServerOriginException catch (error) {
+      if (generation == _generation) {
+        _setState(SessionState.signedOut, error: error.message);
+      }
+      return;
+    }
     try {
       if (!handshakeComplete) {
-        final probe = _clientFactory(credentials.origin, null);
+        final probe = _clientFactory(origin, null);
         try {
           await probe.handshake();
         } finally {
@@ -322,7 +343,7 @@ final class SessionController extends ChangeNotifier {
         }
       }
       if (generation != _generation) return;
-      client = _clientFactory(credentials.origin, credentials.token);
+      client = _clientFactory(origin, credentials.token);
       final user = await client.whoAmI();
       if (!user.hasMobileScopes) {
         throw const ApiException(
@@ -337,7 +358,7 @@ final class SessionController extends ChangeNotifier {
       _client = client;
       client = null;
       _user = user;
-      _origin = credentials.origin;
+      _origin = origin;
       _retryCredentials = credentials;
       _preparedOrigin = null;
       _setState(SessionState.signedIn);

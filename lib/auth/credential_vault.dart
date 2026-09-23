@@ -47,7 +47,7 @@ final class SecureCredentialVault implements CredentialVault {
       if (origin is! String || token is! String || token.isEmpty) {
         throw const FormatException();
       }
-      final uri = ServerOrigin.parse(origin);
+      final uri = ServerOrigin.canonicalizeStoredIdentity(origin);
       return StoredCredentials(origin: uri, token: token);
     } on FormatException catch (_) {
       await clear();

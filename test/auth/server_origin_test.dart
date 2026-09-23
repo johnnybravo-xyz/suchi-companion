@@ -25,6 +25,34 @@ void main() {
       }
     });
 
+    test(
+      'release policy refuses local HTTP but preserves stored identities',
+      () {
+        const local = 'http://192.168.4.2:8000';
+        expect(
+          () => ServerOrigin.parse(local, allowDevelopmentHttp: false),
+          throwsA(
+            isA<ServerOriginException>().having(
+              (error) => error.message,
+              'message',
+              contains('HTTPS'),
+            ),
+          ),
+        );
+        expect(
+          ServerOrigin.canonicalizeStoredIdentity(local).toString(),
+          local,
+        );
+        expect(
+          ServerOrigin.parse(
+            'https://suchi.example.com',
+            allowDevelopmentHttp: false,
+          ).scheme,
+          'https',
+        );
+      },
+    );
+
     test('rejects public, DNS, link-local, and lookalike HTTP origins', () {
       const rejected = [
         'http://suchi.example.com',

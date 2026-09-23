@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 final class ServerOriginException implements Exception {
   const ServerOriginException(this.message);
 
@@ -10,7 +12,15 @@ final class ServerOriginException implements Exception {
 }
 
 abstract final class ServerOrigin {
-  static Uri parse(String input) {
+  static Uri parse(String input, {bool allowDevelopmentHttp = true}) =>
+      _parse(input, allowLocalHttp: kDebugMode && allowDevelopmentHttp);
+
+  // Parses historical stored identities without authorizing a connection.
+  // Every network entry point must use parse() before constructing a client.
+  static Uri canonicalizeStoredIdentity(String input) =>
+      _parse(input, allowLocalHttp: true);
+
+  static Uri _parse(String input, {required bool allowLocalHttp}) {
     final candidate = input.trim();
     if (candidate.isEmpty) {
       throw const ServerOriginException('Enter your Suchi server address.');
@@ -56,6 +66,11 @@ abstract final class ServerOrigin {
       throw const ServerOriginException('Server port must be valid.');
     }
 
+    if (uri.scheme == 'http' && !allowLocalHttp) {
+      throw const ServerOriginException(
+        'This server uses HTTP. Connect over HTTPS to use Suchi Companion in this build.',
+      );
+    }
     if (uri.scheme == 'http' && !_isApprovedLocalHost(uri.host)) {
       throw const ServerOriginException(
         'HTTP is allowed only for localhost or a private literal IP address.',

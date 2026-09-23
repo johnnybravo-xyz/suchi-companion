@@ -834,7 +834,12 @@ Future<void> _scrollTo(WidgetTester tester, Type screen, String title) async {
     500,
     scrollable: find.descendant(
       of: find.byType(screen),
-      matching: find.byType(Scrollable),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable &&
+            (widget.axisDirection == AxisDirection.down ||
+                widget.axisDirection == AxisDirection.up),
+      ),
     ),
     maxScrolls: 60,
   );

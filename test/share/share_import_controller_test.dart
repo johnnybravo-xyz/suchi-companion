@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -477,6 +478,294 @@ void main() {
       expect(controller.errorMessage, isNotNull);
     },
   );
+  test(
+    'Files and Photos stage into the same account queue with durable receipts',
+    () async {
+      final owner = AccountIdentity(origin: _origin, userId: 7, systemId: 1);
+      final png = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      );
+      final file = await _item(temporary, 0, 'file.pdf', _pdf);
+      final photo = await _item(
+        temporary,
+        0,
+        'photo.png',
+        png,
+        declaredMime: 'image/png',
+      );
+      final intake = _FakeIntake([]);
+      intake.onPick = (source, id) async {
+        expect(await queue.shareBatchClaim(id), owner);
+        intake.batches.add(_batch([source == 'files' ? file : photo], id: id));
+        return id;
+      };
+      intake.onDiscard = (id) async {
+        expect(await queue.shareBatchClaim(id), owner);
+        expect(await database.shareReceipt(id, 0), isNotNull);
+        expect(
+          (await database.allUploads()).where((row) => row.shareBatchId == id),
+          hasLength(1),
+        );
+      };
+      final controller = ShareImportController(
+        intake: intake,
+        queue: queue,
+        currentIdentity: () => owner,
+      );
+      addTearDown(controller.close);
+      addTearDown(intake.controller.close);
+      await controller.pick('files');
+      await controller.pick('photos');
+      expect(intake.picks.map((entry) => entry.$1), ['files', 'photos']);
+      for (final entry in intake.picks) {
+        expect(await queue.shareBatchClaim(entry.$2), isNull);
+      }
+      final uploads = await database.allUploads();
+      expect(uploads.map((upload) => upload.mimeType).toSet(), {
+        'application/pdf',
+        'image/png',
+      });
+      expect(uploads.every((upload) => upload.identityUserId == 7), isTrue);
+      expect(uploads.every((upload) => upload.source == 'share'), isTrue);
+      expect(intake.discarded, intake.picks.map((entry) => entry.$2).toList());
+    },
+  );
+
+  test('cancel clears only its claim and picker is single-flight', () async {
+    final owner = AccountIdentity(origin: _origin, userId: 7, systemId: 1);
+    final gate = Completer<String?>();
+    final intake = _FakeIntake([]);
+    intake.onPick = (_, id) async {
+      expect(await queue.shareBatchClaim(id), owner);
+      return gate.future;
+    };
+    final controller = ShareImportController(
+      intake: intake,
+      queue: queue,
+      currentIdentity: () => owner,
+    );
+    addTearDown(controller.close);
+    addTearDown(intake.controller.close);
+    final first = controller.pick('files');
+    expect(identical(first, controller.pick('photos')), isTrue);
+    expect(controller.isPicking, isTrue);
+    while (intake.picks.isEmpty) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    final id = intake.picks.single.$2;
+    gate.complete(null);
+    await first;
+    expect(controller.isPicking, isFalse);
+    expect(await queue.shareBatchClaim(id), isNull);
+    expect(intake.picks, hasLength(1));
+    expect(await database.allUploads(), isEmpty);
+    expect(controller.lastSummary, isNull);
+  });
+
+  test(
+    'claimed batch waits across account switch and controller restart',
+    () async {
+      final owner = AccountIdentity(origin: _origin, userId: 7, systemId: 1);
+      final other = AccountIdentity(origin: _origin, userId: 8, systemId: 1);
+      final file = await _item(temporary, 0, 'owned.pdf', _pdf);
+      final intake = _FakeIntake([]);
+      final gate = Completer<String?>();
+      AccountIdentity? identity = owner;
+      intake.onPick = (_, id) async {
+        expect(await queue.shareBatchClaim(id), owner);
+        intake.batches.add(_batch([file], rejected: 1, id: id));
+        return gate.future;
+      };
+      final first = ShareImportController(
+        intake: intake,
+        queue: queue,
+        currentIdentity: () => identity,
+      );
+      addTearDown(intake.controller.close);
+      final pick = first.pick('files');
+      while (intake.picks.isEmpty) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      final id = intake.picks.single.$2;
+      identity = other;
+      first.concealForIdentityTransition();
+      gate.complete(id);
+      await pick;
+      expect(await queue.shareBatchClaim(id), owner);
+      expect(await database.allUploads(), isEmpty);
+      expect(await database.shareReceipt(id, 0), isNull);
+      expect(intake.discarded, isEmpty);
+      expect(first.lastSummary, isNull);
+      await first.close();
+
+      final restarted = ShareImportController(
+        intake: intake,
+        queue: queue,
+        currentIdentity: () => identity,
+      );
+      addTearDown(restarted.close);
+      final foreign = await restarted.processPending();
+      expect(foreign.staged, 0);
+      expect(foreign.rejected, 0);
+      expect(restarted.lastSummary, isNull);
+      identity = owner;
+      final imported = await restarted.processPending();
+      expect(imported.staged, 1);
+      expect(imported.rejected, 1);
+      final upload = (await database.allUploads()).single;
+      expect(queueUploadBelongsToIdentity(upload, owner), isTrue);
+      expect(visibleQueueUploads([upload], other), isEmpty);
+      expect(await queue.shareBatchClaim(id), isNull);
+      expect(intake.discarded, [id]);
+    },
+  );
+
+  test('foreign claimed batches do not block ordinary OS shares', () async {
+    final owner = AccountIdentity(origin: _origin, userId: 7, systemId: 1);
+    final other = AccountIdentity(origin: _origin, userId: 8, systemId: 1);
+    const osId = '44444444-4444-4444-8444-444444444444';
+    final owned = await _item(temporary, 0, 'owned.pdf', _pdf);
+    final shared = await _item(temporary, 1, 'shared.pdf', _pdf);
+    await queue.claimShareBatch(_batchId, owner);
+    final intake = _FakeIntake([
+      _batch([owned], rejected: 2),
+      _batch([shared], id: osId),
+    ]);
+    final controller = ShareImportController(
+      intake: intake,
+      queue: queue,
+      currentIdentity: () => other,
+    );
+    addTearDown(controller.close);
+    addTearDown(intake.controller.close);
+    final result = await controller.processPending();
+    expect(result.staged, 1);
+    expect(result.rejected, 0);
+    expect(controller.lastSummary?.rejected, 0);
+    expect((await database.allUploads()).single.identityUserId, other.userId);
+    expect(await database.shareReceipt(_batchId, 0), isNull);
+    expect(await queue.shareBatchClaim(_batchId), owner);
+    expect(intake.discarded, [osId]);
+  });
+
+  test(
+    'over-limit claimed picker batch keeps its original ownership',
+    () async {
+      final owner = AccountIdentity(origin: _origin, userId: 7, systemId: 1);
+      final item = await _item(temporary, 0, 'owned.pdf', _pdf);
+      await queue.claimShareBatch(_batchId, owner);
+      final intake = _FakeIntake([
+        _batch([item], rejected: 20),
+      ]);
+      final controller = ShareImportController(
+        intake: intake,
+        queue: queue,
+        currentIdentity: () => owner,
+      );
+      addTearDown(controller.close);
+      addTearDown(intake.controller.close);
+
+      final summary = await controller.processPending();
+      expect(summary.staged, 0);
+      expect(summary.rejected, 0);
+      expect(controller.errorMessage, isNotNull);
+      expect(await database.allUploads(), isEmpty);
+      expect(await queue.shareBatchClaim(_batchId), owner);
+      expect(intake.discarded, isEmpty);
+    },
+  );
+
+  test(
+    'native picker errors retain the owner claim without disclosing paths',
+    () async {
+      final owner = AccountIdentity(origin: _origin, userId: 7, systemId: 1);
+      final intake = _FakeIntake([]);
+      intake.onPick = (_, _) async {
+        throw StateError('Cannot open /private/native/secret.pdf');
+      };
+      final controller = ShareImportController(
+        intake: intake,
+        queue: queue,
+        currentIdentity: () => owner,
+      );
+      addTearDown(controller.close);
+      addTearDown(intake.controller.close);
+      await controller.pick('photos');
+      expect(await queue.shareBatchClaim(intake.picks.single.$2), owner);
+      expect(controller.errorMessage, isNot(contains('/private/')));
+      expect(controller.errorMessage, isNot(contains('secret.pdf')));
+      expect(intake.discarded, isEmpty);
+    },
+  );
+
+  test(
+    'partial and oversize picker rejections retain claim until discard',
+    () async {
+      final owner = AccountIdentity(origin: _origin, userId: 7, systemId: 1);
+      final good = await _item(temporary, 0, 'good.pdf', _pdf);
+      final oversized = await _item(
+        temporary,
+        1,
+        'oversized.pdf',
+        _pdf,
+        declaredSize: maximumDocumentBytes + 1,
+      );
+      final intake = _FakeIntake([], discardFailures: 1);
+      intake.onPick = (_, id) async {
+        intake.batches.add(_batch([good, oversized], rejected: 1, id: id));
+        return id;
+      };
+      intake.onDiscard = (id) async {
+        expect(await queue.shareBatchClaim(id), owner);
+        expect(await database.shareReceipt(id, 0), isNotNull);
+        expect(
+          (await database.shareReceipt(id, 1))?.errorCode,
+          'payload_too_large',
+        );
+      };
+      final controller = ShareImportController(
+        intake: intake,
+        queue: queue,
+        currentIdentity: () => owner,
+      );
+      addTearDown(controller.close);
+      addTearDown(intake.controller.close);
+      await controller.pick('files');
+      final id = intake.picks.single.$2;
+      expect(controller.lastSummary?.rejected, 2);
+      expect(controller.errorMessage, isNotNull);
+      expect(await queue.shareBatchClaim(id), owner);
+      expect(await database.allUploads(), hasLength(1));
+      expect(intake.discarded, isEmpty);
+      final retried = await controller.processPending();
+      expect(retried.alreadyStaged, 2);
+      expect(await database.allUploads(), hasLength(1));
+      expect(await queue.shareBatchClaim(id), isNull);
+      expect(intake.discarded, [id]);
+    },
+  );
+
+  test('corrupt claim cannot stage or discard the pending batch', () async {
+    final item = await _item(temporary, 0, 'protected.pdf', _pdf);
+    await database.setSetting('share_picker_claim:$_batchId', '{"user_id":7}');
+    final intake = _FakeIntake([
+      _batch([item], rejected: 1),
+    ]);
+    final controller = ShareImportController(
+      intake: intake,
+      queue: queue,
+      currentIdentity: () =>
+          AccountIdentity(origin: _origin, userId: 8, systemId: 1),
+    );
+    addTearDown(controller.close);
+    addTearDown(intake.controller.close);
+    final summary = await controller.processPending();
+    expect(summary.staged, 0);
+    expect(summary.rejected, 0);
+    expect(await database.allUploads(), isEmpty);
+    expect(intake.discarded, isEmpty);
+    expect(controller.errorMessage, isNotNull);
+  });
 }
 
 SharedBatch _batch(
@@ -521,10 +810,18 @@ final class _FakeIntake implements ShareIntake {
   Future<List<SharedBatch>> Function()? onPending;
   Future<void> Function(String batchId)? onDiscard;
   final List<String> discarded = [];
+  Future<String?> Function(String source, String batchId)? onPick;
+  final List<(String, String)> picks = [];
   final StreamController<void> controller = StreamController<void>.broadcast();
 
   @override
   Stream<void> get events => controller.stream;
+
+  @override
+  Future<String?> pick(String source, String batchId) async {
+    picks.add((source, batchId));
+    return await onPick?.call(source, batchId);
+  }
 
   @override
   Future<void> discard(String batchId) async {

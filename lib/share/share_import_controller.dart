@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
 import '../auth/account_identity.dart';
 import '../scan/scan_queue_store.dart';
@@ -45,6 +46,7 @@ final class ShareImportController extends ChangeNotifier {
 
   StreamSubscription<void>? _subscription;
   Future<ShareImportSummary>? _inFlight;
+  Future<void>? _pickerRun;
   Future<void>? _closeFuture;
   bool _pendingRun = false;
   bool _closing = false;
@@ -54,6 +56,7 @@ final class ShareImportController extends ChangeNotifier {
   ShareImportSummary? _lastSummary;
   String? _errorMessage;
 
+  bool get isPicking => _pickerRun != null;
   bool get isRunning => _inFlight != null;
   ShareImportPhase get phase => _phase;
   ShareImportSummary? get lastSummary => _lastSummary;
@@ -78,6 +81,54 @@ final class ShareImportController extends ChangeNotifier {
     await processPending();
   }
 
+  Future<void> pick(String source) {
+    if (_pickerRun case final running?) return running;
+    if (_closing || (source != 'files' && source != 'photos')) {
+      return Future.error(
+        const FormatException('Share picker is unavailable.'),
+      );
+    }
+    final identity = _currentIdentity();
+    if (identity == null) {
+      return Future.error(const FormatException('Sign in before importing.'));
+    }
+    final completion = Completer<void>();
+    _pickerRun = completion.future;
+    _notify();
+    unawaited(_pick(source, identity, completion));
+    return completion.future;
+  }
+
+  Future<void> _pick(
+    String source,
+    AccountIdentity identity,
+    Completer<void> completion,
+  ) async {
+    final batchId = const Uuid().v4();
+    try {
+      await _queue.claimShareBatch(batchId, identity);
+      final result = await _intake.pick(source, batchId);
+      if (result == null) {
+        await _queue.removeShareBatchClaim(batchId);
+      } else if (result == batchId) {
+        await processPending();
+      } else {
+        throw const FormatException('Share picker returned an invalid batch.');
+      }
+    } catch (_) {
+      // Claims survive native/storage errors so a later pending manifest
+      // cannot be imported under a different account.
+      if (_currentIdentity() == identity && !_closing) {
+        _errorMessage = _importError;
+        _notify();
+      }
+    } finally {
+      _pickerRun = null;
+      completion.complete();
+      _notify();
+    }
+  }
+
   Future<ShareImportSummary> processPending() {
     if (_inFlight case final running?) {
       if (!_closing) _pendingRun = true;
@@ -100,7 +151,9 @@ final class ShareImportController extends ChangeNotifier {
       generation = _presentationGeneration;
       final result = await _processPass(generation);
       summary = result.summary;
+      final sameIdentity = _currentIdentity() == result.identity;
       if (_canPublish(generation) &&
+          sameIdentity &&
           (summary.staged != 0 ||
               summary.alreadyStaged != 0 ||
               summary.rejected != 0 ||
@@ -120,28 +173,53 @@ final class ShareImportController extends ChangeNotifier {
     }
   }
 
-  Future<({ShareImportSummary summary, String? error})> _processPass(
-    int generation,
-  ) async {
+  Future<
+    ({ShareImportSummary summary, String? error, AccountIdentity? identity})
+  >
+  _processPass(int generation) async {
     var staged = 0;
     var alreadyStaged = 0;
     var rejected = 0;
     var failed = 0;
     String? errorMessage;
+    final identity = _currentIdentity();
     try {
-      // Native pending may copy files asynchronously. Every batch in this pass
-      // belongs to the identity at lookup start, not the identity at completion.
-      final identity = _currentIdentity();
+      // OS shares use the account at lookup start. Picker batches use the
+      // durable owner claim, even after a process restart.
       _setPhase(ShareImportPhase.checking, generation);
       final batches = await _intake.pending();
       for (final batch in batches) {
+        final AccountIdentity? owner;
+        try {
+          owner = await _queue.shareBatchClaim(batch.id);
+        } catch (_) {
+          errorMessage = _importError;
+          continue; // Never interpret a corrupt owner claim as an OS share.
+        }
+        if (owner != null && _currentIdentity() != owner) continue;
+        if (owner != null &&
+            (batch.items.length + batch.rejectedCount > maxSharedItems ||
+                batch.items.any((item) => item.index >= maxSharedItems))) {
+          errorMessage = _importError;
+          continue;
+        }
         if (!batch.complete) continue;
+        final batchIdentity = owner ?? identity;
         rejected += batch.rejectedCount;
         var batchFailed = false;
+        var ownerChanged = false;
         for (final item in batch.items.take(maxSharedItems)) {
+          if (owner != null && _currentIdentity() != owner) {
+            ownerChanged = true;
+            break;
+          }
           if (await _queue.hasShareReceipt(batch.id, item.index)) {
             alreadyStaged++;
             continue;
+          }
+          if (owner != null && _currentIdentity() != owner) {
+            ownerChanged = true;
+            break;
           }
           _setPhase(ShareImportPhase.staging, generation);
           try {
@@ -152,7 +230,7 @@ final class ShareImportController extends ChangeNotifier {
                 filename: item.name,
                 source: ScanSource.share,
                 pageCount: 1,
-                identity: identity,
+                identity: batchIdentity,
                 expectedSize: item.size,
                 expectedSha256: item.sha256,
               ),
@@ -163,6 +241,10 @@ final class ShareImportController extends ChangeNotifier {
             );
             staged++;
           } on QueueStageException catch (error) {
+            if (owner != null && _currentIdentity() != owner) {
+              ownerChanged = true;
+              break;
+            }
             if (error.code == 'share_already_staged') {
               alreadyStaged++;
             } else if (terminalShareRejectionCodes.contains(error.code)) {
@@ -194,15 +276,21 @@ final class ShareImportController extends ChangeNotifier {
             errorMessage = _importError;
           }
         }
-        if (!batchFailed) {
+        if (!batchFailed &&
+            !ownerChanged &&
+            (owner == null || _currentIdentity() == owner)) {
           final allDurable = await Future.wait(
             batch.items.map(
               (item) => _queue.hasShareReceipt(batch.id, item.index),
             ),
           );
-          if (allDurable.every((value) => value)) {
+          if (allDurable.every((value) => value) &&
+              (owner == null || _currentIdentity() == owner)) {
             try {
               await _intake.discard(batch.id);
+              if (owner != null) {
+                await _queue.removeShareBatchClaim(batch.id);
+              }
             } catch (_) {
               errorMessage = _importError;
             }
@@ -210,8 +298,7 @@ final class ShareImportController extends ChangeNotifier {
         }
       }
     } catch (_) {
-      // Native/plugin/storage exceptions can contain protected paths. Keep all
-      // unacknowledged native files and publish only a safe corrective message.
+      // Native/plugin/storage exceptions can contain protected paths.
       errorMessage = _importError;
     }
     return (
@@ -222,6 +309,7 @@ final class ShareImportController extends ChangeNotifier {
         failed: failed,
       ),
       error: errorMessage,
+      identity: identity,
     );
   }
 

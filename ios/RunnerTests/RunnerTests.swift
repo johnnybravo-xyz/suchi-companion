@@ -67,6 +67,111 @@ final class RunnerTests: XCTestCase {
     XCTAssertEqual(try SuchiShareStorage.inspect(payload, expected: item).mime, "image/png")
   }
 
+  func testPickedFilesStageVerifiedItemsAndDiscardAllCopies() async throws {
+    let groupRoot = temporaryRoot.appendingPathComponent("unused-group", isDirectory: true)
+    let hostRoot = temporaryRoot.appendingPathComponent("host", isDirectory: true)
+    try SuchiShareStorage.createProtectedDirectory(groupRoot)
+    let channel = ShareChannel(appGroupRoot: groupRoot, hostRoot: hostRoot)
+    let valid = temporaryRoot.appendingPathComponent("real.png")
+    let spoofed = temporaryRoot.appendingPathComponent("not-an-image.png")
+    try validPNG().write(to: valid)
+    try Data("%PDF-1.7\n".utf8).write(to: spoofed)
+    let batchId = UUID().uuidString.lowercased()
+
+    try await channel.stagePickedDocuments([valid, spoofed], batchId: batchId)
+    let directory = hostRoot.appendingPathComponent(batchId, isDirectory: true)
+    let manifest = try SuchiShareStorage.readManifest(in: directory)
+    XCTAssertTrue(manifest.complete)
+    XCTAssertEqual(manifest.inputCount, 2)
+    XCTAssertEqual(manifest.rejectedIndices, [1])
+    XCTAssertEqual(manifest.items.map(\.index), [0])
+    XCTAssertEqual(manifest.items.first?.mime, "image/png")
+    let pending = try XCTUnwrap(channel.importPendingBatches().first)
+    XCTAssertEqual(pending["batch_id"] as? String, batchId)
+    XCTAssertEqual(pending["rejected_count"] as? Int, 1)
+    let items = try XCTUnwrap(pending["items"] as? [[String: Any]])
+    let retained = URL(fileURLWithPath: try XCTUnwrap(items.first?["path"] as? String))
+    XCTAssertEqual(try Data(contentsOf: retained), validPNG())
+    XCTAssertFalse(FileManager.default.fileExists(
+      atPath: directory.appendingPathComponent("item-001.payload").path
+    ))
+
+    try channel.discardBatch(batchId)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+    XCTAssertTrue(try channel.importPendingBatches().isEmpty)
+  }
+
+  func testInterruptedPickedBatchRecoversVerifiedItemAndRejectsMissingInput() throws {
+    let groupRoot = temporaryRoot.appendingPathComponent("unused-group", isDirectory: true)
+    let hostRoot = temporaryRoot.appendingPathComponent("host", isDirectory: true)
+    try SuchiShareStorage.createProtectedDirectory(groupRoot)
+    try SuchiShareStorage.createProtectedDirectory(hostRoot)
+    let channel = ShareChannel(appGroupRoot: groupRoot, hostRoot: hostRoot)
+    let batchId = UUID().uuidString.lowercased()
+    let directory = hostRoot.appendingPathComponent(batchId, isDirectory: true)
+    try SuchiShareStorage.createProtectedDirectory(directory)
+    let source = temporaryRoot.appendingPathComponent("picked.png")
+    try validPNG().write(to: source)
+    let payload = directory.appendingPathComponent("item-000.payload")
+    let inspected = try SuchiShareStorage.copyAndInspect(from: source, to: payload)
+    let manifest = SuchiShareManifest(
+      version: SuchiShareConstants.manifestVersion,
+      batchId: batchId,
+      createdAt: Int64(Date().timeIntervalSince1970 * 1_000),
+      inputCount: 2,
+      rejectedCount: 0,
+      rejectedIndices: [],
+      complete: false,
+      items: [SuchiShareItem(
+        index: 0,
+        path: payload.lastPathComponent,
+        mime: inspected.mime,
+        name: "picked.png",
+        size: inspected.size,
+        sha256: inspected.sha256
+      )]
+    )
+    try SuchiShareStorage.atomicWrite(manifest, in: directory)
+
+    XCTAssertTrue(try channel.importPendingBatches(excluding: batchId).isEmpty)
+    XCTAssertFalse(try SuchiShareStorage.readManifest(in: directory).complete)
+    let recovered = try XCTUnwrap(channel.importPendingBatches().first)
+    XCTAssertEqual(recovered["rejected_count"] as? Int, 1)
+    XCTAssertTrue(try XCTUnwrap(recovered["complete"] as? Bool))
+    XCTAssertEqual(try SuchiShareStorage.readManifest(in: directory).rejectedIndices, [1])
+    XCTAssertEqual(try Data(contentsOf: payload), validPNG())
+  }
+
+  func testEmptyPickerSelectionDoesNotCreateBatch() async throws {
+    let groupRoot = temporaryRoot.appendingPathComponent("unused-group", isDirectory: true)
+    let hostRoot = temporaryRoot.appendingPathComponent("host", isDirectory: true)
+    let channel = ShareChannel(appGroupRoot: groupRoot, hostRoot: hostRoot)
+    let batchId = UUID().uuidString.lowercased()
+    do {
+      try await channel.stagePickedDocuments([], batchId: batchId)
+      XCTFail("Empty selection should not be staged")
+    } catch SuchiShareStorageError.invalidBatch {
+      XCTAssertFalse(FileManager.default.fileExists(atPath: hostRoot.path))
+    }
+  }
+
+  func testPickerRejectsOverTwentyFilesBeforeCreatingBatch() async throws {
+    let hostRoot = temporaryRoot.appendingPathComponent("host", isDirectory: true)
+    let channel = ShareChannel(hostRoot: hostRoot)
+    let source = temporaryRoot.appendingPathComponent("picked.png")
+    try validPNG().write(to: source)
+    let batchId = UUID().uuidString.lowercased()
+    do {
+      try await channel.stagePickedDocuments(
+        Array(repeating: source, count: SuchiShareConstants.maximumItems + 1),
+        batchId: batchId
+      )
+      XCTFail("Selection beyond the native intake limit must fail")
+    } catch SuchiShareStorageError.invalidBatch {
+      XCTAssertFalse(FileManager.default.fileExists(atPath: hostRoot.path))
+    }
+  }
+
   func testAppGroupBatchImportsVerifiedBytesAndInterruptedReceipts() throws {
     let batchId = UUID().uuidString.lowercased()
     let groupRoot = temporaryRoot.appendingPathComponent("app-group", isDirectory: true)

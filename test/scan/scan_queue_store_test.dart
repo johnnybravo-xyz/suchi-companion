@@ -522,6 +522,49 @@ void main() {
     expect(report.removedArtifacts, 1);
     expect(await orphan.exists(), isFalse);
   });
+  test(
+    'claim is durable, account-bound, and corrupt owner fails closed',
+    () async {
+      final owner = AccountIdentity(origin: _origin, userId: 7, systemId: 1);
+      final disk = File(path.join(temporary.path, 'claims.sqlite'));
+      final first = ScanDatabase(NativeDatabase(disk));
+      final firstStore = await ScanQueueStore.open(
+        database: first,
+        root: Directory(path.join(temporary.path, 'durable-queue')),
+        storageProtection: protection,
+      );
+      await firstStore.claimShareBatch(_firstId, owner);
+      await firstStore.close();
+      await first.close();
+
+      final second = ScanDatabase(NativeDatabase(disk));
+      final secondStore = await ScanQueueStore.open(
+        database: second,
+        root: Directory(path.join(temporary.path, 'durable-queue')),
+        storageProtection: protection,
+      );
+      try {
+        expect(await secondStore.shareBatchClaim(_firstId), owner);
+        await expectLater(
+          secondStore.claimShareBatch(_firstId, owner),
+          throwsFormatException,
+        );
+        await second.setSetting(
+          'share_picker_claim:$_firstId',
+          '{"origin":"https://suchi.example.com","user_id":"7","system_id":1}',
+        );
+        await expectLater(
+          secondStore.shareBatchClaim(_firstId),
+          throwsFormatException,
+        );
+        await secondStore.removeShareBatchClaim(_firstId);
+        expect(await secondStore.shareBatchClaim(_firstId), equals(null));
+      } finally {
+        await secondStore.close();
+        await second.close();
+      }
+    },
+  );
 }
 
 Future<File> _sourceFile(

@@ -591,6 +591,9 @@ final class _Intake implements ShareIntake {
   }
 
   @override
+  Future<String?> pick(String source, String batchId) async => null;
+
+  @override
   Future<void> discard(String batchId) async => discarded.add(batchId);
   void release() {
     for (final gate in [pendingGate, _activePending]) {

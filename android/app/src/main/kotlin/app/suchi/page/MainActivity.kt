@@ -27,6 +27,9 @@ class MainActivity : FlutterActivity() {
         if (scanChannel?.onActivityResult(requestCode, resultCode, data) == true) {
             return
         }
+        if (shareChannel?.onActivityResult(requestCode, resultCode, data) == true) {
+            return
+        }
         super.onActivityResult(requestCode, resultCode, data)
     }
 

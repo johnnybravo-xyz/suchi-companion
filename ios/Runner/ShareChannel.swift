@@ -1,19 +1,35 @@
 import Darwin
 import Flutter
 import Foundation
+import PhotosUI
+import UniformTypeIdentifiers
 import UIKit
 
-final class ShareChannel {
+private final class SharePickSession {
+  let batchId: String
+  let result: FlutterResult
+  let controller: UIViewController
+
+  init(batchId: String, result: @escaping FlutterResult, controller: UIViewController) {
+    self.batchId = batchId
+    self.result = result
+    self.controller = controller
+  }
+}
+
+final class ShareChannel: NSObject {
   private let fileManager = FileManager.default
   private let workQueue = DispatchQueue(label: "app.suchi.page.share-work", qos: .userInitiated)
   private let appGroupRootOverride: URL?
   private let hostRootOverride: URL?
   private var channel: FlutterMethodChannel?
   private var activationObserver: NSObjectProtocol?
+  private var pendingPick: SharePickSession?
 
   init(appGroupRoot: URL? = nil, hostRoot: URL? = nil) {
     appGroupRootOverride = appGroupRoot
     hostRootOverride = hostRoot
+    super.init()
   }
 
   deinit {
@@ -52,6 +68,8 @@ final class ShareChannel {
 
   private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
+    case "pick":
+      pick(call: call, result: result)
     case "pending":
       pending(result: result)
     case "discard":
@@ -62,10 +80,11 @@ final class ShareChannel {
   }
 
   private func pending(result: @escaping FlutterResult) {
+    let activeBatchId = pendingPick?.batchId
     workQueue.async { [weak self] in
       guard let self else { return }
       do {
-        let batches = try self.importPendingBatches()
+        let batches = try self.importPendingBatches(excluding: activeBatchId)
         DispatchQueue.main.async { result(batches) }
       } catch {
         DispatchQueue.main.async {
@@ -80,9 +99,186 @@ final class ShareChannel {
       }
     }
   }
-  func importPendingBatches() throws -> [[String: Any]] {
+
+  private func pick(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard
+      let arguments = call.arguments as? [String: Any],
+      Set(arguments.keys) == ["source", "batch_id"],
+      let source = arguments["source"] as? String,
+      source == "files" || source == "photos",
+      let batchId = arguments["batch_id"] as? String,
+      SuchiShareStorage.isCanonicalVersionFourUUID(batchId)
+    else {
+      result(FlutterError(
+        code: "bad_pick_request",
+        message: "The file selection is invalid.",
+        details: nil
+      ))
+      return
+    }
+    guard pendingPick == nil else {
+      result(FlutterError(
+        code: "share_busy",
+        message: "A file selection is already active.",
+        details: nil
+      ))
+      return
+    }
+    let window = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap(\.windows)
+      .first(where: \.isKeyWindow)
+    guard let presenter = window?.rootViewController, presenter.presentedViewController == nil else {
+      result(FlutterError(
+        code: "share_unavailable",
+        message: "Files could not be opened right now.",
+        details: ["retryable": true]
+      ))
+      return
+    }
+
+    let picker: UIViewController
+    if source == "files" {
+      let documents = UIDocumentPickerViewController(
+        forOpeningContentTypes: [.pdf, .jpeg, .png, .heic, .heif],
+        asCopy: true
+      )
+      documents.allowsMultipleSelection = true
+      documents.delegate = self
+      picker = documents
+    } else {
+      var configuration = PHPickerConfiguration()
+      configuration.filter = .images
+      configuration.selectionLimit = SuchiShareConstants.maximumItems
+      configuration.preferredAssetRepresentationMode = .current
+      let photos = PHPickerViewController(configuration: configuration)
+      photos.delegate = self
+      picker = photos
+    }
+    pendingPick = SharePickSession(batchId: batchId, result: result, controller: picker)
+    presenter.present(picker, animated: true)
+  }
+
+  private func finishPick(_ picker: UIViewController, value: Any?) {
+    guard let request = pendingPick, request.controller === picker else { return }
+    pendingPick = nil
+    request.result(value)
+  }
+
+  private func failPick(_ picker: UIViewController) {
+    finishPick(picker, value: FlutterError(
+      code: "share_storage_unavailable",
+      message: "Selected files could not be saved. Please try again.",
+      details: ["retryable": true]
+    ))
+  }
+
+  // Called only after selection: a cancelled picker never creates a host batch.
+  func stagePickedDocuments(_ urls: [URL], batchId: String) async throws {
+    try await stagePick(batchId: batchId, inputCount: urls.count) { index, directory in
+      let url = urls[index]
+      let accessGranted = url.startAccessingSecurityScopedResource()
+      defer {
+        if accessGranted { url.stopAccessingSecurityScopedResource() }
+      }
+      let destination = try SuchiShareStorage.directChild(
+        named: String(format: "item-%03d.payload", index),
+        of: directory
+      )
+      let inspected = try SuchiShareStorage.copyAndInspect(from: url, to: destination)
+      guard Self.documentMime(for: url) == inspected.mime else {
+        try? self.fileManager.removeItem(at: destination)
+        throw SuchiShareStorageError.unsupportedContent
+      }
+      return SuchiShareItem(
+        index: index,
+        path: destination.lastPathComponent,
+        mime: inspected.mime,
+        name: SuchiShareStorage.sanitizedName(
+          url.lastPathComponent,
+          mime: inspected.mime,
+          index: index
+        ),
+        size: inspected.size,
+        sha256: inspected.sha256
+      )
+    }
+  }
+
+  private static func documentMime(for url: URL) -> String? {
+    switch url.pathExtension.lowercased() {
+    case "pdf": return "application/pdf"
+    case "jpg", "jpeg": return "image/jpeg"
+    case "png": return "image/png"
+    case "heic": return "image/heic"
+    case "heif": return "image/heif"
+    default: return nil
+    }
+  }
+
+  private func stagePickedPhotos(_ results: [PHPickerResult], batchId: String) async throws {
+    try await stagePick(batchId: batchId, inputCount: results.count) { index, directory in
+      let item = try await SuchiShareProviderLoader.retain(
+        provider: results[index].itemProvider,
+        index: index,
+        in: directory
+      )
+      guard item.mime != "application/pdf" else {
+        let file = try SuchiShareStorage.directChild(named: item.path, of: directory)
+        try? self.fileManager.removeItem(at: file)
+        throw SuchiShareStorageError.unsupportedContent
+      }
+      return item
+    }
+  }
+
+  private func stagePick(
+    batchId: String,
+    inputCount: Int,
+    retain: (Int, URL) async throws -> SuchiShareItem
+  ) async throws {
+    guard
+      SuchiShareStorage.isCanonicalVersionFourUUID(batchId),
+      (1...SuchiShareConstants.maximumItems).contains(inputCount)
+    else {
+      throw SuchiShareStorageError.invalidBatch
+    }
+    let root = try hostRoot()
+    let directory = try SuchiShareStorage.directChild(named: batchId, of: root)
+    guard !fileManager.fileExists(atPath: directory.path) else {
+      throw SuchiShareStorageError.invalidBatch
+    }
+    try SuchiShareStorage.createProtectedDirectory(directory)
+    var manifest = SuchiShareManifest(
+      version: SuchiShareConstants.manifestVersion,
+      batchId: batchId,
+      createdAt: Int64(Date().timeIntervalSince1970 * 1_000),
+      inputCount: inputCount,
+      rejectedCount: 0,
+      rejectedIndices: [],
+      complete: false,
+      items: []
+    )
+    try SuchiShareStorage.atomicWrite(manifest, in: directory)
+    try SuchiShareStorage.syncDirectory(root)
+    for index in 0..<inputCount {
+      do {
+        manifest.items.append(try await retain(index, directory))
+      } catch SuchiShareStorageError.storageUnavailable {
+        throw SuchiShareStorageError.storageUnavailable
+      } catch {
+        manifest.rejectedIndices.append(index)
+        manifest.rejectedCount += 1
+      }
+      try SuchiShareStorage.atomicWrite(manifest, in: directory)
+    }
+    manifest.complete = true
+    try SuchiShareStorage.atomicWrite(manifest, in: directory)
+  }
+
+  func importPendingBatches(excluding activeBatchId: String? = nil) throws -> [[String: Any]] {
     try importAppGroupBatches()
-    return try readHostBatches()
+    return try readHostBatches(excluding: activeBatchId)
   }
 
   private func discard(call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -92,40 +288,43 @@ final class ShareChannel {
       let batchId = arguments["batch_id"] as? String,
       SuchiShareStorage.isCanonicalVersionFourUUID(batchId)
     else {
-      result(
-        FlutterError(
-          code: "bad_batch_id",
-          message: "The share batch id is invalid.",
-          details: nil
-        )
-      )
+      result(FlutterError(
+        code: "bad_batch_id",
+        message: "The share batch id is invalid.",
+        details: nil
+      ))
       return
     }
 
     workQueue.async { [weak self] in
       guard let self else { return }
       do {
-        let root = try self.hostRoot()
-        let directory = try SuchiShareStorage.directChild(named: batchId, of: root)
-        if self.fileManager.fileExists(atPath: directory.path) {
-          guard try !self.isSymbolicLink(directory) else {
-            throw SuchiShareStorageError.invalidBatch
-          }
-          try self.fileManager.removeItem(at: directory)
-          try SuchiShareStorage.syncDirectory(root)
-        }
+        try self.discardBatch(batchId)
         DispatchQueue.main.async { result(nil) }
       } catch {
         DispatchQueue.main.async {
-          result(
-            FlutterError(
-              code: "share_storage_unavailable",
-              message: "The share batch could not be discarded.",
-              details: ["retryable": true]
-            )
-          )
+          result(FlutterError(
+            code: "share_storage_unavailable",
+            message: "The share batch could not be discarded.",
+            details: ["retryable": true]
+          ))
         }
       }
+    }
+  }
+
+  func discardBatch(_ batchId: String) throws {
+    guard SuchiShareStorage.isCanonicalVersionFourUUID(batchId) else {
+      throw SuchiShareStorageError.invalidBatch
+    }
+    let root = try hostRoot()
+    let directory = try SuchiShareStorage.directChild(named: batchId, of: root)
+    if fileManager.fileExists(atPath: directory.path) {
+      guard try !isSymbolicLink(directory) else {
+        throw SuchiShareStorageError.invalidBatch
+      }
+      try fileManager.removeItem(at: directory)
+      try SuchiShareStorage.syncDirectory(root)
     }
   }
 
@@ -271,14 +470,32 @@ final class ShareChannel {
     }
   }
 
-  private func readHostBatches() throws -> [[String: Any]] {
+  private func readHostBatches(excluding activeBatchId: String?) throws -> [[String: Any]] {
     let root = try hostRoot()
     let directories = try directDirectories(in: root)
-      .filter { SuchiShareStorage.isCanonicalVersionFourUUID($0.lastPathComponent) }
+      .filter {
+        SuchiShareStorage.isCanonicalVersionFourUUID($0.lastPathComponent)
+          && $0.lastPathComponent != activeBatchId
+      }
     var batches: [[String: Any]] = []
     batches.reserveCapacity(directories.count)
     for directory in directories {
       do {
+        let manifestURL = directory.appendingPathComponent("manifest.json")
+        guard fileManager.fileExists(atPath: manifestURL.path) else {
+          throw SuchiShareStorageError.invalidManifest
+        }
+        var manifest = try SuchiShareStorage.readManifest(in: directory)
+        if !manifest.complete {
+          let received = Set(manifest.items.map(\.index))
+            .union(manifest.rejectedIndices)
+          manifest.rejectedIndices += (0..<manifest.inputCount)
+            .filter { !received.contains($0) }
+          manifest.rejectedIndices.sort()
+          manifest.rejectedCount = manifest.rejectedIndices.count
+          manifest.complete = true
+          try SuchiShareStorage.atomicWrite(manifest, in: directory)
+        }
         batches.append(try readHostBatch(at: directory))
       } catch SuchiShareStorageError.invalidManifest,
         SuchiShareStorageError.invalidItem,
@@ -384,5 +601,65 @@ final class ShareChannel {
 
   private func isSymbolicLink(_ url: URL) throws -> Bool {
     return try url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true
+  }
+}
+
+extension ShareChannel: UIDocumentPickerDelegate, PHPickerViewControllerDelegate {
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    finishPick(controller, value: nil)
+  }
+
+  func documentPicker(
+    _ controller: UIDocumentPickerViewController,
+    didPickDocumentsAt urls: [URL]
+  ) {
+    guard let request = pendingPick, request.controller === controller else { return }
+    guard !urls.isEmpty else {
+      finishPick(controller, value: nil)
+      return
+    }
+    guard urls.count <= SuchiShareConstants.maximumItems else {
+      finishPick(controller, value: FlutterError(
+        code: "share_selection_too_large",
+        message: "Select no more than 20 files at a time.",
+        details: ["retryable": false]
+      ))
+      return
+    }
+    Task.detached(priority: .userInitiated) { [weak self] in
+      guard let self else { return }
+      do {
+        try await self.stagePickedDocuments(urls, batchId: request.batchId)
+        await MainActor.run {
+          self.finishPick(controller, value: request.batchId)
+        }
+      } catch {
+        await MainActor.run { self.failPick(controller) }
+      }
+    }
+  }
+
+  func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+    guard let request = pendingPick, request.controller === picker else { return }
+    picker.dismiss(animated: true)
+    guard !results.isEmpty else {
+      finishPick(picker, value: nil)
+      return
+    }
+    guard results.count <= SuchiShareConstants.maximumItems else {
+      failPick(picker)
+      return
+    }
+    Task.detached(priority: .userInitiated) { [weak self] in
+      guard let self else { return }
+      do {
+        try await self.stagePickedPhotos(results, batchId: request.batchId)
+        await MainActor.run {
+          self.finishPick(picker, value: request.batchId)
+        }
+      } catch {
+        await MainActor.run { self.failPick(picker) }
+      }
+    }
   }
 }

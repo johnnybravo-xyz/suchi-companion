@@ -70,6 +70,7 @@ abstract interface class ShareIntake {
   Stream<void> get events;
 
   Future<List<SharedBatch>> pending();
+  Future<String?> pick(String source, String batchId);
 
   Future<void> discard(String batchId);
 }
@@ -96,6 +97,33 @@ class ShareBridge implements ShareIntake {
       }
       return response.map(_parseBatch).toList(growable: false)
         ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
+    } on PlatformException catch (error) {
+      throw _failure(error);
+    } on MissingPluginException {
+      throw const ShareFailure(
+        code: 'share_unavailable',
+        message: 'Share intake is unavailable.',
+        retryable: false,
+      );
+    }
+  }
+
+  @override
+  Future<String?> pick(String source, String batchId) async {
+    if ((source != 'files' && source != 'photos') ||
+        !_batchIdPattern.hasMatch(batchId)) {
+      throw const FormatException('Share picker request is invalid.');
+    }
+    try {
+      final result = await _channel.invokeMethod<Object?>('pick', {
+        'source': source,
+        'batch_id': batchId,
+      });
+      if (result == null) return null;
+      if (result != batchId) {
+        throw const FormatException('Share picker returned an invalid batch.');
+      }
+      return batchId;
     } on PlatformException catch (error) {
       throw _failure(error);
     } on MissingPluginException {

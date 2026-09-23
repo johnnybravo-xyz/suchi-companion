@@ -159,5 +159,7 @@ class _HeldIntake implements ShareIntake {
   @override
   Future<List<SharedBatch>> pending() => pendingResult.future;
   @override
+  Future<String?> pick(String source, String batchId) async => null;
+  @override
   Future<void> discard(String batchId) async {}
 }

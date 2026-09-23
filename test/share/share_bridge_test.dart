@@ -67,6 +67,35 @@ void main() {
     expect(batches.first.complete, isFalse);
   });
 
+  test('pending accepts an OS share with more than twenty inputs', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          channel,
+          (_) async => [
+            {
+              'batch_id': 'c4652f32-b979-4fc0-adbe-1d761beb2209',
+              'created_at': 2000,
+              'rejected_count': 21,
+              'complete': true,
+              'items': [
+                {
+                  'index': 19,
+                  'path': '/incoming/last.pdf',
+                  'mime': 'application/pdf',
+                  'name': 'last.pdf',
+                  'size': 12,
+                  'sha256': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                },
+              ],
+            },
+          ],
+        );
+
+    final batch = (await bridge.pending()).single;
+    expect(batch.items.single.index, 19);
+    expect(batch.rejectedCount, 21);
+  });
+
   test('pending rejects reordered native items', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (_) async {
@@ -112,6 +141,39 @@ void main() {
         });
 
     await bridge.discard('c4652f32-b979-4fc0-adbe-1d761beb2209');
+  });
+
+  test(
+    'picker sends source and batch id and rejects mismatched receipts',
+    () async {
+      const id = 'c4652f32-b979-4fc0-adbe-1d761beb2209';
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            expect(call.method, 'pick');
+            expect(call.arguments, {'source': 'photos', 'batch_id': id});
+            return id;
+          });
+      expect(await bridge.pick('photos', id), id);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            channel,
+            (_) async => 'eb85ada3-235c-49f7-9939-2851d411e614',
+          );
+      await expectLater(bridge.pick('photos', id), throwsFormatException);
+      await expectLater(bridge.pick('camera', id), throwsFormatException);
+    },
+  );
+
+  test('picker cancellation returns null without a batch', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          expect(call.arguments['source'], 'files');
+          return null;
+        });
+    expect(
+      await bridge.pick('files', 'c4652f32-b979-4fc0-adbe-1d761beb2209'),
+      isNull,
+    );
   });
 
   test('shareEvent notifies a warm harness', () async {

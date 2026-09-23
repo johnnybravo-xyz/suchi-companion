@@ -135,6 +135,7 @@ final class ScanQueueStore {
     'image/heif',
   };
   static final _uuid = Uuid();
+  static const _shareClaimPrefix = 'share_picker_claim:';
   static Future<void> _reconcileTail = Future<void>.value();
 
   final ScanDatabase database;
@@ -187,6 +188,69 @@ final class ScanQueueStore {
 
   Future<bool> hasCaptureReceipt(String captureId) async =>
       await database.captureReceipt(captureId) != null;
+
+  Future<void> claimShareBatch(String batchId, AccountIdentity identity) async {
+    _ensureOpen();
+    _validateShareClaimId(batchId);
+    if (identity.userId <= 0 ||
+        identity.systemId <= 0 ||
+        !_validQueueOrigin(identity.origin.toString())) {
+      throw const FormatException('Share claim identity is invalid.');
+    }
+    final key = '$_shareClaimPrefix$batchId';
+    if (await database.setting(key) != null) {
+      throw const FormatException('Share batch already has an owner.');
+    }
+    await database.setSetting(
+      key,
+      jsonEncode({
+        'origin': identity.origin.toString(),
+        'user_id': identity.userId,
+        'system_id': identity.systemId,
+      }),
+    );
+  }
+
+  Future<AccountIdentity?> shareBatchClaim(String batchId) async {
+    _ensureOpen();
+    _validateShareClaimId(batchId);
+    final encoded = await database.setting('$_shareClaimPrefix$batchId');
+    if (encoded == null) return null;
+    try {
+      final claim = jsonDecode(encoded);
+      if (claim is! Map<String, dynamic> ||
+          claim.length != 3 ||
+          claim['origin'] is! String ||
+          claim['user_id'] is! int ||
+          claim['system_id'] is! int ||
+          claim['user_id'] <= 0 ||
+          claim['system_id'] <= 0 ||
+          !_validQueueOrigin(claim['origin'] as String)) {
+        throw const FormatException();
+      }
+      return AccountIdentity(
+        origin: Uri.parse(claim['origin'] as String),
+        userId: claim['user_id'] as int,
+        systemId: claim['system_id'] as int,
+      );
+    } on FormatException {
+      throw const FormatException('Share batch claim is invalid.');
+    } on TypeError {
+      throw const FormatException('Share batch claim is invalid.');
+    }
+  }
+
+  Future<void> removeShareBatchClaim(String batchId) async {
+    _ensureOpen();
+    _validateShareClaimId(batchId);
+    await database.deleteSetting('$_shareClaimPrefix$batchId');
+  }
+
+  static void _validateShareClaimId(String batchId) {
+    if (!_isCanonicalUuidV4(batchId)) {
+      throw const FormatException('Share batch id is invalid.');
+    }
+  }
 
   Future<void> recordRejectedShareItem({
     required ShareReceiptInput receipt,
@@ -899,7 +963,12 @@ final class ScanQueueStore {
     final handle = await file.open();
     try {
       final bytes = await handle.read(4096);
-      if (bytes.length >= 5 && ascii.decode(bytes.sublist(0, 5)) == '%PDF-') {
+      if (bytes.length >= 5 &&
+          bytes[0] == 0x25 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x44 &&
+          bytes[3] == 0x46 &&
+          bytes[4] == 0x2d) {
         return 'application/pdf';
       }
       if (bytes.length >= 3 &&
@@ -912,7 +981,11 @@ final class ScanQueueStore {
       if (bytes.length >= png.length && _bytesEqual(bytes, png, png.length)) {
         return 'image/png';
       }
-      if (bytes.length >= 16 && ascii.decode(bytes.sublist(4, 8)) == 'ftyp') {
+      if (bytes.length >= 16 &&
+          bytes[4] == 0x66 &&
+          bytes[5] == 0x74 &&
+          bytes[6] == 0x79 &&
+          bytes[7] == 0x70) {
         final boxSize =
             bytes[0] << 24 | bytes[1] << 16 | bytes[2] << 8 | bytes[3];
         if (boxSize >= 16 &&

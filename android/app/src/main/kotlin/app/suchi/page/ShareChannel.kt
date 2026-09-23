@@ -1,7 +1,11 @@
 package app.suchi.page
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -22,6 +26,9 @@ class ShareChannel(private val activity: FlutterActivity) {
         const val CHANNEL_NAME = "app.suchi.page/share"
         const val STORE_NAME = "suchi-share-imports"
         const val BATCH_ID_EXTRA = "app.suchi.page.share.BATCH_ID"
+        const val PICKER_REQUEST = 4721
+        const val PICKER_PREFERENCES = "suchi-share-picker"
+        const val PENDING_PICKER_BATCH = "pending_batch_id"
         const val MANIFEST_VERSION = 1
         const val MAX_ITEMS = 20
         const val MAX_INPUTS = 10_000
@@ -62,6 +69,8 @@ class ShareChannel(private val activity: FlutterActivity) {
 
     private val executor = Executors.newSingleThreadExecutor()
     private val inFlightBatches = mutableSetOf<String>()
+    private var pendingPickResult: MethodChannel.Result? = null
+    private var pickerResultProcessing = false
     private var channel: MethodChannel? = null
 
     fun register(engine: FlutterEngine) {
@@ -101,14 +110,122 @@ class ShareChannel(private val activity: FlutterActivity) {
         }
     }
 
+    /** The marker is committed before launching the system picker and survives a recreated activity. */
+    fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        if (requestCode != PICKER_REQUEST) return false
+        val batchId = pickerPreferences().getString(PENDING_PICKER_BATCH, null) ?: return true
+        if (pickerResultProcessing) return true
+        val result = pendingPickResult
+        pendingPickResult = null
+        if (resultCode == Activity.RESULT_CANCELED) {
+            if (clearPickerMarker()) {
+                result?.success(null)
+            } else {
+                result?.error("share_storage_unavailable", "The file picker could not be reset.", null)
+            }
+            return true
+        }
+        if (resultCode != Activity.RESULT_OK) {
+            clearPickerMarker()
+            result?.error("share_pick_failed", "The file picker did not complete.", null)
+            return true
+        }
+        val inputs = SharePicker.selectedUris(data)
+        if (inputs == null || inputs.isEmpty() || inputs.size > MAX_ITEMS || inputs.any { it.scheme != "content" }) {
+            clearPickerMarker()
+            result?.error("share_pick_failed", "Select between 1 and 20 supported files.", null)
+            return true
+        }
+        pickerResultProcessing = true
+        executor.execute {
+            val staged = try {
+                stageBatch(batchId, inputs.mapIndexed(::SharedInput), null)
+                true
+            } catch (_: Exception) {
+                false
+            }
+            val cleared = clearPickerMarker()
+            activity.runOnUiThread {
+                pickerResultProcessing = false
+                if (staged && cleared) {
+                    result?.success(batchId)
+                    channel?.invokeMethod("shareEvent", null)
+                } else {
+                    result?.error(
+                        "share_storage_unavailable",
+                        "Selected files could not be retained. Check the import queue.",
+                        mapOf("retryable" to true),
+                    )
+                    // An interrupted batch may have durable receipts; the queue can recover them.
+                    channel?.invokeMethod("shareEvent", null)
+                }
+            }
+        }
+        return true
+    }
+
+    private fun pickerPreferences() =
+        activity.getSharedPreferences(PICKER_PREFERENCES, Activity.MODE_PRIVATE)
+
+    private fun clearPickerMarker(): Boolean =
+        pickerPreferences().edit().remove(PENDING_PICKER_BATCH).commit()
+
+    private fun pick(call: MethodCall, result: MethodChannel.Result) {
+        val arguments = call.arguments as? Map<*, *>
+        val source = arguments?.get("source") as? String
+        val batchId = arguments?.get("batch_id") as? String
+        if ((source != "files" && source != "photos") || batchId == null || !isCanonicalVersionFourUuid(batchId)) {
+            result.error("bad_pick_request", "The file picker request is invalid.", null)
+            return
+        }
+        if (pickerResultProcessing || pendingPickResult != null || pickerPreferences().contains(PENDING_PICKER_BATCH)) {
+            result.error("share_pick_busy", "A file picker is already open.", null)
+            return
+        }
+        val intent = if (source == "files") {
+            SharePicker.filesIntent()
+        } else {
+            SharePicker.photosIntent(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+        }
+        if (!pickerPreferences().edit().putString(PENDING_PICKER_BATCH, batchId).commit()) {
+            result.error("share_storage_unavailable", "The file picker could not be started.", null)
+            return
+        }
+        pendingPickResult = result
+        try {
+            activity.startActivityForResult(intent, PICKER_REQUEST)
+        } catch (_: ActivityNotFoundException) {
+            if (source != "photos" || intent.action != MediaStore.ACTION_PICK_IMAGES) {
+                failPickerLaunch(result)
+                return
+            }
+            try {
+                activity.startActivityForResult(SharePicker.photosIntent(false), PICKER_REQUEST)
+            } catch (_: Exception) {
+                failPickerLaunch(result)
+            }
+        } catch (_: Exception) {
+            failPickerLaunch(result)
+        }
+    }
+
+    private fun failPickerLaunch(result: MethodChannel.Result) {
+        pendingPickResult = null
+        clearPickerMarker()
+        result.error("share_pick_failed", "The file picker is unavailable.", null)
+    }
+
     fun close() {
         channel?.setMethodCallHandler(null)
         channel = null
+        pendingPickResult = null
+        pickerResultProcessing = false
         executor.shutdown()
     }
 
     private fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
+            "pick" -> pick(call, result)
             "pending" -> pending(result)
             "discard" -> discard(call, result)
             else -> result.notImplemented()
@@ -694,6 +811,44 @@ class ShareChannel(private val activity: FlutterActivity) {
                 (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
             }
         return uris.mapIndexed(::SharedInput)
+    }
+}
+
+internal object SharePicker {
+    private val imageMimeTypes = arrayOf("image/jpeg", "image/png", "image/heic", "image/heif")
+
+    fun filesIntent(): Intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+        addCategory(Intent.CATEGORY_OPENABLE)
+        type = "*/*"
+        putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/pdf", *imageMimeTypes))
+        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+
+    fun photosIntent(systemPickerAvailable: Boolean): Intent =
+        if (systemPickerAvailable) {
+            Intent(MediaStore.ACTION_PICK_IMAGES).apply {
+                type = "image/*"
+                putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, 20)
+            }
+        } else {
+            Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "image/*"
+                putExtra(Intent.EXTRA_MIME_TYPES, imageMimeTypes)
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        }
+
+    fun selectedUris(data: Intent?): List<Uri>? {
+        if (data == null) return emptyList()
+        val clip = data.clipData
+        return if (clip != null) {
+            (0 until clip.itemCount).map { clip.getItemAt(it).uri ?: return null }
+        } else {
+            listOfNotNull(data.data)
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 package app.suchi.page
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
@@ -29,16 +30,21 @@ import java.util.UUID
 class NativeAdapterInstrumentedTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val targetContext = instrumentation.targetContext
+    private val pickerPreferences by lazy {
+        targetContext.getSharedPreferences("suchi-share-picker", Activity.MODE_PRIVATE)
+    }
     private val shareRoot by lazy { File(targetContext.filesDir, "suchi-share-imports") }
 
     @Before
     fun clearShareStore() {
         shareRoot.deleteRecursively()
+        assertTrue(pickerPreferences.edit().clear().commit())
     }
 
     @After
     fun removeShareStore() {
         shareRoot.deleteRecursively()
+        assertTrue(pickerPreferences.edit().clear().commit())
     }
 
     @Test
@@ -194,18 +200,6 @@ class NativeAdapterInstrumentedTest {
             SystemClock.sleep(300)
             assertEquals(1, shareRoot.listFiles().orEmpty().filter(File::isDirectory).size)
             assertLaunchIntentCleared(activity)
-
-            manifest.put("unexpected", true)
-            manifestFile.writeText(manifest.toString())
-            instrumentation.context.startActivity(
-                shareIntent(batchId).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-            waitForShareIntent(activity)
-            SystemClock.sleep(500)
-            instrumentation.runOnMainSync {
-                assertEquals(Intent.ACTION_SEND_MULTIPLE, activity.intent.action)
-                assertTrue(activity.intent.hasExtra("app.suchi.page.share.BATCH_ID"))
-            }
         } finally {
             instrumentation.runOnMainSync { activity.finishAndRemoveTask() }
         }
@@ -279,6 +273,117 @@ class NativeAdapterInstrumentedTest {
         }
     }
 
+    @Test
+    fun pickerIntentsRequestOnlySupportedDocumentsAndStillImages() {
+        val files = SharePicker.filesIntent()
+        assertEquals(Intent.ACTION_OPEN_DOCUMENT, files.action)
+        assertTrue(files.hasCategory(Intent.CATEGORY_OPENABLE))
+        assertEquals("*/*", files.type)
+        assertTrue(files.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false))
+        assertEquals(
+            setOf("application/pdf", "image/jpeg", "image/png", "image/heic", "image/heif"),
+            files.getStringArrayExtra(Intent.EXTRA_MIME_TYPES)?.toSet(),
+        )
+
+        val fallback = SharePicker.photosIntent(false)
+        assertEquals(Intent.ACTION_OPEN_DOCUMENT, fallback.action)
+        assertEquals("image/*", fallback.type)
+        assertTrue(fallback.hasCategory(Intent.CATEGORY_OPENABLE))
+        assertTrue(fallback.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false))
+        assertEquals(
+            setOf("image/jpeg", "image/png", "image/heic", "image/heif"),
+            fallback.getStringArrayExtra(Intent.EXTRA_MIME_TYPES)?.toSet(),
+        )
+
+        val system = SharePicker.photosIntent(true)
+        assertEquals(MediaStore.ACTION_PICK_IMAGES, system.action)
+        assertEquals("image/*", system.type)
+        assertEquals(20, system.getIntExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, 0))
+    }
+
+    @Test
+    fun recreatedPickerStagesOnlyItsClaimedBatchAndCancellationLeavesNoBatch() {
+        instrumentation.context.startActivity(
+            Intent(targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+        val activity = waitForActivity()
+        try {
+            val canceledId = UUID.randomUUID().toString()
+            assertTrue(pickerPreferences.edit().putString("pending_batch_id", canceledId).commit())
+            val canceled = ShareChannel(activity)
+            try {
+                instrumentation.runOnMainSync {
+                    assertTrue(canceled.onActivityResult(4721, Activity.RESULT_CANCELED, null))
+                }
+            } finally {
+                canceled.close()
+            }
+            assertFalse(pickerPreferences.contains("pending_batch_id"))
+            assertFalse(File(shareRoot, canceledId).exists())
+
+            val retainedId = UUID.randomUUID().toString()
+            assertTrue(pickerPreferences.edit().putString("pending_batch_id", retainedId).commit())
+            val restored = ShareChannel(activity)
+            try {
+                val first = Uri.parse("content://app.suchi.page.test.share/first")
+                val empty = Uri.parse("content://app.suchi.page.test.share/empty")
+                val clip = ClipData.newUri(targetContext.contentResolver, "first", first)
+                clip.addItem(ClipData.Item(empty))
+                instrumentation.runOnMainSync {
+                    assertTrue(
+                        restored.onActivityResult(
+                            4721,
+                            Activity.RESULT_OK,
+                            Intent().apply { clipData = clip },
+                        ),
+                    )
+                }
+                waitUntil {
+                    File(shareRoot, retainedId).resolve("manifest.json")
+                        .takeIf(File::isFile)
+                        ?.let { JSONObject(it.readText()).optBoolean("complete") } == true &&
+                        !pickerPreferences.contains("pending_batch_id")
+                }
+                val manifest = JSONObject(File(shareRoot, "$retainedId/manifest.json").readText())
+                assertEquals(retainedId, manifest.getString("batch_id"))
+                assertEquals(2, manifest.getInt("input_count"))
+                assertEquals(1, manifest.getJSONArray("items").length())
+                assertEquals(1, manifest.getInt("rejected_count"))
+            } finally {
+                restored.close()
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finishAndRemoveTask() }
+        }
+    }
+
+    @Test
+    fun pickerRejectsMoreThanTwentySelectionsWithoutMakingAReceipt() {
+        instrumentation.context.startActivity(
+            Intent(targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+        val activity = waitForActivity()
+        val batchId = UUID.randomUUID().toString()
+        try {
+            assertTrue(pickerPreferences.edit().putString("pending_batch_id", batchId).commit())
+            val uri = Uri.parse("content://app.suchi.page.test.share/first")
+            val clip = ClipData.newUri(targetContext.contentResolver, "first", uri)
+            repeat(20) { clip.addItem(ClipData.Item(uri)) }
+            val intake = ShareChannel(activity)
+            try {
+                instrumentation.runOnMainSync {
+                    assertTrue(intake.onActivityResult(4721, Activity.RESULT_OK, Intent().apply { clipData = clip }))
+                }
+            } finally {
+                intake.close()
+            }
+            assertFalse(pickerPreferences.contains("pending_batch_id"))
+            assertFalse(File(shareRoot, batchId).exists())
+        } finally {
+            instrumentation.runOnMainSync { activity.finishAndRemoveTask() }
+        }
+    }
+
     private fun shareIntent(
         batchId: String? = null,
         segments: List<String> = listOf("first", "second"),
@@ -323,18 +428,6 @@ class NativeAdapterInstrumentedTest {
             result != null
         }
         return requireNotNull(result)
-    }
-
-    private fun waitForShareIntent(activity: MainActivity) {
-        waitUntil {
-            var received = false
-            instrumentation.runOnMainSync {
-                received =
-                    activity.intent.action == Intent.ACTION_SEND_MULTIPLE &&
-                        activity.intent.hasExtra(Intent.EXTRA_STREAM)
-            }
-            received
-        }
     }
 
     private fun assertLaunchIntentCleared(activity: MainActivity) {

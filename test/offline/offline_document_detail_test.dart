@@ -122,11 +122,11 @@ void main() {
       await _pumpDetail(tester, session, files, store);
 
       await tester.scrollUntilVisible(
-        find.text('Make available offline'),
+        find.text('Save offline'),
         200,
         scrollable: find.byType(Scrollable),
       );
-      await tester.tap(find.text('Make available offline'));
+      await tester.tap(find.text('Save offline'));
       await tester.pumpAndSettle();
       expect(find.text('Keep sensitive document offline?'), findsOneWidget);
       expect(store.find(session.identity, 91), isNull);
@@ -143,98 +143,129 @@ void main() {
     },
   );
 
-  testWidgets('detail reflects save, update, and remove states', (
+  testWidgets('detail saves, updates, and removes through the caption menu', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await _pumpDetail(tester, session, files, store);
 
-    await tester.scrollUntilVisible(
-      find.text('Make available offline'),
-      200,
-      scrollable: find.byType(Scrollable),
-    );
-    expect(find.text('Make available offline'), findsOneWidget);
-    final offlineBounds = tester.getRect(
-      find.widgetWithText(TextButton, 'Make available offline'),
-    );
-    final openBounds = tester.getRect(
-      find.widgetWithText(FilledButton, 'Open'),
-    );
-    final typeBounds = tester.getRect(find.text('PDF'));
-    final sizeBounds = tester.getRect(find.text('12 B'));
-    expect(offlineBounds.right, lessThan(openBounds.left));
-    expect(
-      (offlineBounds.center.dy - openBounds.center.dy).abs(),
-      lessThan(20),
-    );
-    expect(typeBounds.top, greaterThan(openBounds.bottom));
-    expect(sizeBounds.top, greaterThan(openBounds.bottom));
-
-    await tester.runAsync(
-      () => store.save(
-        identity: session.identity!,
-        document: DocumentDetail.fromJson(_documentJson(blob: 'b' * 64)),
-        client: session.client!,
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 300));
-
-    final saved = store.find(session.identity, 91);
-    expect(saved, isNotNull);
-    expect(await tester.runAsync(saved!.payload.readAsBytes), _payload);
-    expect(find.text('Remove offline copy'), findsOneWidget);
-    expect(find.text('Available offline'), findsOneWidget);
+    final preview = find.byKey(const ValueKey('document-preview'));
+    final save = find.widgetWithText(OutlinedButton, 'Save offline');
+    final open = find.widgetWithText(FilledButton, 'Open');
+    await tester.ensureVisible(save);
+    expect(save, findsOneWidget);
+    expect(find.byTooltip('Make available offline'), findsOneWidget);
+    final saveBounds = tester.getRect(save);
+    final openBounds = tester.getRect(open);
+    expect(saveBounds.right, lessThan(openBounds.left));
+    expect(saveBounds.width, closeTo(openBounds.width, 2));
+    expect(saveBounds.height, closeTo(openBounds.height, 2));
+    expect(saveBounds.height, greaterThanOrEqualTo(52));
     expect(
       tester
-          .getRect(find.widgetWithText(TextButton, 'Remove offline copy'))
-          .right,
-      lessThan(tester.getRect(find.widgetWithText(FilledButton, 'Open')).left),
+          .getRect(find.descendant(of: preview, matching: find.text('PDF')))
+          .bottom,
+      lessThan(saveBounds.top),
     );
+    expect(
+      tester
+          .getRect(find.descendant(of: preview, matching: find.text('12 B')))
+          .bottom,
+      lessThan(saveBounds.top),
+    );
+
+    await tester.tap(save);
+    await tester.pump();
+    await _waitForCopy(tester, store, session, blob: 'b' * 64);
+    final saved = store.find(session.identity, 91)!;
+    expect(await tester.runAsync(saved.payload.readAsBytes), _payload);
+    expect(handoffs, isEmpty);
+    expect(find.text('Available offline'), findsOneWidget);
+    expect(find.text('Save offline'), findsNothing);
+    await tester.tap(find.byTooltip('Offline copy options'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove offline copy'), findsOneWidget);
+    expect(find.text('Update offline copy'), findsNothing);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
 
     originalBlob = 'c' * 64;
     await tester.pumpWidget(const SizedBox.shrink());
     await _pumpDetail(tester, session, files, store);
-    await tester.scrollUntilVisible(
-      find.text('Update offline copy'),
-      200,
-      scrollable: find.byType(Scrollable),
-    );
+    expect(find.text('Update needed'), findsOneWidget);
+    await tester.tap(find.byTooltip('Offline copy options'));
+    await tester.pumpAndSettle();
     expect(find.text('Update offline copy'), findsOneWidget);
-
-    await tester.runAsync(
-      () => store.save(
-        identity: session.identity!,
-        document: DocumentDetail.fromJson(_documentJson(blob: 'c' * 64)),
-        client: session.client!,
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(store.find(session.identity, 91)?.document.originalBlob, 'c' * 64);
-    expect(find.text('Update offline copy'), findsNothing);
     expect(find.text('Remove offline copy'), findsOneWidget);
-    expect(find.text('Available offline'), findsOneWidget);
-
-    await tester.tap(find.text('Remove offline copy'));
+    await tester.tap(find.text('Update offline copy'));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    await _waitForCopy(tester, store, session, blob: 'c' * 64);
+    expect(find.text('Available offline'), findsOneWidget);
+    expect(find.text('Update needed'), findsNothing);
+
+    await tester.tap(find.byTooltip('Offline copy options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove offline copy'));
+    await tester.pumpAndSettle();
     expect(find.text('Remove offline copy?'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
     expect(store.find(session.identity, 91), isNotNull);
 
-    await tester.runAsync(() => store.remove(session.identity!, 91));
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byTooltip('Offline copy options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove offline copy'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove', skipOffstage: false));
+    for (
+      var attempt = 0;
+      attempt < 80 && (store.find(session.identity, 91) != null || store.busy);
+      attempt++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    await tester.pump();
     expect(store.find(session.identity, 91), isNull);
-    expect(find.text('Make available offline'), findsOneWidget);
+    expect(find.text('Save offline'), findsOneWidget);
   });
 
-  testWidgets('offline actions stack beside right-aligned Open at 200% text', (
+  testWidgets('narrow 200% detail stacks controls and keeps caption clear', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    for (final dark in [false, true]) {
+      await _pumpDetail(
+        tester,
+        session,
+        files,
+        store,
+        textScale: 2,
+        dark: dark,
+      );
+
+      final save = find.widgetWithText(OutlinedButton, 'Save offline');
+      final open = find.widgetWithText(FilledButton, 'Open');
+      final preview = find.byKey(const ValueKey('document-preview'));
+      expect(tester.getRect(save).bottom, lessThan(tester.getRect(open).top));
+      expect(tester.getRect(save).left, closeTo(tester.getRect(open).left, 2));
+      expect(
+        tester.getRect(save).right,
+        closeTo(tester.getRect(open).right, 2),
+      );
+      expect(
+        tester
+            .getRect(find.descendant(of: preview, matching: find.text('PDF')))
+            .bottom,
+        lessThan(tester.getRect(save).top),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
     await tester.runAsync(
       () => store.save(
         identity: session.identity!,
@@ -242,31 +273,38 @@ void main() {
         client: session.client!,
       ),
     );
-    await tester.binding.setSurfaceSize(const Size(320, 700));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await _pumpDetail(tester, session, files, store, textScale: 2);
-
-    final remove = find.widgetWithText(TextButton, 'Remove offline copy');
-    final open = find.widgetWithText(FilledButton, 'Open');
-    final preview = find.byKey(const ValueKey('document-preview'));
-    expect(find.text('Available offline'), findsOneWidget);
-    expect(find.text('PDF'), findsOneWidget);
-    expect(tester.getRect(remove).bottom, lessThan(tester.getRect(open).top));
-    expect(
-      tester.getRect(open).right,
-      closeTo(tester.getRect(preview).right - 10, 2),
-    );
-    expect(tester.takeException(), isNull);
+    for (final dark in [false, true]) {
+      await _pumpDetail(
+        tester,
+        session,
+        files,
+        store,
+        textScale: 2,
+        dark: dark,
+      );
+      final preview = find.byKey(const ValueKey('document-preview'));
+      final status = find.text('Available offline');
+      final menu = find.byTooltip('Offline copy options');
+      final open = find.widgetWithText(FilledButton, 'Open');
+      expect(find.descendant(of: preview, matching: status), findsOneWidget);
+      expect(tester.getRect(status).right, lessThan(tester.getRect(menu).left));
+      expect(tester.getRect(menu).size, const Size(48, 48));
+      expect(tester.getRect(menu).bottom, lessThan(tester.getRect(open).top));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
   });
 
   testWidgets(
     'metadata network failure renders a read-only manifest fallback',
     (tester) async {
+      sensitive = true;
       await tester.runAsync(
         () => store.save(
           identity: session.identity!,
-          document: DocumentDetail.fromJson(_documentJson()),
+          document: DocumentDetail.fromJson(_documentJson(sensitive: true)),
           client: session.client!,
+          reveal: true,
         ),
       );
       requests.clear();
@@ -276,6 +314,15 @@ void main() {
 
       expect(find.text('Showing offline copy'), findsOneWidget);
       expect(find.text('Preview unavailable offline'), findsOneWidget);
+      expect(find.text('Available offline'), findsOneWidget);
+      expect(find.text('PDF'), findsOneWidget);
+      expect(find.text('12 B'), findsOneWidget);
+      await tester.tap(find.byTooltip('Offline copy options'));
+      await tester.pumpAndSettle();
+      expect(find.text('Remove offline copy'), findsOneWidget);
+      expect(find.text('Update offline copy'), findsNothing);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
       expect(find.text('Quarterly report'), findsOneWidget);
       expect(
         requests.where((request) => request.url.path.contains('preview')),
@@ -288,6 +335,16 @@ void main() {
 
       await tester.ensureVisible(find.text('Open'));
       await tester.tap(find.text('Open'));
+      await tester.pump();
+      expect(find.text('Open this document?'), findsOneWidget);
+      expect(handoffs, isEmpty);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(handoffs, isEmpty);
+      await tester.tap(find.text('Open'));
+      await tester.pump();
+      await tester.tap(find.text('Open document'));
+      await tester.pump();
       await tester.pump();
       await tester.runAsync(() async {
         for (var attempt = 0; attempt < 20 && handoffs.isEmpty; attempt++) {
@@ -326,6 +383,7 @@ Future<void> _pumpDetail(
   DocumentFiles files,
   OfflineDocumentStore store, {
   double textScale = 1,
+  bool dark = false,
 }) async {
   final categories = JdCategoryStore(
     client: session.client!,
@@ -334,7 +392,7 @@ Future<void> _pumpDetail(
   addTearDown(categories.dispose);
   await tester.pumpWidget(
     MaterialApp(
-      theme: SuchiTheme.light,
+      theme: dark ? SuchiTheme.dark : SuchiTheme.light,
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context)
             .copyWith(textScaler: TextScaler.linear(textScale)),
@@ -353,6 +411,32 @@ Future<void> _pumpDetail(
   );
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 500));
+}
+
+Future<void> _waitForCopy(
+  WidgetTester tester,
+  OfflineDocumentStore store,
+  SessionController session, {
+  required String blob,
+}) async {
+  for (
+    var attempt = 0;
+    attempt < 80 &&
+        (store.find(session.identity, 91)?.document.originalBlob != blob ||
+            store.busy);
+    attempt++
+  ) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+  await tester.pump();
+  expect(
+    store.find(session.identity, 91)?.document.originalBlob,
+    blob,
+    reason: 'busy=${store.busy} error=${store.errorMessage}',
+  );
 }
 
 http.Response _fixture(String name) => http.Response(

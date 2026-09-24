@@ -27,6 +27,8 @@ const _documentSensitivityOptions = <String, String>{
   'restricted': 'Restricted',
 };
 
+enum _OfflineCopyAction { update, remove }
+
 class DocumentDetailScreen extends StatefulWidget {
   const DocumentDetailScreen({
     required this.documentId,
@@ -1080,6 +1082,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
               ? _reveal
               : () => _openFile(share: false)
         : null;
+    final control = _offlineControl(offlineEntry);
     return SuchiCard(
       key: const ValueKey('document-preview'),
       color: colors.manila,
@@ -1121,13 +1124,84 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
               ),
             ),
           ),
-          _previewFooter(
-            document,
-            offlineEntry: offlineEntry,
-            offlineOutdated: offlineOutdated,
-            concealed: concealed,
-            activate: activate,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                QuietBadge(_friendlyType(document.mimeType)),
+                Text(
+                  _formatBytes(document.originalSize),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: colors.muted),
+                ),
+                if (offlineEntry != null)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        offlineOutdated ? Icons.update : Icons.offline_pin,
+                        size: 18,
+                        color: offlineOutdated
+                            ? colors.warning
+                            : colors.success,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          offlineOutdated
+                              ? 'Update needed'
+                              : 'Available offline',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: offlineOutdated
+                                    ? colors.warning
+                                    : colors.success,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      PopupMenuButton<_OfflineCopyAction>(
+                        tooltip: 'Offline copy options',
+                        enabled:
+                            !_mutating && !_fileLoading && !_offlineMutating,
+                        icon: const Icon(Icons.more_vert),
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(48, 48),
+                        ),
+                        onSelected: (action) {
+                          switch (action) {
+                            case _OfflineCopyAction.update:
+                              _saveOffline();
+                            case _OfflineCopyAction.remove:
+                              _removeOffline();
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          if (offlineOutdated && _offlineFallback == null)
+                            const PopupMenuItem(
+                              value: _OfflineCopyAction.update,
+                              child: Text('Update offline copy'),
+                            ),
+                          const PopupMenuItem(
+                            value: _OfflineCopyAction.remove,
+                            child: Text('Remove offline copy'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+              ],
+            ),
           ),
+          if (control != null || !concealed)
+            _previewFooter(
+              control: control,
+              concealed: concealed,
+              activate: activate,
+            ),
         ],
       ),
     );
@@ -1158,40 +1232,25 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     );
   }
 
-  Widget _previewFooter(
-    DocumentDetail document, {
-    required OfflineDocument? offlineEntry,
-    required bool offlineOutdated,
+  Widget _previewFooter({
+    required Widget? control,
     required bool concealed,
     required VoidCallback? activate,
   }) {
     final colors = SuchiColors.of(context);
-    final control = _offlineControl(offlineEntry, offlineOutdated);
-    final fileInfo = Wrap(
-      spacing: 9,
-      runSpacing: 7,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        QuietBadge(_friendlyType(document.mimeType)),
-        Text(
-          _formatBytes(document.originalSize),
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      ],
-    );
     return Container(
       decoration: BoxDecoration(
         color: colors.surface,
         border: Border(top: BorderSide(color: colors.line)),
       ),
-      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+      padding: const EdgeInsets.all(12),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final open = Tooltip(
             message: _fileLoading ? 'Cancel document handoff' : 'Open document',
             child: FilledButton.icon(
               style: FilledButton.styleFrom(
-                minimumSize: const Size(48, 48),
+                minimumSize: const Size(0, 52),
                 backgroundColor: colors.accent.withValues(alpha: 0.96),
                 foregroundColor: colors.onAccent,
               ),
@@ -1206,37 +1265,22 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
             ),
           );
           final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-          final stacked = constraints.maxWidth < 310 || scale > 1.25;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          final stacked =
+              constraints.maxWidth < 310 || scale > 1.25 || _offlineMutating;
+          if (control == null) return open;
+          if (concealed) return control;
+          if (stacked) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [control, const SizedBox(height: 8), open],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              if (control != null || !concealed) ...[
-                if (stacked)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (control != null)
-                        Align(alignment: Alignment.centerLeft, child: control),
-                      if (control != null && !concealed)
-                        const SizedBox(height: 6),
-                      if (!concealed)
-                        Align(alignment: Alignment.centerRight, child: open),
-                    ],
-                  )
-                else
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      if (control != null) Expanded(child: control),
-                      if (control != null && !concealed)
-                        const SizedBox(width: 8),
-                      if (!concealed) open,
-                    ],
-                  ),
-                const SizedBox(height: 8),
-              ],
-              fileInfo,
+              Expanded(child: control),
+              const SizedBox(width: 8),
+              Expanded(child: open),
             ],
           );
         },
@@ -1244,7 +1288,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     );
   }
 
-  Widget? _offlineControl(OfflineDocument? offlineEntry, bool offlineOutdated) {
+  Widget? _offlineControl(OfflineDocument? offlineEntry) {
     final store = widget.offlineDocuments;
     if (store == null) return null;
     if (_offlineMutating) {
@@ -1268,43 +1312,14 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
         ],
       );
     }
-    final enabled = !_mutating && !_fileLoading;
-    if (offlineEntry == null) {
-      return TextButton.icon(
-        onPressed: enabled ? _saveOffline : null,
+    if (offlineEntry != null) return null;
+    return Tooltip(
+      message: 'Make available offline',
+      child: OutlinedButton.icon(
+        onPressed: !_mutating && !_fileLoading ? _saveOffline : null,
         icon: const Icon(Icons.download_for_offline_outlined),
-        label: const Text('Make available offline'),
-      );
-    }
-    return Wrap(
-      spacing: 4,
-      runSpacing: 4,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        if (!offlineOutdated)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.offline_pin, size: 18),
-                SizedBox(width: 6),
-                Flexible(child: Text('Available offline')),
-              ],
-            ),
-          ),
-        if (offlineOutdated)
-          TextButton.icon(
-            onPressed: enabled ? _saveOffline : null,
-            icon: const Icon(Icons.update),
-            label: const Text('Update offline copy'),
-          ),
-        TextButton.icon(
-          onPressed: enabled ? _removeOffline : null,
-          icon: const Icon(Icons.remove_circle_outline),
-          label: const Text('Remove offline copy'),
-        ),
-      ],
+        label: const Text('Save offline'),
+      ),
     );
   }
 

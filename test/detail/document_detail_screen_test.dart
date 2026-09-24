@@ -351,17 +351,23 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     }
 
+    final preview = find.byKey(const ValueKey('document-preview'));
     final open = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Open'),
     );
-    final previewBounds = tester.getRect(
-      find.byKey(const ValueKey('document-preview')),
-    );
+    final previewBounds = tester.getRect(preview);
     final openBounds = tester.getRect(
       find.widgetWithText(FilledButton, 'Open'),
     );
+    final type = find.descendant(of: preview, matching: find.text('PDF'));
+    final size = find.descendant(of: preview, matching: find.text('16.4 KB'));
+    expect(type, findsOneWidget);
+    expect(size, findsOneWidget);
+    expect(tester.getRect(type).bottom, lessThan(openBounds.top));
+    expect(tester.getRect(size).bottom, lessThan(openBounds.top));
     expect(openBounds.bottom, lessThan(previewBounds.bottom));
-    expect(openBounds.right, closeTo(previewBounds.right - 10, 2));
+    expect(openBounds.right, closeTo(previewBounds.right - 12, 2));
+    expect(openBounds.left, closeTo(previewBounds.left + 12, 2));
     expect(open.onPressed, isNotNull);
     await invokeAndWait(open.onPressed!, 1);
     expect(
@@ -370,6 +376,14 @@ void main() {
     );
     expect(calls, hasLength(1));
     expect(calls.single.method, 'open');
+    expect(
+      await tester.runAsync(
+        () =>
+            File((calls.single.arguments as Map)['path'] as String)
+                .readAsBytes(),
+      ),
+      [37, 80, 68, 70],
+    );
 
     final share = tester.widget<IconButton>(
       find.widgetWithIcon(IconButton, Icons.ios_share_outlined),

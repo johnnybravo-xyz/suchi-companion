@@ -19,7 +19,7 @@ and pins one exact compatible server revision.
 | Native share and explicit Files/Photos intake | `lib/share/`, `ScanQueueScreen`, Android `ShareChannel`, iOS `ShareChannel`/Share Extension and `ios/Shared/` |
 | Archive browsing, filing and retrieval | `lib/documents/`, `lib/inbox/`, `lib/search/`, `lib/detail/` |
 | Server-backed Saved Views | `lib/search/saved_views.dart`, `lib/api/api_models.dart`, owned by the shell |
-| Account-scoped offline documents | `lib/offline/offline_document_store.dart`, Documents/detail/More surfaces, native document channels |
+| Account-scoped offline documents | `lib/offline/offline_document_store.dart`, Documents/detail surfaces, native document channels |
 | Common presentation | `lib/widgets/suchi_widgets.dart`, `lib/theme/suchi_theme.dart` |
 
 Screens keep their own loading, pagination and error state. The shell owns the
@@ -85,11 +85,15 @@ repeats the anonymous handshake before constructing a token-bearing client.
 Documents. Known loss of connectivity, or a Documents network/timeout failure,
 selects the account's Offline collection. Connectivity returning does not
 implicitly switch back. A restored offline session builds a local-only shell
-with Documents and More; it has no `SuchiClient`, category store, Inbox, Scan,
-Search or Trash surface. Sign-out cancels account-bound work and removes that
-account's offline directories before secure credential deletion. Any protected
-cleanup failure restores the prior signed-in/offline state instead of reporting
-a successful sign-out.
+with Documents, Scan and More, without a `SuchiClient` or category store; Inbox,
+Search and Trash remain unavailable. Scan uses the existing native capture,
+protected queue and original account snapshot, not an unauthenticated upload
+path. Network recovery alone never starts uploads: **Retry** repeats the
+anonymous handshake and whoami first, then a same-account queue may resume and
+the full navigation returns. Sign-out cancels account-bound work and removes
+that account's offline directories before secure credential deletion. Any
+protected cleanup failure restores the prior signed-in/offline state instead
+of reporting a successful sign-out.
 
 `ServerOrigin` permits localhost/private-LAN HTTP only in debug builds. Profile
 and release pairing, manual entry and stored-credential restoration require
@@ -236,27 +240,31 @@ leaves the previous verified copy intact. Startup follows no links, deletes
 staging/malformed/unknown entries and retains only the newest valid duplicate.
 Thumbnails, email HTML and extracted text are never persisted there.
 
-Documents can select Offline while signed in and sorts manifest-backed rows
-without HTTP. Swiping right on an online Documents row reveals a solid
-Make/Update offline action; it fetches current detail before saving, asks
-consent for newly sensitive documents and rejects late work after an account
-transition. A network/timeout detail failure may fall back only to the
-matching account manifest and becomes read-only; authorization and malformed
-failures do not.
-Detail compares `original_blob` for Update, and offers explicit Make, Update
-and Remove actions. Sensitive retention and local file handoff require
-confirmation. More reports offline count/bytes and offers local Open/Remove.
+Documents owns the only saved-copy library entry point: the visible
+**Saved offline** filter shows the current account's count. It sorts
+manifest-backed rows without HTTP and opens the local payload even when a
+client is available.
+The category drawer has no second offline destination. Swiping right on an
+online row exposes Make/Update; tapping collapses the action before work starts,
+and another swipe can inspect or cancel it. Saving fetches current detail, asks
+consent if classification is newly sensitive, and rejects results after an
+identity change. Network/timeout detail failures may fall back only to the
+matching account manifest in read-only mode; authorization and malformed
+responses cannot. Detail compares `original_blob` for Update and places
+fresh/stale status plus update/remove options in the preview caption. Sensitive
+retention and local handoff require confirmation. More retains retry, not a
+second document library.
 
 Document detail owns a preview-first workspace. The preview card couples the
-openable page with friendly type and exact byte size. Its action row places
-the account-scoped offline control left of right-aligned Open; Share, Edit and
-Trash remain route actions. Responsive reader/filing actions lead into an
-always-visible metadata card. Its sender is the first
-`sender` correspondent, falling back to the first correspondent, and missing
-fields render explicitly rather than being inferred. Provenance displays the
-actual added time and first source label/kind; the validated `original_blob`
-remains internal to offline freshness checks and manifests, not the Details
-card. Ordinary preview states may fade; sensitive concealment replaces
+openable page with friendly type, exact byte size and saved-copy status. Its
+action row places the account-scoped Save offline control left of right-aligned
+Open until a copy exists; Share, Edit and Trash remain route actions.
+Responsive reader/filing actions lead into an always-visible metadata card.
+Its sender is the first `sender` correspondent, falling back to the first
+correspondent. Missing fields render explicitly rather than being inferred.
+Provenance displays added time and first source label/kind; the validated
+`original_blob` stays internal to offline freshness checks and manifests.
+Ordinary preview states may fade; sensitive concealment replaces
 the whole animation subtree and evicts revealed bytes before the next frame. A
 failed metadata refresh retains clearly labelled stale information with Retry.
 
@@ -292,14 +300,15 @@ copies belongs to the system clipboard and can outlive the reader.
 `lib/detail/document_files.dart` streams one document at a time into a protected
 `suchi-document-exports` directory under application support. The
 `app.suchi.page/documents` native channel opens or shares only a regular,
-non-linked payload at the exact expected depth under either that temporary root
-or `suchi-offline-documents`; staging directories, links, nested paths and files
-over 64 MiB are refused. Android exposes both roots through read-only
-FileProvider URI grants; iOS uses Quick Look and its share sheet. Temporary
-downloads are bounded to 64 MiB and partials are removed on
-failure or cancellation. Sign-out and cold startup remove export copies;
-otherwise the next export prunes copies older than 24 hours. Another app can
-retain a copy after the user shares it; Suchi Companion cannot remove that external copy.
+non-linked payload at the exact expected depth under either temporary exports
+or `suchi-offline-documents`. For saved copies it also requires a committed
+`offline-<UUIDv4>/document-<id>.<extension>` path, never a staging directory
+or manifest. Links, nested paths and files over 64 MiB are refused. Android
+exposes both roots through read-only FileProvider URI grants; iOS uses Quick
+Look and its share sheet. Temporary downloads are bounded to 64 MiB; failure
+or cancellation removes partials. Sign-out and cold startup clear export
+copies, and later exports prune copies older than 24 hours. Another app may
+retain a shared copy outside Suchi Companion's control.
 
 More's privacy-policy action opens the fixed public HTTPS
 `https://suchi.page/privacy/` address, never the paired origin or credentials.

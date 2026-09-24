@@ -74,31 +74,41 @@ are limited to 64 MiB; use the web app for larger files. Temporary copies are
 removed when signing out or on the next cold launch, and older copies are
 pruned during later exports.
 
-Choose **Make available offline** in document detail, or swipe right on an online
-Documents row to reveal a solid offline action. The app checks current server
+Choose **Save offline** in document detail, or swipe right on an online
+Documents row to reveal an offline action. The app checks current server
 metadata before retaining the verified full file in protected,
-backup-excluded app storage. A saved row offers **Update offline copy**;
-detail also offers **Remove offline copy**, which deletes only the device
-copy. Each file remains subject to the
-64 MiB limit. Sensitive files ask before retention and again before handoff to
+backup-excluded app storage. A saved document shows its offline status beside
+the file type and size inside the preview; **Offline copy options** offers
+**Update offline copy** when stale and **Remove offline copy**. Removing deletes
+only the device copy. Each file remains subject to the 64 MiB limit; sensitive
+files ask before retention and again before handoff to
 another app. Previews, email HTML and extracted text are never written into
 the offline store.
 
-**Documents → Offline** and **More → Offline documents** list copies for only
-the current server account and filing system. When a previously verified
-credential cannot reach its server, Suchi Companion starts with only Documents
-and More; Inbox, Scan, Search, Trash and other server actions stay unavailable.
-**More → Retry** performs a new anonymous handshake before reusing the token.
-Connectivity returning does not silently leave Offline. Signing out removes the
-account's offline copies before deleting its credential; if protected cleanup
-fails, sign-out fails and the session remains active.
+In **Documents**, the visible **Saved offline** filter shows the current
+account's saved-copy count. Select it to list copies without a network request;
+tap a row to open its protected full file. The category drawer does not
+duplicate this destination. Swipe actions fold away after selection, while the
+underlying save/update can still be retried or cancelled.
 
-Document detail opens on a large preview: tap the page or **Open** on the right
-of its action row to hand off the full file. Offline controls sit to the left
-of **Open**; **Share**, **Edit** and **Trash** remain in the top bar. File type
-and size stay with the preview. Below it, **Read text** and **File under…**
-actions. The always-visible **Details** card includes filing, sender, tags,
-sensitivity, languages, added date and source. Tap its **Sensitivity** row
+When a previously verified credential cannot reach its server, Suchi Companion
+keeps local Documents, Scan and More available. Scans enter the same protected,
+account-bound upload queue, remain on this device, and resume uploading only
+after connectivity returns **and** the stored credential is verified again.
+Inbox, Search, Trash and other server actions remain unavailable until then.
+**More → Retry** performs a new anonymous handshake before reusing the token.
+Signing out removes the account's offline copies before deleting its
+credential; if protected cleanup fails, sign-out fails and the session remains
+active. Failed queue files remain available for explicit resolution.
+
+Document detail opens on a large preview: tap the page or the filled **Open**
+button to hand off the full file. An outlined **Save offline** button sits
+beside Open until a copy exists; narrow layouts stack the controls. File type,
+size and saved-copy status stay inside the preview well, with update/remove
+in its options menu. **Share**, **Edit** and **Trash** remain in the top bar.
+Below it, **Read text** and **File under…** actions. The always-visible
+**Details** card includes filing, sender, tags, sensitivity, languages, added
+date and source. Tap its **Sensitivity** row
 to change classification directly; choosing a sensitive level conceals the
 preview immediately. Offline details remain read-only.
 

@@ -64,13 +64,14 @@
   View opens the queue without capture; new completions refresh archive lists.
 - Open accepted Scan uploads and split child documents through the existing
   document viewer, with account-bound pickers and independent recovery actions.
-- Preview-first document detail with **Open** right-aligned beside the offline
-  control in one action row, top-bar sharing and responsive reader/filing
-  actions. The always-visible **Details** card includes added date and source,
-  without exposing the blob ID; tapping its Sensitivity row changes
-  classification directly. Sensitive choices immediately conceal the preview.
-  File type, size and offline controls stay with the preview; stale refreshes
-  remain explicit.
+- Preview-first document detail with a filled **Open** action and outlined
+  **Save offline** beside it (stacked at larger text). Type, size and offline
+  status now sit inside the preview well; a compact options menu exposes
+  stale-copy update and confirmed removal without competing with Open.
+  Top-bar sharing and responsive reader/filing actions remain. The always-visible
+  **Details** card includes added date and source, without exposing the blob ID;
+  tapping its Sensitivity row changes classification directly. Sensitive choices
+  immediately conceal the preview; stale refreshes remain explicit.
 - Render email bodies inline through a sandboxed, credential-free WebView.
   JavaScript, navigation, forms, frames and remote resources stay blocked;
   sensitive email still requires Reveal and full-file handoff uses `.eml`.
@@ -81,16 +82,19 @@
   Named queries can be created, opened as an exact Documents scope and deleted;
   flat legacy and snapshot filters are preserved, while unsupported future
   filters remain visible and fail closed without a partial document request.
-- Keep selected full documents available offline in protected,
-  backup-excluded, account-scoped storage with atomic updates, restart
-  reconciliation, 64 MiB limits and no persistent previews or extracted text.
-  Swipe right on an online Documents row to reveal a solid Make/Update
-  offline action; fresh detail checks classification before retention.
-  Documents and More expose offline copies; verified saved sessions can enter
-  a local-only Documents/More shell after network failure and explicitly
-  retry the anonymous handshake.
-  Sensitive retention/handoff requires confirmation, and sign-out removes
-  offline copies before credentials.
+- Keep selected full documents in protected, backup-excluded, account-scoped
+  storage. Atomic retention, restart reconciliation and 64 MiB bounds protect
+  verified files without persisting previews or extracted text. Native viewers
+  receive only committed payloads, never staging files or manifests.
+  Swipe right on an online Documents row to save or update a copy; the action
+  closes when tapped and can be reopened to inspect or cancel work. Documents'
+  visible **Saved offline** filter shows the count and opens copies locally,
+  including while connected. More no longer duplicates that library.
+  A verified saved account can use Documents, Scan and More after network
+  failure. Scans enter the same protected, account-bound queue; uploads stay
+  paused until authenticated retry succeeds, not merely until connectivity
+  returns. Inbox, Search and Trash then return. Sensitive retention/handoff
+  requires confirmation, and sign-out removes offline copies before credentials.
 - Document capture keeps each platform's full native scanner pipeline for edge
   detection, perspective straightening, rotation, lighting cleanup, page edits
   and review before the shared upload flow.

@@ -394,7 +394,7 @@ final class SessionController extends ChangeNotifier {
         if (generation != _generation) return;
         _setState(
           SessionState.offline,
-          error: 'Suchi could not be reached. Only documents kept offline are available.',
+          error: 'Suchi could not be reached. Saved documents and scans remain available; uploads are paused.',
           requestId: error.requestId,
         );
         return;

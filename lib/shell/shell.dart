@@ -36,8 +36,9 @@ class SuchiShell extends StatefulWidget {
 }
 
 class _SuchiShellState extends State<SuchiShell> {
-  late final SuchiClient? _client;
-  late final JdCategoryStore? _categories;
+  SuchiClient? get _client => widget.services.session.client;
+  JdCategoryStore? _categories;
+  SuchiClient? _categoryClient;
   late final SavedViewController _savedViews;
   int _selected = 0;
   SavedView? _requestedSavedView;
@@ -56,18 +57,10 @@ class _SuchiShellState extends State<SuchiShell> {
     super.initState();
     _listMode = widget.services.settings.documentListMode;
     widget.services.settings.addListener(_settingsChanged);
-    _client = widget.services.session.client;
-    final client = _client;
-    _categories = client == null
-        ? null
-        : JdCategoryStore(
-            client: client,
-            onUnauthorized: widget.services.session.expire,
-          );
-    _categories?.load();
+    _updateClient();
     _savedViews = SavedViewController(session: widget.services.session);
     _syncIdentity();
-    widget.services.session.addListener(_syncIdentity);
+    widget.services.session.addListener(_sessionChanged);
     _queueSubscription = widget.services.queue.watchUploads().listen(
       _queueChanged,
       onError: (Object error, StackTrace stack) {
@@ -79,7 +72,7 @@ class _SuchiShellState extends State<SuchiShell> {
   @override
   void dispose() {
     widget.services.settings.removeListener(_settingsChanged);
-    widget.services.session.removeListener(_syncIdentity);
+    widget.services.session.removeListener(_sessionChanged);
     unawaited(_queueSubscription.cancel());
     _queueRows.dispose();
     _queueUnavailable.dispose();
@@ -91,6 +84,27 @@ class _SuchiShellState extends State<SuchiShell> {
   void _settingsChanged() {
     final mode = widget.services.settings.documentListMode;
     if (_listMode != mode) setState(() => _listMode = mode);
+  }
+
+  void _updateClient() {
+    final client = _client;
+    if (client == _categoryClient) return;
+    _categories?.dispose();
+    _categoryClient = client;
+    _categories = client == null
+        ? null
+        : JdCategoryStore(
+            client: client,
+            onUnauthorized: widget.services.session.expire,
+          );
+    _categories?.load();
+  }
+
+  void _sessionChanged() {
+    final clientChanged = _categoryClient != _client;
+    if (clientChanged) _updateClient();
+    _syncIdentity();
+    if (clientChanged && mounted) setState(() {});
   }
 
   AccountIdentity? get _currentIdentity => widget.services.session.identity;
@@ -143,12 +157,11 @@ class _SuchiShellState extends State<SuchiShell> {
 
   void _capture() {
     final services = widget.services;
-    if (_client == null ||
+    if (_currentIdentity == null ||
         _choosingCaptureMode ||
         !services.settings.loaded ||
         services.capture.isBusy ||
-        services.capture.hasPendingCapture ||
-        !identical(_client, services.session.client)) {
+        services.capture.hasPendingCapture) {
       return;
     }
     unawaited(
@@ -158,7 +171,7 @@ class _SuchiShellState extends State<SuchiShell> {
 
   Future<void> _chooseCaptureMode(Rect anchor) async {
     final services = widget.services;
-    if (_client == null ||
+    if (_currentIdentity == null ||
         _choosingCaptureMode ||
         !services.settings.loaded ||
         services.capture.isBusy ||
@@ -167,7 +180,7 @@ class _SuchiShellState extends State<SuchiShell> {
       return;
     }
     _choosingCaptureMode = true;
-    final client = services.session.client;
+    final identity = _currentIdentity;
     unawaited(HapticFeedback.selectionClick());
     try {
       final mode = await chooseCaptureMode(
@@ -175,9 +188,7 @@ class _SuchiShellState extends State<SuchiShell> {
         settings: services.settings,
         anchor: anchor,
       );
-      if (!mounted ||
-          mode == null ||
-          !identical(client, services.session.client)) {
+      if (!mounted || mode == null || _currentIdentity != identity) {
         return;
       }
       _choosingCaptureMode = false;
@@ -188,11 +199,7 @@ class _SuchiShellState extends State<SuchiShell> {
   }
 
   void _refreshArchive() {
-    if (!mounted ||
-        _client == null ||
-        !identical(_client, widget.services.session.client)) {
-      return;
-    }
+    if (!mounted || _client == null) return;
     setState(() => _readerRevision++);
   }
 
@@ -288,7 +295,11 @@ class _SuchiShellState extends State<SuchiShell> {
     final client = _client;
     final categories = _categories;
     if (client == null || categories == null) {
-      final offlineSelected = _selected == 1 ? 1 : 0;
+      final offlineSelected = switch (_selected) {
+        2 => 1,
+        4 => 2,
+        _ => 0,
+      };
       final screens = <Widget>[
         DocumentsScreen(
           key: const ValueKey('offline-documents'),
@@ -303,18 +314,15 @@ class _SuchiShellState extends State<SuchiShell> {
           onOpenDocument: (_) {},
           onOpenOfflineDocument: _openOfflineDocument,
         ),
+        _scanQueueScreen(),
         MoreScreen(
           session: widget.services.session,
           settings: widget.services.settings,
-          offlineDocuments: widget.services.offlineDocuments,
         ),
       ];
       return Scaffold(
         body: IndexedStack(index: offlineSelected, children: screens),
-        bottomNavigationBar: _OfflineDock(
-          selected: offlineSelected,
-          onSelected: (index) => setState(() => _selected = index),
-        ),
+        bottomNavigationBar: _queueDock(offlineOnly: true),
       );
     }
     final screens = <Widget>[
@@ -344,16 +352,7 @@ class _SuchiShellState extends State<SuchiShell> {
         onOpenDocument: _openDocument,
         onOpenOfflineDocument: _openOfflineDocument,
       ),
-      ScanQueueScreen(
-        queue: widget.services.queue,
-        capture: widget.services.capture,
-        uploads: widget.services.uploads,
-        session: widget.services.session,
-        shareImport: widget.services.shareImport,
-        settings: widget.services.settings,
-        onScan: _capture,
-        onOpenDocument: _openDocument,
-      ),
+      _scanQueueScreen(),
       SearchScreen(
         client: client,
         session: widget.services.session,
@@ -366,97 +365,66 @@ class _SuchiShellState extends State<SuchiShell> {
         session: widget.services.session,
         settings: widget.services.settings,
         onOpenTrash: _openTrash,
-        offlineDocuments: widget.services.offlineDocuments,
       ),
     ];
     return Scaffold(
       body: IndexedStack(index: _selected, children: screens),
-      bottomNavigationBar: ListenableBuilder(
-        listenable: Listenable.merge([
-          _queueRows,
-          _queueUnavailable,
-          widget.services.session,
-          widget.services.shareImport,
-          widget.services.uploads,
-          widget.services.settings,
-        ]),
-        builder: (context, _) {
-          final identity = _currentIdentity;
-          final rows = visibleQueueUploads(_queueRows.value, identity);
-          final pending = rows
-              .where(
-                (item) => item.state != 'filed' && item.state != 'duplicate',
-              )
-              .length;
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _UploadActivityBar(
-                // Replace the animation subtree immediately on account change.
-                key: ValueKey(identity),
-                rows: rows,
-                identity: identity,
-                importer: widget.services.shareImport,
-                uploadsEnabled: widget.services.uploads.isActive,
-                unavailable: _queueUnavailable.value,
-                onView: _openQueue,
-              ),
-              _SuchiDock(
-                selected: _selected,
-                pendingCount: pending,
-                onSelected: _select,
-                captureMode: widget.services.settings.captureMode,
-                onChooseCaptureMode: _chooseCaptureMode,
-              ),
-            ],
-          );
-        },
-      ),
+      bottomNavigationBar: _queueDock(),
     );
   }
-}
 
-class _OfflineDock extends StatelessWidget {
-  const _OfflineDock({required this.selected, required this.onSelected});
+  Widget _scanQueueScreen() => ScanQueueScreen(
+    queue: widget.services.queue,
+    capture: widget.services.capture,
+    uploads: widget.services.uploads,
+    session: widget.services.session,
+    shareImport: widget.services.shareImport,
+    settings: widget.services.settings,
+    onScan: _capture,
+    onOpenDocument: _openDocument,
+  );
 
-  final int selected;
-  final ValueChanged<int> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = SuchiColors.of(context);
-    return Material(
-      color: colors.surface,
-      elevation: 8,
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 78,
-          child: Row(
-            children: [
-              Expanded(
-                child: _DockItem(
-                  label: 'Documents',
-                  icon: Icons.folder_outlined,
-                  selected: selected == 0,
-                  onTap: () => onSelected(0),
-                ),
-              ),
-              Expanded(
-                child: _DockItem(
-                  label: 'More',
-                  icon: Icons.more_horiz,
-                  selected: selected == 1,
-                  onTap: () => onSelected(1),
-                ),
-              ),
-            ],
+  Widget _queueDock({bool offlineOnly = false}) => ListenableBuilder(
+    listenable: Listenable.merge([
+      _queueRows,
+      _queueUnavailable,
+      widget.services.session,
+      widget.services.shareImport,
+      widget.services.uploads,
+      widget.services.settings,
+    ]),
+    builder: (context, _) {
+      final identity = _currentIdentity;
+      final rows = visibleQueueUploads(_queueRows.value, identity);
+      final pending = rows
+          .where((item) => item.state != 'filed' && item.state != 'duplicate')
+          .length;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _UploadActivityBar(
+            // Replace the animation subtree immediately on account change.
+            key: ValueKey(identity),
+            rows: rows,
+            identity: identity,
+            importer: widget.services.shareImport,
+            uploadsEnabled: widget.services.uploads.isActive,
+            unavailable: _queueUnavailable.value,
+            onView: _openQueue,
           ),
-        ),
-      ),
-    );
-  }
+          _SuchiDock(
+            selected: _selected,
+            pendingCount: pending,
+            onSelected: _select,
+            captureMode: widget.services.settings.captureMode,
+            onChooseCaptureMode: _chooseCaptureMode,
+            offlineOnly: offlineOnly,
+          ),
+        ],
+      );
+    },
+  );
 }
 
 class _UploadActivity {
@@ -871,6 +839,7 @@ class _SuchiDock extends StatelessWidget {
     required this.onSelected,
     required this.captureMode,
     required this.onChooseCaptureMode,
+    this.offlineOnly = false,
   });
 
   final int selected;
@@ -878,6 +847,7 @@ class _SuchiDock extends StatelessWidget {
   final ValueChanged<int> onSelected;
   final CaptureMode captureMode;
   final ValueChanged<Rect> onChooseCaptureMode;
+  final bool offlineOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -901,31 +871,33 @@ class _SuchiDock extends StatelessWidget {
                   top: false,
                   child: Row(
                     children: [
-                      Expanded(
-                        child: _DockItem(
-                          label: 'Inbox',
-                          icon: Icons.inbox_outlined,
-                          selected: selected == 0,
-                          onTap: () => onSelected(0),
+                      if (!offlineOnly)
+                        Expanded(
+                          child: _DockItem(
+                            label: 'Inbox',
+                            icon: Icons.inbox_outlined,
+                            selected: selected == 0,
+                            onTap: () => onSelected(0),
+                          ),
                         ),
-                      ),
                       Expanded(
                         child: _DockItem(
                           label: 'Documents',
                           icon: Icons.folder_outlined,
-                          selected: selected == 1,
-                          onTap: () => onSelected(1),
+                          selected: selected == (offlineOnly ? 0 : 1),
+                          onTap: () => onSelected(offlineOnly ? 0 : 1),
                         ),
                       ),
                       const Expanded(child: SizedBox()),
-                      Expanded(
-                        child: _DockItem(
-                          label: 'Search',
-                          icon: Icons.search,
-                          selected: selected == 3,
-                          onTap: () => onSelected(3),
+                      if (!offlineOnly)
+                        Expanded(
+                          child: _DockItem(
+                            label: 'Search',
+                            icon: Icons.search,
+                            selected: selected == 3,
+                            onTap: () => onSelected(3),
+                          ),
                         ),
-                      ),
                       Expanded(
                         child: _DockItem(
                           label: 'More',

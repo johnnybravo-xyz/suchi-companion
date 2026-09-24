@@ -42,17 +42,34 @@ void main() {
   late ScanDatabase database;
   late AppServices services;
   late _Archive archive;
+  late _MutableNetwork network;
+  late _MemoryVault vault;
+  bool servicesReady = false;
+  bool returnCapture = false;
   late int scannerCalls;
 
   setUp(() async {
     FlutterSecureStorage.setMockInitialValues({});
     archive = _Archive();
+    network = _MutableNetwork();
+    vault = _MemoryVault();
+    returnCapture = false;
     scannerCalls = 0;
+    servicesReady = false;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel(scannerChannelName), (
-          _,
+          call,
         ) async {
+          if (call.method == 'discardCapture') return null;
           scannerCalls++;
+          if (returnCapture) {
+            return {
+              'cancelled': false,
+              'page_count': 1,
+              'pages': <Object>[],
+              'pdf_path': '${temporary.path}/camera.pdf',
+            };
+          }
           return {'cancelled': true, 'page_count': 0, 'pages': <Object>[]};
         });
     temporary = await Directory.systemTemp.createTemp('suchi-navigation-');
@@ -63,7 +80,13 @@ void main() {
       storageProtection: const _NoopProtection(),
     );
     final session = SessionController(
-      vault: _MemoryVault(),
+      vault: vault,
+      onPauseUploads: () async {
+        if (servicesReady) await services.uploads.pause();
+      },
+      onResumeUploads: () async {
+        if (servicesReady) await services.uploads.resume();
+      },
       clientFactory: (origin, token) => SuchiClient(
         origin: origin,
         token: token,
@@ -94,7 +117,7 @@ void main() {
       settings: AppSettingsController(database),
       uploads: UploadCoordinator(
         store: queue,
-        network: _OfflineNetwork(),
+        network: network,
         currentClient: () => session.client,
         currentIdentity: () => session.identity,
         deviceOcrEnabled: () => false,
@@ -117,6 +140,7 @@ void main() {
       documentFiles: documentFiles,
     );
     await services.settings.initialize();
+    servicesReady = true;
   });
 
   tearDown(() async {
@@ -281,29 +305,107 @@ void main() {
   }
 
   testNavigation(
-    'restored offline session exposes only local Documents and More',
+    'offline capture stays protected and account-bound until verified reconnect',
     (tester) async {
       archive.networkUnavailable = true;
-      archive.requests.clear();
       await services.session.retryStoredCredentials();
       expect(services.session.state, SessionState.offline);
-      expect(services.session.client, isNull);
+      final identity = services.session.identity!;
       final requestCount = archive.requests.length;
-
+      await tester.runAsync(() async {
+        await File('${temporary.path}/camera.pdf').writeAsBytes([
+          0x25,
+          0x50,
+          0x44,
+          0x46,
+          0x2d,
+          0x31,
+          0x2e,
+          0x34,
+          0x0a,
+        ], flush: true);
+      });
+      returnCapture = true;
       await showShell(tester);
-
       expect(find.byType(DocumentsScreen), findsOneWidget);
       expect(find.byType(InboxScreen), findsNothing);
-      expect(find.byType(ScanQueueScreen), findsNothing);
-      expect(find.text('Documents'), findsWidgets);
-      expect(find.text('More'), findsOneWidget);
-      expect(archive.requests, hasLength(requestCount));
-
+      expect(find.text('Search'), findsNothing);
       await tester.tap(find.text('More'));
       await tester.pumpAndSettle();
-      expect(find.text('Working offline'), findsOneWidget);
-      expect(find.text('Retry'), findsOneWidget);
+      expect(
+        tester.widget<ListTile>(find.widgetWithText(ListTile, 'Trash')).onTap,
+        isNull,
+      );
       expect(archive.requests, hasLength(requestCount));
+      await tester.tap(find.byType(ScanDockButton));
+      await _pumpQueueWork(tester);
+      for (
+        var attempt = 0;
+        attempt < 100 && services.capture.isBusy;
+        attempt++
+      ) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(scannerCalls, 1);
+      expect(
+        services.capture.state,
+        ScanCaptureState.complete,
+        reason:
+            '${services.capture.errorCode}: ${services.capture.errorMessage}',
+      );
+      expect(find.byType(ScanQueueScreen), findsOneWidget);
+      final queued = (await tester.runAsync(services.queue.allUploads))!.single;
+      expect(queued.state, 'queued');
+      expect(queueUploadBelongsToIdentity(queued, identity), isTrue);
+      expect(
+        await tester.runAsync(() => services.queue.verifyPayload(queued)),
+        isTrue,
+      );
+      expect(find.text(queued.filename), findsOneWidget);
+      expect(archive.requests, hasLength(requestCount));
+
+      await retainUpload(
+        tester,
+        id: 'foreign-capture',
+        state: 'queued',
+        documentId: null,
+        foreign: true,
+      );
+      await _pumpQueueWork(tester);
+      expect(find.text('foreign-capture.pdf'), findsNothing);
+      archive.uploadDigest = queued.sha256;
+      archive.uploadSize = queued.byteSize;
+      network.online = true;
+      await tester.runAsync(() async {
+        await services.uploads.start();
+        await services.uploads.resume();
+      });
+      expect(archive.requests, hasLength(requestCount));
+      archive.networkUnavailable = false;
+      final reconnect = services.session.retryStoredCredentials();
+      await _pumpQueueWork(tester);
+      await tester.runAsync(() => reconnect);
+      expect(services.session.state, SessionState.signedIn);
+      final localAfterReconnect = await tester.runAsync(
+        () => services.queue.database.uploadById(queued.id),
+      );
+      final foreignAfterReconnect = await tester.runAsync(
+        () => services.queue.database.uploadById('foreign-capture'),
+      );
+      expect(localAfterReconnect?.state, 'duplicate');
+      expect(foreignAfterReconnect?.state, 'queued');
+      expect(
+        archive.requests.where(
+          (request) =>
+              request.method == 'POST' && request.url.path == '/api/documents/',
+        ),
+        hasLength(1),
+      );
+      expect(find.byType(InboxScreen, skipOffstage: false), findsOneWidget);
+      expect(find.text('Search'), findsOneWidget);
     },
   );
 
@@ -989,6 +1091,8 @@ final class _Archive {
   bool failDetail = false;
   bool networkUnavailable = false;
   bool refuseEdit = false;
+  String? uploadDigest;
+  int? uploadSize;
   Completer<http.Response>? pendingDetail;
   Completer<http.Response>? pendingRestore;
   List<Map<String, Object?>> splitResults = [];
@@ -1013,6 +1117,23 @@ final class _Archive {
     if (networkUnavailable &&
         (path == '/api/handshake' || path == '/api/whoami')) {
       throw const SocketException('offline');
+    }
+    if (path == '/api/documents/' && request.method == 'POST') {
+      return http.Response(
+        jsonEncode({
+          'id': 93,
+          'sha256': uploadDigest,
+          'size': uploadSize,
+          'mime_type': 'application/pdf',
+          'title': 'Camera scan',
+          'deduplicated': true,
+        }),
+        200,
+        headers: {
+          'content-type': 'application/json',
+          'location': '/api/documents/93',
+        },
+      );
     }
     switch (path) {
       case '/api/handshake':
@@ -1105,12 +1226,13 @@ http.Response _json(Object body, {int status = 200}) => http.Response(
 );
 
 final class _MemoryVault implements CredentialVault {
+  StoredCredentials? credentials;
   @override
-  Future<void> clear() async {}
+  Future<void> clear() async => credentials = null;
   @override
-  Future<StoredCredentials?> read() async => null;
+  Future<StoredCredentials?> read() async => credentials;
   @override
-  Future<void> save(StoredCredentials credentials) async {}
+  Future<void> save(StoredCredentials value) async => credentials = value;
 }
 
 final class _NoopProtection implements StorageProtection {
@@ -1120,12 +1242,13 @@ final class _NoopProtection implements StorageProtection {
   Future<void> protectDirectory(String path) async {}
 }
 
-final class _OfflineNetwork implements NetworkMonitor {
+final class _MutableNetwork implements NetworkMonitor {
+  bool online = false;
   @override
   Stream<bool> get changes => const Stream.empty();
 
   @override
-  Future<bool> isOnline() async => false;
+  Future<bool> isOnline() async => online;
 }
 
 final class _OnlineNetwork implements NetworkMonitor {

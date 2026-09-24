@@ -75,12 +75,14 @@ removed when signing out or on the next cold launch, and older copies are
 pruned during later exports.
 
 Choose **Save offline** in document detail, or swipe right on an online
-Documents row to reveal an offline action. The app checks current server
-metadata before retaining the verified full file in protected,
+Documents row to reveal Save/Update. Swipe left on a saved row to reveal
+**Remove offline copy**, which asks for confirmation and deletes only the
+device copy. Saving checks current server metadata before retaining the
+verified full file in protected,
 backup-excluded app storage. A saved document shows its offline status beside
 the file type and size inside the preview; **Offline copy options** offers
-**Update offline copy** when stale and **Remove offline copy**. Removing deletes
-only the device copy. Each file remains subject to the 64 MiB limit; sensitive
+**Update offline copy** when stale and **Remove offline copy**. Each file
+remains subject to the 64 MiB limit; sensitive
 files ask before retention and again before handoff to
 another app. Previews, email HTML and extracted text are never written into
 the offline store.
@@ -88,8 +90,10 @@ the offline store.
 In **Documents**, the visible **Saved offline** filter shows the current
 account's saved-copy count. Select it to list copies without a network request;
 tap a row to open its protected full file. The category drawer does not
-duplicate this destination. Swipe actions fold away after selection, while the
-underlying save/update can still be retried or cancelled.
+duplicate this destination. Swipe left here to remove a saved copy even while
+offline; swipe right to save/update is available only on online rows. Swipe
+actions fold away after selection, while underlying work can still be retried
+or cancelled.
 
 When a previously verified credential cannot reach its server, Suchi Companion
 keeps local Documents, Scan and More available. Scans enter the same protected,

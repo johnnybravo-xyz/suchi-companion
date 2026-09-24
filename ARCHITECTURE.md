@@ -245,8 +245,9 @@ Documents owns the only saved-copy library entry point: the visible
 manifest-backed rows without HTTP and opens the local payload even when a
 client is available.
 The category drawer has no second offline destination. Swiping right on an
-online row exposes Make/Update; tapping collapses the action before work starts,
-and another swipe can inspect or cancel it. Saving fetches current detail, asks
+online row exposes Make/Update; swiping left on a saved row (including the
+local-only library) exposes confirmed removal without contacting the server.
+Actions collapse when tapped. Saving fetches current detail, asks
 consent if classification is newly sensitive, and rejects results after an
 identity change. Network/timeout detail failures may fall back only to the
 matching account manifest in read-only mode; authorization and malformed

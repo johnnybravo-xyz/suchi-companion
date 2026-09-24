@@ -25,7 +25,7 @@ void main() {
   tearDown(() async => fixture.close());
 
   testWidgets(
-    'right swipe reveals an operable offline action; left swipe does not',
+    'right swipe saves or updates; left swipe does nothing without a copy',
     (tester) async {
       _phoneViewport(tester);
       final opened = <int>[];
@@ -74,6 +74,85 @@ void main() {
     },
   );
 
+  testWidgets('left swipe removes only the confirmed device copy', (
+    tester,
+  ) async {
+    _phoneViewport(tester);
+    await fixture.show(tester);
+    await tester.drag(find.text('Receipt'), const Offset(-220, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove offline copy').hitTestable(), findsNothing);
+
+    await tester.drag(find.text('Receipt'), const Offset(220, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Make available offline'));
+    await _waitForCopy(tester, fixture, downloads: 1);
+    final saved = fixture.store.find(fixture.session.identity, 91)!;
+    final detailRequests = fixture.detailRequests;
+    final downloadRequests = fixture.downloadRequests;
+
+    await tester.drag(find.text('Receipt'), const Offset(-220, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove offline copy').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('Remove offline copy?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(fixture.store.find(fixture.session.identity, 91), same(saved));
+    expect(await tester.runAsync(saved.payload.exists), isTrue);
+
+    await tester.tap(find.text('Saved offline · 1'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.text('Authoritative receipt'), const Offset(220, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Update offline copy').hitTestable(), findsNothing);
+    await tester.drag(
+      find.text('Authoritative receipt'),
+      const Offset(-220, 0),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove offline copy').hitTestable());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove', skipOffstage: false));
+    await tester.pumpAndSettle();
+    await _waitForRemoval(tester, fixture);
+    expect(await tester.runAsync(saved.payload.exists), isFalse);
+    expect(find.text('No offline documents'), findsOneWidget);
+    expect(fixture.detailRequests, detailRequests);
+    expect(fixture.downloadRequests, downloadRequests);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('confirmation cannot cross a same-account session transition', (
+    tester,
+  ) async {
+    _phoneViewport(tester);
+    await fixture.show(tester);
+    await tester.drag(find.text('Receipt'), const Offset(220, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Make available offline'));
+    await _waitForCopy(tester, fixture, downloads: 1);
+    final oldIdentity = fixture.session.identity!;
+    final saved = fixture.store.find(oldIdentity, 91)!;
+
+    await tester.drag(find.text('Receipt'), const Offset(-220, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove offline copy').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('Remove offline copy?'), findsOneWidget);
+    expect(await fixture.session.signOut(), isTrue);
+    await fixture.session.pairWithToken(
+      serverAddress: 'https://suchi.example.com',
+      token: 'a' * 64,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove', skipOffstage: false));
+    await tester.pumpAndSettle();
+    expect(fixture.store.find(oldIdentity, 91), same(saved));
+    expect(await tester.runAsync(saved.payload.exists), isTrue);
+    expect(fixture.store.entriesFor(fixture.session.identity), hasLength(1));
+  });
+
   testWidgets('offline action remains tappable with large phone text', (
     tester,
   ) async {
@@ -88,6 +167,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(action, findsNothing);
     await _waitForCopy(tester, fixture, downloads: 1);
+    expect(fixture.store.entriesFor(fixture.session.identity), hasLength(1));
+    await tester.drag(find.text('Receipt'), const Offset(-220, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove offline').hitTestable(), findsOneWidget);
+    await tester.tap(find.text('Remove offline'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
     expect(fixture.store.entriesFor(fixture.session.identity), hasLength(1));
     expect(tester.takeException(), isNull);
   });
@@ -185,6 +272,21 @@ Future<void> _waitForCopy(
     'Offline copy did not finish: detail=${fixture.detailRequests}, '
     'downloads=${fixture.downloadRequests}, busy=${fixture.store.busy}.',
   );
+}
+
+Future<void> _waitForRemoval(WidgetTester tester, _Fixture fixture) async {
+  for (var attempt = 0; attempt < 500; attempt++) {
+    if (!fixture.store.busy &&
+        fixture.store.find(fixture.session.identity, 91) == null) {
+      await tester.pumpAndSettle();
+      return;
+    }
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump(const Duration(milliseconds: 10));
+  }
+  fail('Offline copy was not removed.');
 }
 
 final class _Fixture {

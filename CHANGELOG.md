@@ -86,9 +86,10 @@
   storage. Atomic retention, restart reconciliation and 64 MiB bounds protect
   verified files without persisting previews or extracted text. Native viewers
   receive only committed payloads, never staging files or manifests.
-  Swipe right on an online Documents row to save or update a copy; the action
-  closes when tapped and can be reopened to inspect or cancel work. Documents'
-  visible **Saved offline** filter shows the count and opens copies locally,
+  Swipe right on an online Documents row to save or update a copy; swipe
+  left on a saved row, including the offline library, to confirm local removal.
+  Actions close when tapped and can be reopened to inspect or cancel work.
+  Documents' visible **Saved offline** filter shows the count and opens copies locally,
   including while connected. More no longer duplicates that library.
   A verified saved account can use Documents, Scan and More after network
   failure. Scans enter the same protected, account-bound queue; uploads stay

@@ -90,12 +90,15 @@ Connectivity returning does not silently leave Offline. Signing out removes the
 account's offline copies before deleting its credential; if protected cleanup
 fails, sign-out fails and the session remains active.
 
-The detail workspace keeps the first-page preview and file actions together.
-**Document information** expands file type, size, sources and tags when tapped
-on its collapsed header. Sensitive previews still require **Reveal preview**;
-**Hide** removes them immediately.
-If a refresh fails, the last loaded information stays labelled with an error
-and Retry rather than appearing current.
+Document detail opens on a large preview: tap the page or **Open** to hand off
+the full file, or use **Share**, **Edit** and **Trash** in the top bar. File type,
+size and the make/update/remove-offline control stay with the preview. Below it,
+**Read text** and **File under…** remain the two primary actions. An always-visible
+card shows filing, sender, tags, sensitivity and available languages; the footer
+identifies when and how the document was added without exposing the full blob
+identifier. Sensitive previews still require **Reveal preview**; **Hide** removes
+them immediately. If a refresh fails, the last loaded information stays labelled
+with an error and Retry rather than appearing current.
 Email documents render the server-produced body inline without giving the
 WebView a server URL or credentials. JavaScript, links, forms, frames and remote
 resources are blocked. Email HTML stays in memory only and is cleared by Hide,

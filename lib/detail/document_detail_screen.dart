@@ -63,7 +63,6 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
   int _generation = 0;
   int _previewGeneration = 0;
   int _sensitivePreviewEpoch = 0;
-  final ExpansibleController _informationController = ExpansibleController();
 
   bool get _sameAccount =>
       widget.session.state == SessionState.signedIn &&
@@ -94,7 +93,6 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     _generation++;
     _previewGeneration++;
     _evictRevealedPreview();
-    _informationController.dispose();
     super.dispose();
   }
 
@@ -730,8 +728,15 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     backgroundColor: SuchiColors.of(context).paper,
     appBar: AppBar(
       leading: const BackButton(),
-      title: const Text('Document'),
       actions: [
+        IconButton(
+          tooltip: 'Share document',
+          onPressed:
+              _mutating || _fileLoading || _offlineMutating || _document == null
+              ? null
+              : () => _openFile(share: true),
+          icon: const Icon(Icons.ios_share_outlined),
+        ),
         IconButton(
           tooltip: 'Edit document',
           onPressed:
@@ -774,23 +779,26 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
       );
     }
     final document = _document!;
-    final colors = SuchiColors.of(context);
     final textTheme = Theme.of(context).textTheme;
     final offlineEntry = _offlineEntry ?? _offlineFallback;
     final offlineOutdated =
         offlineEntry != null &&
         offlineEntry.document.originalBlob != document.originalBlob;
-    final date = DateFormat.yMMMd().format(
-      DateTime.fromMillisecondsSinceEpoch(
-        document.createdAt * 1000,
-        isUtc: true,
-      ).toLocal(),
-    );
+    final summary = <String>[
+      if (document.jdCategoryName?.trim().isNotEmpty == true)
+        document.jdCategoryName!.trim(),
+      ?_sender(document),
+      _formatDate(document.createdAt),
+    ];
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
       children: [
-        const SectionLabel('Document'),
-        const SizedBox(height: 8),
+        _previewPane(
+          document,
+          offlineEntry: offlineEntry,
+          offlineOutdated: offlineOutdated,
+        ),
+        const SizedBox(height: 20),
         Text(
           document.title,
           style: textTheme.headlineSmall?.copyWith(
@@ -806,19 +814,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
           children: [
             if (document.jdCategoryCode != null)
               JdChip(code: document.jdCategoryCode),
-            Text(
-              [
-                if (document.jdCategoryName?.trim().isNotEmpty == true)
-                  document.jdCategoryName!,
-                date,
-              ].join(' · '),
-              style: textTheme.bodySmall,
-            ),
-            Semantics(
-              label: 'Classification: ${_classification(document.sensitivity)}',
-              excludeSemantics: true,
-              child: QuietBadge(_classification(document.sensitivity)),
-            ),
+            Text(summary.join(' · '), style: textTheme.bodySmall),
           ],
         ),
         if (error != null) ...[
@@ -854,174 +850,74 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
           ),
         ],
         const SizedBox(height: 18),
-        _previewPane(document),
-        const SizedBox(height: 16),
-        if (_fileLoading)
-          ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 52),
-            child: Row(
-              children: [
-                const SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('Preparing document…')),
-                TextButton(
-                  style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
-                  onPressed: widget.files.cancelPending,
-                  child: const Text('Cancel'),
-                ),
-              ],
-            ),
-          )
-        else
-          FilledButton.icon(
-            style: FilledButton.styleFrom(minimumSize: const Size(0, 52)),
-            onPressed: _mutating || _offlineMutating
-                ? null
-                : () => _openFile(share: false),
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('Open document'),
-          ),
-        const SizedBox(height: 10),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-            final columns = (constraints.maxWidth / (104 * scale + 8))
-                .floor()
-                .clamp(1, 3);
-            final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
-            final enabled = !_mutating && !_fileLoading && !_offlineMutating;
-            final online = _offlineFallback == null;
-            return Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _secondaryAction(
-                  width: width,
-                  icon: Icons.ios_share,
-                  label: 'Share',
-                  onPressed: enabled ? () => _openFile(share: true) : null,
-                ),
-                _secondaryAction(
-                  width: width,
-                  icon: Icons.article_outlined,
-                  label: 'Read text',
-                  onPressed: enabled && online ? _readText : null,
-                ),
-                _secondaryAction(
-                  width: width,
-                  icon: Icons.drive_file_move_outline,
-                  label: 'File under',
-                  onPressed: enabled && online ? _fileUnder : null,
-                ),
-              ],
-            );
-          },
-        ),
-        if (widget.offlineDocuments != null) ...[
-          const SizedBox(height: 12),
-          if (_offlineMutating)
-            Row(
-              children: [
-                const SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: Text(_offlineProgressLabel)),
-                TextButton(
-                  onPressed: widget.offlineDocuments!.cancelPending,
-                  child: const Text('Cancel'),
-                ),
-              ],
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (offlineEntry != null && !offlineOutdated)
-                  const Chip(
-                    avatar: Icon(Icons.offline_pin, size: 18),
-                    label: Text('Available offline'),
-                  ),
-                if (_offlineFallback == null &&
-                    (offlineEntry == null || offlineOutdated))
-                  OutlinedButton.icon(
-                    onPressed: _saveOffline,
-                    icon: const Icon(Icons.download_for_offline_outlined),
-                    label: Text(
-                      offlineEntry == null
-                          ? 'Make available offline'
-                          : 'Update offline copy',
-                    ),
-                  ),
-                if (offlineEntry != null)
-                  OutlinedButton.icon(
-                    onPressed: _removeOffline,
-                    icon: const Icon(Icons.remove_circle_outline),
-                    label: const Text('Remove offline copy'),
-                  ),
-              ],
+        _bodyActions(),
+        const SizedBox(height: 20),
+        const SectionLabel('Details'),
+        const SizedBox(height: 8),
+        _metadataCard(document),
+        const SizedBox(height: 20),
+        _provenanceFooter(document),
+      ],
+    );
+  }
+
+  Widget _metadataCard(DocumentDetail document) {
+    final rows = <MapEntry<String, String>>[
+      MapEntry('Filed', _filedUnder(document)),
+      MapEntry('From', _sender(document) ?? 'None'),
+      MapEntry(
+        'Tags',
+        document.tags.isEmpty ? 'None' : document.tags.join(' · '),
+      ),
+      MapEntry('Sensitivity', _classification(document.sensitivity)),
+      if (document.languages.trim().isNotEmpty)
+        MapEntry('Languages', document.languages.trim()),
+    ];
+    return SuchiCard(
+      key: const ValueKey('document-metadata'),
+      elevated: false,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          for (var index = 0; index < rows.length; index++)
+            _MetaRow(
+              label: rows[index].key,
+              value: rows[index].value,
+              showDivider: index != rows.length - 1,
             ),
         ],
-        const SizedBox(height: 18),
-        SuchiCard(
-          child: ExpansionTile(
-            controller: _informationController,
-            onExpansionChanged: (_) => setState(() {}),
-            title: const Text('Document information'),
-            subtitle: const Text('Type, size, sources, tags'),
-            expansionAnimationStyle: SuchiMotion.standardStyle(context),
-            shape: const Border(),
-            collapsedShape: const Border(),
-            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            children: [
-              _MetaRow(label: 'Type', value: document.mimeType),
-              _MetaRow(
-                label: 'Size',
-                value: _formatBytes(document.originalSize),
+      ),
+    );
+  }
+
+  Widget _provenanceFooter(DocumentDetail document) {
+    final source = document.sources.isEmpty
+        ? 'None'
+        : _sourceName(document.sources.first);
+    final visible =
+        'Added ${_formatDate(document.addedAt)} · '
+        'Source $source · Blob ${_shortBlob(document.originalBlob)}';
+    return Semantics(
+      key: const ValueKey('document-provenance'),
+      label:
+          'Provenance. Added ${_formatDate(document.addedAt)}. '
+          'Source $source. Original blob ${_shortBlob(document.originalBlob)}.',
+      child: ExcludeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SectionLabel('Provenance'),
+            const SizedBox(height: 7),
+            Text(
+              visible,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: SuchiColors.of(context).muted,
+                height: 1.45,
               ),
-              if (document.languages.isNotEmpty)
-                _MetaRow(label: 'Languages', value: document.languages),
-              if (document.sources.isNotEmpty) ...[
-                const _InformationLabel('Sources'),
-                for (final source in document.sources)
-                  _MetaRow(
-                    label: source.label,
-                    value: source.detail?.isNotEmpty == true
-                        ? source.detail!
-                        : source.kind,
-                  ),
-              ],
-              if (document.correspondents.isNotEmpty) ...[
-                const _InformationLabel('Correspondents'),
-                for (final correspondent in document.correspondents)
-                  _MetaRow(
-                    label: correspondent.role,
-                    value: correspondent.name,
-                  ),
-              ],
-              if (document.tags.isNotEmpty) ...[
-                const _InformationLabel('Tags'),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 7,
-                    runSpacing: 7,
-                    children: [
-                      for (final tag in document.tags)
-                        Chip(label: Text(tag), backgroundColor: colors.manila),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -1034,125 +930,303 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     onRetry: _load,
   );
 
-  Widget _secondaryAction({
-    required double width,
+  Widget _bodyActions() {
+    final enabled = !_mutating && !_fileLoading && !_offlineMutating;
+    final online = _offlineFallback == null;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+        final stacked = constraints.maxWidth < 340 || scale > 1.3;
+        final read = _bodyAction(
+          icon: Icons.article_outlined,
+          label: 'Read text',
+          onPressed: enabled && online ? _readText : null,
+        );
+        final file = _bodyAction(
+          icon: Icons.drive_file_move_outline,
+          label: 'File under…',
+          onPressed: enabled && online ? _fileUnder : null,
+        );
+        if (stacked) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [read, const SizedBox(height: 8), file],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: read),
+            const SizedBox(width: 8),
+            Expanded(child: file),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _bodyAction({
     required IconData icon,
     required String label,
     required VoidCallback? onPressed,
-  }) => SizedBox(
-    width: width,
-    child: OutlinedButton.icon(
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(104, 48),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      ),
-      onPressed: onPressed,
-      icon: Icon(icon, size: 18),
-      label: Text(label, textAlign: TextAlign.center),
+  }) => OutlinedButton.icon(
+    style: OutlinedButton.styleFrom(
+      minimumSize: const Size(0, 52),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
     ),
+    onPressed: onPressed,
+    icon: Icon(icon, size: 19),
+    label: Text(label, textAlign: TextAlign.center),
   );
 
-  Widget _previewPane(DocumentDetail document) {
+  Widget _previewPane(
+    DocumentDetail document, {
+    required OfflineDocument? offlineEntry,
+    required bool offlineOutdated,
+  }) {
     final colors = SuchiColors.of(context);
-    if (_offlineFallback != null) {
-      return SuchiCard(
-        child: SizedBox(
-          height: 220,
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.cloud_off_outlined, size: 36, color: colors.muted),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Preview unavailable offline',
-                    style: Theme.of(context).textTheme.titleMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Open the protected full copy to view this document.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    final concealed = document.isSensitive && !_revealed;
-    final content = concealed
+    final concealed =
+        _offlineFallback == null && document.isSensitive && !_revealed;
+    final content = _offlineFallback != null
+        ? _offlinePreviewContent()
+        : concealed
         ? _SensitiveGate(document: document, onReveal: _reveal)
         : _previewContent(document);
     // Concealment and WebView removal replace the entire subtree immediately,
     // never retaining sensitive bytes or email HTML in an outgoing animation.
     final well = KeyedSubtree(
       key: ValueKey((document.isSensitive, _sensitivePreviewEpoch, concealed)),
-      child: concealed || _emailHtml != null
+      child: concealed || _emailHtml != null || _offlineFallback != null
           ? content
           : _animatedPreview(content),
     );
+    final enabled = !_mutating && !_offlineMutating && !_fileLoading;
+    final activate = enabled
+        ? concealed
+              ? _reveal
+              : () => _openFile(share: false)
+        : null;
     return SuchiCard(
+      key: const ValueKey('document-preview'),
+      color: colors.manila,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            constraints: const BoxConstraints(minHeight: 44),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Preview',
-                    style: Theme.of(context).textTheme.titleSmall,
+          Semantics(
+            button: true,
+            label: concealed ? 'Reveal document preview' : 'Open document',
+            child: InkWell(
+              onTap: activate,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 300),
+                    child: Center(child: well),
                   ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Wrap(
-                    spacing: 8,
-                    alignment: WrapAlignment.end,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        _isEmail(document.mimeType)
-                            ? 'Email body'
-                            : 'First page',
-                        style: Theme.of(context).textTheme.bodySmall,
+                  if (!concealed)
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        alignment: WrapAlignment.end,
+                        children: [
+                          if (document.isSensitive && _revealed)
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                minimumSize: const Size(48, 48),
+                                backgroundColor: colors.surface.withValues(
+                                  alpha: 0.94,
+                                ),
+                              ),
+                              onPressed: _hide,
+                              icon: const Icon(
+                                Icons.visibility_off_outlined,
+                                size: 18,
+                              ),
+                              label: const Text('Hide'),
+                            ),
+                          Tooltip(
+                            message: _fileLoading
+                                ? 'Cancel document handoff'
+                                : 'Open document',
+                            child: FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(48, 48),
+                              ),
+                              onPressed: _fileLoading
+                                  ? widget.files.cancelPending
+                                  : activate,
+                              icon: _fileLoading
+                                  ? const SizedBox.square(
+                                      dimension: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.open_in_new, size: 18),
+                              label: Text(_fileLoading ? 'Cancel' : 'Open'),
+                            ),
+                          ),
+                        ],
                       ),
-                      if (document.isSensitive && _revealed)
-                        TextButton.icon(
-                          style: TextButton.styleFrom(
-                            minimumSize: const Size(48, 48),
-                          ),
-                          onPressed: _hide,
-                          icon: const Icon(
-                            Icons.visibility_off_outlined,
-                            size: 18,
-                          ),
-                          label: const Text('Hide'),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
+                    ),
+                ],
+              ),
             ),
           ),
-          Container(
-            constraints: const BoxConstraints(minHeight: 265),
-            decoration: BoxDecoration(
-              color: colors.manila,
-              border: Border(top: BorderSide(color: colors.line)),
-            ),
-            alignment: Alignment.center,
-            child: well,
+          _previewFooter(
+            document,
+            offlineEntry: offlineEntry,
+            offlineOutdated: offlineOutdated,
           ),
         ],
       ),
+    );
+  }
+
+  Widget _offlinePreviewContent() {
+    final colors = SuchiColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.cloud_off_outlined, size: 38, color: colors.muted),
+          const SizedBox(height: 12),
+          Text(
+            'Preview unavailable offline',
+            style: Theme.of(context).textTheme.titleMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Open the protected full copy to view this document.',
+            style: Theme.of(context).textTheme.bodySmall,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _previewFooter(
+    DocumentDetail document, {
+    required OfflineDocument? offlineEntry,
+    required bool offlineOutdated,
+  }) {
+    final colors = SuchiColors.of(context);
+    final control = _offlineControl(offlineEntry, offlineOutdated);
+    final fileInfo = Wrap(
+      spacing: 9,
+      runSpacing: 7,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        QuietBadge(_friendlyType(document.mimeType)),
+        Text(
+          _formatBytes(document.originalSize),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.line)),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+          final stacked = constraints.maxWidth < 420 || scale > 1.25;
+          if (control == null) return fileInfo;
+          if (stacked) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                fileInfo,
+                const SizedBox(height: 6),
+                Align(alignment: Alignment.centerLeft, child: control),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: fileInfo),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Align(alignment: Alignment.centerRight, child: control),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget? _offlineControl(OfflineDocument? offlineEntry, bool offlineOutdated) {
+    final store = widget.offlineDocuments;
+    if (store == null) return null;
+    if (_offlineMutating) {
+      return Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              semanticsLabel: _offlineProgressLabel,
+            ),
+          ),
+          Text(_offlineProgressLabel),
+          TextButton(
+            onPressed: store.cancelPending,
+            child: const Text('Cancel'),
+          ),
+        ],
+      );
+    }
+    final enabled = !_mutating && !_fileLoading;
+    if (offlineEntry == null) {
+      return TextButton.icon(
+        onPressed: enabled ? _saveOffline : null,
+        icon: const Icon(Icons.download_for_offline_outlined),
+        label: const Text('Make available offline'),
+      );
+    }
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (!offlineOutdated)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.offline_pin, size: 18),
+                SizedBox(width: 6),
+                Text('Available offline'),
+              ],
+            ),
+          ),
+        if (offlineOutdated)
+          TextButton.icon(
+            onPressed: enabled ? _saveOffline : null,
+            icon: const Icon(Icons.update),
+            label: const Text('Update offline copy'),
+          ),
+        TextButton.icon(
+          onPressed: enabled ? _removeOffline : null,
+          icon: const Icon(Icons.remove_circle_outline),
+          label: const Text('Remove offline copy'),
+        ),
+      ],
     );
   }
 
@@ -1192,7 +1266,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
         padding: const EdgeInsets.all(12),
         child: Image.memory(
           bytes,
-          height: 250,
+          height: 270,
           fit: BoxFit.contain,
           semanticLabel: 'First page preview',
         ),
@@ -1253,6 +1327,76 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
+  static String _formatDate(int seconds) => DateFormat.yMMMd().format(
+    DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true).toLocal(),
+  );
+
+  static String? _sender(DocumentDetail document) {
+    for (final correspondent in document.correspondents) {
+      if (correspondent.role.trim().toLowerCase() == 'sender') {
+        final name = correspondent.name.trim();
+        return name.isEmpty ? null : name;
+      }
+    }
+    if (document.correspondents.isEmpty) return null;
+    final name = document.correspondents.first.name.trim();
+    return name.isEmpty ? null : name;
+  }
+
+  static String _filedUnder(DocumentDetail document) {
+    final path = <String>[
+      if (document.jdAreaName?.trim().isNotEmpty == true)
+        document.jdAreaName!.trim(),
+      if (document.jdCategoryName?.trim().isNotEmpty == true)
+        document.jdCategoryName!.trim(),
+    ];
+    if (path.isEmpty) return document.jdCategoryCode?.toString() ?? 'None';
+    final label = path.join(' / ');
+    return document.jdCategoryCode == null
+        ? label
+        : '${document.jdCategoryCode} · $label';
+  }
+
+  static String _sourceName(DocumentSource source) {
+    final label = source.label.trim();
+    final kind = source.kind.trim();
+    if (label.isEmpty) return kind.isEmpty ? 'None' : kind;
+    if (kind.isEmpty || label.toLowerCase() == kind.toLowerCase()) return label;
+    return '$label / $kind';
+  }
+
+  static String _shortBlob(String digest) {
+    if (digest.length <= 16) return digest;
+    return '${digest.substring(0, 8)}…${digest.substring(digest.length - 8)}';
+  }
+
+  static String _friendlyType(String mimeType) {
+    final normalized = mimeType.split(';').first.trim().toLowerCase();
+    return switch (normalized) {
+      'application/pdf' => 'PDF',
+      'message/rfc822' => 'EMAIL',
+      'text/plain' => 'TEXT',
+      'text/html' => 'HTML',
+      'image/jpeg' => 'JPEG',
+      'image/png' => 'PNG',
+      'image/heic' || 'image/heif' => 'HEIC',
+      'application/msword' ||
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document' =>
+        'WORD',
+      'application/vnd.ms-excel' ||
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' =>
+        'EXCEL',
+      'application/vnd.ms-powerpoint' ||
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation' =>
+        'POWERPOINT',
+      'application/zip' => 'ZIP',
+      _ when normalized.startsWith('image/') => 'IMAGE',
+      _ when normalized.startsWith('audio/') => 'AUDIO',
+      _ when normalized.startsWith('video/') => 'VIDEO',
+      _ => 'FILE',
+    };
+  }
+
   static bool _isEmail(String mimeType) =>
       mimeType.split(';').first.trim().toLowerCase() == 'message/rfc822';
 }
@@ -1278,7 +1422,7 @@ class _SensitiveGate extends StatelessWidget {
         ),
         const SizedBox(height: 7),
         Text(
-          'The image will load only after you choose Reveal.',
+          'The preview will load only after you choose Reveal.',
           style: Theme.of(context).textTheme.bodySmall,
           textAlign: TextAlign.center,
         ),
@@ -1294,31 +1438,65 @@ class _SensitiveGate extends StatelessWidget {
 }
 
 class _MetaRow extends StatelessWidget {
-  const _MetaRow({required this.label, required this.value});
+  const _MetaRow({
+    required this.label,
+    required this.value,
+    required this.showDivider,
+  });
 
   final String label;
   final String value;
+  final bool showDivider;
 
   @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minHeight: 48),
-    padding: const EdgeInsets.symmetric(vertical: 11),
-    decoration: BoxDecoration(
-      border: Border(bottom: BorderSide(color: SuchiColors.of(context).line)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: 5),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(color: SuchiColors.of(context).ink),
+  Widget build(BuildContext context) {
+    final labelStyle = Theme.of(context).textTheme.bodySmall;
+    final valueStyle = Theme.of(context).textTheme.bodyMedium
+        ?.copyWith(color: SuchiColors.of(context).ink);
+    return Semantics(
+      container: true,
+      label: '$label: $value',
+      child: ExcludeSemantics(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+            final stacked = constraints.maxWidth < 290 || scale > 1.3;
+            return Container(
+              constraints: const BoxConstraints(minHeight: 48),
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              decoration: BoxDecoration(
+                border: showDivider
+                    ? Border(
+                        bottom: BorderSide(color: SuchiColors.of(context).line),
+                      )
+                    : null,
+              ),
+              child: stacked
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(label, style: labelStyle),
+                        const SizedBox(height: 5),
+                        Text(value, style: valueStyle),
+                      ],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 92,
+                          child: Text(label, style: labelStyle),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(value, style: valueStyle)),
+                      ],
+                    ),
+            );
+          },
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 String _classification(String sensitivity) => switch (sensitivity) {
@@ -1328,18 +1506,6 @@ String _classification(String sensitivity) => switch (sensitivity) {
   'restricted' => 'Restricted',
   _ => 'Not set',
 };
-
-class _InformationLabel extends StatelessWidget {
-  const _InformationLabel(this.label);
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 16, bottom: 4),
-    child: Align(alignment: Alignment.centerLeft, child: SectionLabel(label)),
-  );
-}
 
 class _DetailSkeleton extends StatelessWidget {
   const _DetailSkeleton();
@@ -1365,38 +1531,53 @@ class _DetailSkeleton extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
           children: [
-            bar(70, 12),
-            const SizedBox(height: 12),
+            SuchiCard(
+              color: colors.manila,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 300),
+                  Container(
+                    color: colors.surface,
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        bar(58, 24),
+                        const SizedBox(width: 10),
+                        bar(64, 14),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
             bar(double.infinity, 28),
             const SizedBox(height: 8),
             bar(210, 28),
             const SizedBox(height: 12),
             bar(180, 20),
             const SizedBox(height: 18),
-            SuchiCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: bar(70, 16),
-                  ),
-                  Container(height: 265, color: colors.manila),
-                ],
-              ),
+            Row(
+              children: [
+                Expanded(child: bar(double.infinity, 52)),
+                const SizedBox(width: 8),
+                Expanded(child: bar(double.infinity, 52)),
+              ],
             ),
-            const SizedBox(height: 16),
-            bar(double.infinity, 52),
-            const SizedBox(height: 10),
-            bar(double.infinity, 48),
-            const SizedBox(height: 18),
+            const SizedBox(height: 20),
+            bar(60, 12),
+            const SizedBox(height: 8),
             SuchiCard(
+              elevated: false,
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  bar(180, 18),
-                  const SizedBox(height: 8),
-                  bar(150, 14),
+                  bar(double.infinity, 16),
+                  const SizedBox(height: 18),
+                  bar(180, 16),
+                  const SizedBox(height: 18),
+                  bar(150, 16),
                 ],
               ),
             ),

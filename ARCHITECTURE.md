@@ -238,10 +238,16 @@ not. Detail compares `original_blob` for Update, and offers explicit Make,
 Update and Remove actions. Sensitive retention and local file handoff require
 confirmation. More reports offline count/bytes and offers local Open/Remove.
 
-Document detail owns its Preview workspace and route-local information
-disclosure. Ordinary preview states may fade; sensitive concealment replaces the
-whole animation subtree and evicts revealed bytes before the next frame. A failed
-metadata refresh retains clearly labelled stale information with Retry.
+Document detail owns a preview-first workspace. The preview card couples the
+openable page with friendly type, exact byte size and account-scoped offline
+control; Share, Edit and Trash remain route actions. Responsive reader/filing
+actions lead into an always-visible metadata card. Its sender is the first
+`sender` correspondent, falling back to the first correspondent, and missing
+fields render explicitly rather than being inferred. Provenance uses the actual
+added time, first source label/kind and a bounded prefix/suffix of the validated
+`original_blob`. Ordinary preview states may fade; sensitive concealment replaces
+the whole animation subtree and evicts revealed bytes before the next frame. A
+failed metadata refresh retains clearly labelled stale information with Retry.
 
 `message/rfc822` previews use a separate bounded `text/html; charset=utf-8`
 request. Dart authenticates that request, injects a restrictive CSP at the start

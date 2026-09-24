@@ -61,9 +61,11 @@
   View opens the queue without capture; new completions refresh archive lists.
 - Open accepted Scan uploads and split child documents through the existing
   document viewer, with account-bound pickers and independent recovery actions.
-- Preview-focused document detail with collapsed information, responsive file
-  actions and explicit stale-refresh errors. Sensitive Hide and account changes
-  immediately remove revealed previews, including during transitions.
+- Preview-first document detail with an openable page card, top-bar sharing,
+  responsive reader/filing actions, always-visible metadata and bounded
+  provenance. File type, exact size and offline controls stay with the preview;
+  stale refreshes remain explicit. Sensitive Hide and account changes immediately
+  remove revealed previews, including during transitions.
 - Render email bodies inline through a sandboxed, credential-free WebView.
   JavaScript, navigation, forms, frames and remote resources stay blocked;
   sensitive email still requires Reveal and full-file handoff uses `.eml`.

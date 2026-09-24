@@ -847,8 +847,8 @@ void main() {
     await showShell(tester);
     await tester.tap(find.text('Receipt 066'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('File under'));
-    await tester.tap(find.text('File under'));
+    await tester.ensureVisible(find.text('File under…'));
+    await tester.tap(find.text('File under…'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Utilities'));
     await tester.pumpAndSettle();

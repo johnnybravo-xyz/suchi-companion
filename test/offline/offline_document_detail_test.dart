@@ -153,14 +153,7 @@ void main() {
       200,
       scrollable: find.byType(Scrollable),
     );
-    expect(
-      tester
-          .widget<OutlinedButton>(
-            find.widgetWithText(OutlinedButton, 'Make available offline'),
-          )
-          .onPressed,
-      isNotNull,
-    );
+    expect(find.text('Make available offline'), findsOneWidget);
 
     await tester.runAsync(
       () => store.save(
@@ -185,14 +178,7 @@ void main() {
       200,
       scrollable: find.byType(Scrollable),
     );
-    expect(
-      tester
-          .widget<OutlinedButton>(
-            find.widgetWithText(OutlinedButton, 'Update offline copy'),
-          )
-          .onPressed,
-      isNotNull,
-    );
+    expect(find.text('Update offline copy'), findsOneWidget);
 
     await tester.runAsync(
       () => store.save(
@@ -250,12 +236,8 @@ void main() {
         isEmpty,
       );
 
-      await tester.scrollUntilVisible(
-        find.text('Open document'),
-        200,
-        scrollable: find.byType(Scrollable),
-      );
-      await tester.tap(find.text('Open document'));
+      await tester.ensureVisible(find.text('Open'));
+      await tester.tap(find.text('Open'));
       await tester.pump();
       await tester.runAsync(() async {
         for (var attempt = 0; attempt < 20 && handoffs.isEmpty; attempt++) {

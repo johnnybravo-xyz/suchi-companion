@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -129,7 +130,7 @@ void main() {
         isEmpty,
       );
 
-      await tester.tap(find.text('Reveal preview'));
+      await tester.tap(find.byKey(const ValueKey('document-preview')));
       await tester.pump();
 
       final observedThumbnails = requests
@@ -191,8 +192,7 @@ void main() {
         hasLength(4),
       );
 
-      await tester.ensureVisible(find.text('Share'));
-      await tester.tap(find.text('Share'));
+      await tester.tap(find.byTooltip('Share document'));
       await tester.pumpAndSettle();
       expect(find.text('Share this document?'), findsOneWidget);
       expect(
@@ -233,52 +233,151 @@ void main() {
     },
   );
 
-  testWidgets('information disclosure hides source details until expanded', (
-    tester,
-  ) async {
-    final semantics = tester.ensureSemantics();
-    final requests = <http.Request>[];
-    final detail =
-        jsonDecode(_fixture('document-detail.json')) as Map<String, dynamic>;
-    detail['sensitivity'] = 'confidential';
-    await _openDetail(tester, detail: detail, requests: requests);
-    await tester.pumpAndSettle();
-    expect(
-      find.bySemanticsLabel(RegExp(r'\bClassification: Confidential\b')),
-      findsOneWidget,
-    );
-    await tester.scrollUntilVisible(find.text('Document information'), 250);
-    expect(find.text('Personal Outlook'), findsNothing);
-    expect(find.text('reader@example.com / INBOX'), findsNothing);
-    expect(find.text('BESCOM'), findsNothing);
-    expect(find.text('electricity'), findsNothing);
+  testWidgets(
+    'preview-first detail keeps metadata and provenance always visible',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final requests = <http.Request>[];
+      final detail =
+          jsonDecode(_fixture('document-detail.json')) as Map<String, dynamic>;
+      detail['sensitivity'] = 'confidential';
+      await _openDetail(tester, detail: detail, requests: requests);
+      await tester.pumpAndSettle();
 
-    expect(find.text('Document information'), findsOneWidget);
-    await tester.drag(find.text('Document information'), const Offset(0, -100));
-    await tester.pumpAndSettle();
-    expect(find.text('reader@example.com / INBOX'), findsNothing);
-    await tester.tap(find.text('Document information'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('reader@example.com / INBOX'));
-    expect(find.text('reader@example.com / INBOX'), findsOneWidget);
-    expect(find.text('BESCOM'), findsOneWidget);
-    expect(find.text('electricity'), findsOneWidget);
-    await tester.ensureVisible(find.text('Document information'));
-    await tester.tap(find.text('Document information'));
-    await tester.pumpAndSettle();
-    expect(find.text('reader@example.com / INBOX'), findsNothing);
-    expect(
-      requests.where(
-        (request) =>
-            request.url.path.endsWith('/thumb') ||
-            request.url.queryParameters['include_content'] == '1',
-      ),
-      isEmpty,
+      final preview = find.byKey(const ValueKey('document-preview'));
+      expect(preview, findsOneWidget);
+      expect(
+        tester.getTopLeft(preview).dy,
+        lessThan(tester.getTopLeft(find.text('March electricity bill')).dy),
+      );
+      expect(find.widgetWithText(AppBar, 'Document'), findsNothing);
+      expect(find.byTooltip('Share document'), findsOneWidget);
+      expect(find.text('PDF'), findsOneWidget);
+      expect(find.text('16.4 KB'), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.text('DETAILS', skipOffstage: false),
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Read text'), findsOneWidget);
+      expect(find.text('File under…'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Filed: 31 · Home / Utilities'),
+        findsOneWidget,
+      );
+      expect(find.bySemanticsLabel('From: BESCOM'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Tags: utilities · electricity'),
+        findsOneWidget,
+      );
+      expect(
+        find.bySemanticsLabel('Sensitivity: Confidential'),
+        findsOneWidget,
+      );
+      expect(find.bySemanticsLabel('Languages: de,en'), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.text('PROVENANCE', skipOffstage: false),
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(
+        find.textContaining('Source Personal Outlook / mailbox'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Blob aaaaaaaa…aaaaaaaa'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(
+          RegExp(
+            r'^Provenance\. Added .+\. Source Personal Outlook / mailbox\. '
+            r'Original blob a{8}…a{8}\.$',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('reader@example.com'), findsNothing);
+      expect(
+        requests.where(
+          (request) =>
+              request.url.path.endsWith('/thumb') ||
+              request.url.queryParameters['include_content'] == '1',
+        ),
+        isEmpty,
+      );
+      semantics.dispose();
+    },
+  );
+
+  testWidgets('preview and AppBar hand off the full document', (tester) async {
+    const channel = MethodChannel('app.suchi.page/documents');
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
     );
-    semantics.dispose();
+    final requests = <http.Request>[];
+    await _openDetail(
+      tester,
+      requests: requests,
+      respond: (request) async {
+        if (request.url.path.endsWith('/preview') ||
+            request.url.path.endsWith('/download')) {
+          return http.Response.bytes(
+            const [37, 80, 68, 70],
+            200,
+            headers: {'content-type': 'application/pdf'},
+          );
+        }
+        return null;
+      },
+    );
+    await tester.pumpAndSettle();
+
+    Future<void> invokeAndWait(VoidCallback callback, int count) async {
+      await tester.runAsync(() async {
+        callback();
+        for (var attempt = 0; attempt < 40 && calls.length < count; attempt++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    final open = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Open'),
+    );
+    expect(open.onPressed, isNotNull);
+    await invokeAndWait(open.onPressed!, 1);
+    expect(
+      requests.where((request) => request.url.path.endsWith('/preview')),
+      hasLength(1),
+    );
+    expect(calls, hasLength(1));
+    expect(calls.single.method, 'open');
+
+    final share = tester.widget<IconButton>(
+      find.widgetWithIcon(IconButton, Icons.ios_share_outlined),
+    );
+    expect(share.onPressed, isNotNull);
+    await invokeAndWait(share.onPressed!, 2);
+    expect(calls.last.method, 'share');
+    expect(
+      requests.where((request) => request.url.path.endsWith('/preview')),
+      hasLength(1),
+    );
+    expect(
+      requests.where((request) => request.url.path.endsWith('/download')),
+      hasLength(1),
+    );
   });
 
-  testWidgets('public and internal classifications are not called sensitive', (
+  testWidgets('public and internal sensitivity remains explicit', (
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
@@ -288,15 +387,14 @@ void main() {
       detail['sensitivity'] = sensitivity;
       await _openDetail(tester, detail: detail);
       await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Sensitivity'), 200);
       expect(
         find.bySemanticsLabel(
-          RegExp(
-            'Classification: ${switch (sensitivity) {
-              'public' => 'Public',
-              'internal' => 'Internal',
-              _ => 'Not set',
-            }}',
-          ),
+          'Sensitivity: ${switch (sensitivity) {
+            'public' => 'Public',
+            'internal' => 'Internal',
+            _ => 'Not set',
+          }}',
         ),
         findsOneWidget,
       );
@@ -519,6 +617,29 @@ void main() {
     },
   );
 
+  testWidgets('narrow 200% detail keeps the full hierarchy usable', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _openDetail(tester, textScale: 2);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Open'), findsOneWidget);
+    expect(find.text('PDF'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.scrollUntilVisible(find.text('File under…'), 200);
+    expect(find.text('Read text'), findsOneWidget);
+    expect(find.text('File under…'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.scrollUntilVisible(find.text('Sensitivity'), 200);
+    expect(find.text('Not set'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('PROVENANCE'), 200);
+    expect(find.textContaining('Blob aaaaaaaa…aaaaaaaa'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
   testWidgets('account transition conceals preview and rejects late reveal', (
     tester,
   ) async {
@@ -586,6 +707,7 @@ Future<SessionController> _openDetail(
   List<http.Request>? requests,
   Future<http.Response?> Function(http.Request)? respond,
   bool disableAnimations = false,
+  double textScale = 1,
 }) async {
   final document =
       detail ??
@@ -633,8 +755,10 @@ Future<SessionController> _openDetail(
     MaterialApp(
       theme: SuchiTheme.light,
       builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context)
-            .copyWith(disableAnimations: disableAnimations),
+        data: MediaQuery.of(context).copyWith(
+          disableAnimations: disableAnimations,
+          textScaler: TextScaler.linear(textScale),
+        ),
         child: child!,
       ),
       home: DocumentDetailScreen(

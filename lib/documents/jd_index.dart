@@ -39,6 +39,9 @@ class JdIndex extends StatefulWidget {
     this.selectedId,
     this.includeAll = false,
     this.onAllSelected,
+    this.includeOffline = false,
+    this.offlineSelected = false,
+    this.onOfflineSelected,
   });
 
   final JdCategoryStore store;
@@ -47,6 +50,9 @@ class JdIndex extends StatefulWidget {
   final int? selectedId;
   final bool includeAll;
   final VoidCallback? onAllSelected;
+  final bool includeOffline;
+  final bool offlineSelected;
+  final VoidCallback? onOfflineSelected;
 
   @override
   State<JdIndex> createState() => _JdIndexState();
@@ -159,10 +165,18 @@ class _JdIndexState extends State<JdIndex> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 2, 18, 28),
       children: [
+        if (widget.includeOffline)
+          ListTile(
+            minTileHeight: 52,
+            selected: widget.offlineSelected,
+            leading: const Icon(Icons.offline_pin_outlined),
+            title: const Text('Offline'),
+            onTap: widget.onOfflineSelected,
+          ),
         if (widget.includeAll)
           ListTile(
             minTileHeight: 52,
-            selected: widget.selectedId == null,
+            selected: !widget.offlineSelected && widget.selectedId == null,
             leading: const Icon(Icons.all_inbox_outlined),
             title: const Text('All documents'),
             onTap: widget.onAllSelected,

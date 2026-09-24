@@ -74,6 +74,22 @@ are limited to 64 MiB; use the web app for larger files. Temporary copies are
 removed when signing out or on the next cold launch, and older copies are
 pruned during later exports.
 
+Choose **Make available offline** in document detail to retain the verified full
+file and its metadata in protected, backup-excluded app storage. Changed server
+files show **Update offline copy**; **Remove offline copy** deletes only the
+device copy. Each file remains subject to the 64 MiB limit. Sensitive files ask
+before retention and again before handoff to another app. Previews, email HTML
+and extracted text are never written into the offline store.
+
+**Documents → Offline** and **More → Offline documents** list copies for only
+the current server account and filing system. When a previously verified
+credential cannot reach its server, Suchi Companion starts with only Documents
+and More; Inbox, Scan, Search, Trash and other server actions stay unavailable.
+**More → Retry** performs a new anonymous handshake before reusing the token.
+Connectivity returning does not silently leave Offline. Signing out removes the
+account's offline copies before deleting its credential; if protected cleanup
+fails, sign-out fails and the session remains active.
+
 The detail workspace keeps the first-page preview and file actions together.
 **Document information** expands file type, size, sources and tags when tapped
 on its collapsed header. Sensitive previews still require **Reveal preview**;

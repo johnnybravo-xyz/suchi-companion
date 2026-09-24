@@ -16,6 +16,7 @@ import 'package:suchi_mobile/auth/session_controller.dart';
 import 'package:suchi_mobile/detail/document_files.dart';
 import 'package:suchi_mobile/documents/thumbnail_cache.dart';
 import 'package:suchi_mobile/more/app_settings_controller.dart';
+import 'package:suchi_mobile/offline/offline_document_store.dart';
 import 'package:suchi_mobile/scan/network_monitor.dart';
 import 'package:suchi_mobile/scan/scan_capture_controller.dart';
 import 'package:suchi_mobile/scan/scan_database.dart';
@@ -53,6 +54,7 @@ final class MobileAppHarness {
       root: Directory('${temporary.path}/queue'),
       storageProtection: const TestStorageProtection(),
     );
+    late OfflineDocumentStore offlineDocuments;
     final session = SessionController(
       vault: TestCredentialVault(),
       onPauseUploads: () async {
@@ -67,6 +69,8 @@ final class MobileAppHarness {
       onResumeUploads: () async {
         if (_initialized) await services.uploads.resume();
       },
+      onClearOfflineDocuments: (identity) =>
+          offlineDocuments.clearAccount(identity),
       clientFactory: (origin, token) => SuchiClient(
         origin: origin,
         token: token,
@@ -107,6 +111,12 @@ final class MobileAppHarness {
     );
     final bridge = ShareBridge();
     final exports = await Directory('${temporary.path}/exports').create();
+    final documentFiles = DocumentFiles(root: exports);
+    offlineDocuments = await OfflineDocumentStore.open(
+      files: documentFiles,
+      root: Directory('${temporary.path}/offline'),
+      storageProtection: const TestStorageProtection(),
+    );
     final settings = AppSettingsController(database);
     await settings.initialize();
     services = AppServices(
@@ -122,6 +132,8 @@ final class MobileAppHarness {
         onUnauthorized: session.expire,
         now: now,
       ),
+      network: TestOnlineNetwork(),
+      offlineDocuments: offlineDocuments,
       capture: ScanCaptureController(
         scanner: ScannerBridge(),
         queue: queue,
@@ -134,7 +146,7 @@ final class MobileAppHarness {
         currentIdentity: () => identity,
       ),
       thumbnails: ThumbnailMemoryCache(),
-      documentFiles: DocumentFiles(root: exports),
+      documentFiles: documentFiles,
     );
     _initialized = true;
   }
@@ -199,4 +211,12 @@ final class TestOfflineNetwork implements NetworkMonitor {
   Stream<bool> get changes => const Stream.empty();
   @override
   Future<bool> isOnline() async => false;
+}
+
+final class TestOnlineNetwork implements NetworkMonitor {
+  @override
+  Stream<bool> get changes => const Stream.empty();
+
+  @override
+  Future<bool> isOnline() async => true;
 }

@@ -21,6 +21,7 @@ import 'package:suchi_mobile/documents/documents_screen.dart';
 import 'package:suchi_mobile/documents/thumbnail_cache.dart';
 import 'package:suchi_mobile/inbox/inbox_screen.dart';
 import 'package:suchi_mobile/more/app_settings_controller.dart';
+import 'package:suchi_mobile/offline/offline_document_store.dart';
 import 'package:suchi_mobile/scan/network_monitor.dart';
 import 'package:suchi_mobile/scan/scan_capture_controller.dart';
 import 'package:suchi_mobile/scan/scan_database.dart';
@@ -76,6 +77,12 @@ void main() {
     final shareBridge = ShareBridge();
     final files = Directory('${temporary.path}/exports');
     await files.create();
+    final documentFiles = DocumentFiles(root: files);
+    final offlineDocuments = await OfflineDocumentStore.open(
+      files: documentFiles,
+      root: Directory('${temporary.path}/offline'),
+      storageProtection: const _NoopProtection(),
+    );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('app.suchi.page/documents'),
@@ -93,6 +100,8 @@ void main() {
         deviceOcrEnabled: () => false,
         onUnauthorized: session.expire,
       ),
+      network: _OnlineNetwork(),
+      offlineDocuments: offlineDocuments,
       capture: ScanCaptureController(
         scanner: ScannerBridge(),
         queue: queue,
@@ -105,7 +114,7 @@ void main() {
         currentIdentity: () => session.identity,
       ),
       thumbnails: ThumbnailMemoryCache(),
-      documentFiles: DocumentFiles(root: files),
+      documentFiles: documentFiles,
     );
     await services.settings.initialize();
   });
@@ -159,7 +168,8 @@ void main() {
         home: ListenableBuilder(
           listenable: services.session,
           builder: (context, _) =>
-              services.session.state == SessionState.signedIn
+              services.session.state == SessionState.signedIn ||
+                  services.session.state == SessionState.offline
               ? SuchiShell(services: services)
               : const Scaffold(body: Text('Signed out')),
         ),
@@ -269,6 +279,33 @@ void main() {
       },
     );
   }
+
+  testNavigation(
+    'restored offline session exposes only local Documents and More',
+    (tester) async {
+      archive.networkUnavailable = true;
+      archive.requests.clear();
+      await services.session.retryStoredCredentials();
+      expect(services.session.state, SessionState.offline);
+      expect(services.session.client, isNull);
+      final requestCount = archive.requests.length;
+
+      await showShell(tester);
+
+      expect(find.byType(DocumentsScreen), findsOneWidget);
+      expect(find.byType(InboxScreen), findsNothing);
+      expect(find.byType(ScanQueueScreen), findsNothing);
+      expect(find.text('Documents'), findsWidgets);
+      expect(find.text('More'), findsOneWidget);
+      expect(archive.requests, hasLength(requestCount));
+
+      await tester.tap(find.text('More'));
+      await tester.pumpAndSettle();
+      expect(find.text('Working offline'), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+      expect(archive.requests, hasLength(requestCount));
+    },
+  );
 
   testNavigation('local-only and foreign queue documents cannot navigate', (
     tester,
@@ -950,6 +987,7 @@ final class _Archive {
   ];
   final trashed = <int>{};
   bool failDetail = false;
+  bool networkUnavailable = false;
   bool refuseEdit = false;
   Completer<http.Response>? pendingDetail;
   Completer<http.Response>? pendingRestore;
@@ -972,6 +1010,10 @@ final class _Archive {
   Future<http.Response> handle(http.Request request) async {
     requests.add(request);
     final path = request.url.path;
+    if (networkUnavailable &&
+        (path == '/api/handshake' || path == '/api/whoami')) {
+      throw const SocketException('offline');
+    }
     switch (path) {
       case '/api/handshake':
         return _fixture('handshake.json');
@@ -1084,4 +1126,12 @@ final class _OfflineNetwork implements NetworkMonitor {
 
   @override
   Future<bool> isOnline() async => false;
+}
+
+final class _OnlineNetwork implements NetworkMonitor {
+  @override
+  Stream<bool> get changes => const Stream.empty();
+
+  @override
+  Future<bool> isOnline() async => true;
 }

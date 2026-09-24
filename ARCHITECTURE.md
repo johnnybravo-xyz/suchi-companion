@@ -19,6 +19,7 @@ and pins one exact compatible server revision.
 | Native share and explicit Files/Photos intake | `lib/share/`, `ScanQueueScreen`, Android `ShareChannel`, iOS `ShareChannel`/Share Extension and `ios/Shared/` |
 | Archive browsing, filing and retrieval | `lib/documents/`, `lib/inbox/`, `lib/search/`, `lib/detail/` |
 | Server-backed Saved Views | `lib/search/saved_views.dart`, `lib/api/api_models.dart`, owned by the shell |
+| Account-scoped offline documents | `lib/offline/offline_document_store.dart`, Documents/detail/More surfaces, native document channels |
 | Common presentation | `lib/widgets/suchi_widgets.dart`, `lib/theme/suchi_theme.dart` |
 
 Screens keep their own loading, pagination and error state. The shell owns the
@@ -66,6 +67,24 @@ Pairing checks `/api/handshake` without credentials, then verifies a scoped
 token with `/api/whoami`. The client accepts only supported origins and refuses
 redirects. Password exchange obtains a mobile token; the app stores the token
 in platform secure storage, never a password or a browser credential.
+
+After a successful `/api/whoami`, secure storage also records the bounded,
+validated `UserSelf` snapshot needed to identify offline data. Restoration may
+enter `SessionState.offline` only when that snapshot has both mobile scopes and
+the anonymous handshake or authenticated whoami fails with network/timeout.
+Authentication rejection, redirects, malformed responses, invalid origins and
+legacy credentials without a snapshot never unlock offline data. **Retry**
+repeats the anonymous handshake before constructing a token-bearing client.
+
+`AppServices` owns one production `NetworkMonitor` shared by uploads and
+Documents. Known loss of connectivity, or a Documents network/timeout failure,
+selects the account's Offline collection. Connectivity returning does not
+implicitly switch back. A restored offline session builds a local-only shell
+with Documents and More; it has no `SuchiClient`, category store, Inbox, Scan,
+Search or Trash surface. Sign-out cancels account-bound work and removes that
+account's offline directories before secure credential deletion. Any protected
+cleanup failure restores the prior signed-in/offline state instead of reporting
+a successful sign-out.
 
 `ServerOrigin` permits localhost/private-LAN HTTP only in debug builds. Profile
 and release pairing, manual entry and stored-credential restoration require
@@ -201,6 +220,24 @@ decision. The lifecycle privacy shield conceals archive content when the app
 is inactive. Native exports use scoped requests and protected local files;
 viewers and share targets receive file handles, not server credentials.
 
+`OfflineDocumentStore` owns `suchi-offline-documents` under protected,
+backup-excluded application support. Each committed `offline-<UUID>/` contains
+exactly one full payload and a bounded, versioned `manifest.json` with canonical
+origin, user ID, filing-system ID, complete metadata, original-blob digest,
+payload name, size and save time. Downloads use the full `/download` endpoint,
+are account-bound, cancellable and capped at 64 MiB. Payload and manifest are
+staged and flushed before the directory rename publishes them; a failed update
+leaves the previous verified copy intact. Startup follows no links, deletes
+staging/malformed/unknown entries and retains only the newest valid duplicate.
+Thumbnails, email HTML and extracted text are never persisted there.
+
+Documents can select Offline while signed in and sorts manifest-backed rows
+without HTTP. A network/timeout detail failure may fall back only to the matching
+account manifest and becomes read-only; authorization and malformed failures do
+not. Detail compares `original_blob` for Update, and offers explicit Make,
+Update and Remove actions. Sensitive retention and local file handoff require
+confirmation. More reports offline count/bytes and offers local Open/Remove.
+
 Document detail owns its Preview workspace and route-local information
 disclosure. Ordinary preview states may fade; sensitive concealment replaces the
 whole animation subtree and evicts revealed bytes before the next frame. A failed
@@ -233,9 +270,12 @@ copies belongs to the system clipboard and can outlive the reader.
 
 `lib/detail/document_files.dart` streams one document at a time into a protected
 `suchi-document-exports` directory under application support. The
-`app.suchi.page/documents` native channel opens or shares only files inside that
-directory. Android uses read-only FileProvider URI grants; iOS uses Quick Look
-and its share sheet. Downloads are bounded to 64 MiB and partials are removed on
+`app.suchi.page/documents` native channel opens or shares only a regular,
+non-linked payload at the exact expected depth under either that temporary root
+or `suchi-offline-documents`; staging directories, links, nested paths and files
+over 64 MiB are refused. Android exposes both roots through read-only
+FileProvider URI grants; iOS uses Quick Look and its share sheet. Temporary
+downloads are bounded to 64 MiB and partials are removed on
 failure or cancellation. Sign-out and cold startup remove export copies;
 otherwise the next export prunes copies older than 24 hours. Another app can
 retain a copy after the user shares it; Suchi Companion cannot remove that external copy.
@@ -264,6 +304,15 @@ For document navigation, run `flutter test test/shell/document_navigation_test.d
 The production shell regressions cover repeated back navigation through loaded
 pages, category and sort retention, errors/retry, refused edits, successful
 mutations, stale-account reads and 200% text on Android/iOS layouts.
+
+For offline retention, run `flutter test test/offline`, plus
+`test/auth/session_controller_test.dart` and
+`test/auth/credential_vault_test.dart`.
+These cover atomic discovery and cleanup, account isolation, cancellation, size
+bounds, verified-snapshot restoration,
+anonymous retry ordering, network selection, read-only detail fallback and
+sensitive confirmation. Native adapter tests additionally enforce both allowed
+roots, exact depth, link refusal and the 64 MiB limit.
 
 For explicit text reads, run `flutter test test/detail test/api/api_contract_test.dart`.
 The reader regressions cover metadata-only navigation, sensitivity changes,

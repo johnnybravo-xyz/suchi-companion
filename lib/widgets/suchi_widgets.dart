@@ -349,7 +349,7 @@ class DocumentThumb extends StatefulWidget {
     this.onUnauthorized,
   });
 
-  final SuchiClient client;
+  final SuchiClient? client;
   final ThumbnailMemoryCache cache;
   final int documentId;
   final bool sensitive;
@@ -383,17 +383,13 @@ class _DocumentThumbState extends State<DocumentThumb> {
   }
 
   void _load() {
-    if (widget.sensitive && !widget.reveal) {
+    final client = widget.client;
+    if (client == null || widget.sensitive && !widget.reveal) {
       _result = null;
       return;
     }
     _result = widget.cache
-        .load(
-          widget.client,
-          widget.documentId,
-          width: 160,
-          reveal: widget.reveal,
-        )
+        .load(client, widget.documentId, width: 160, reveal: widget.reveal)
         .onError((error, _) {
           final failure =
               error ?? StateError('Thumbnail request failed without an error.');
@@ -414,7 +410,15 @@ class _DocumentThumbState extends State<DocumentThumb> {
         height: widget.height,
         child: ColoredBox(
           color: colors.manila,
-          child: widget.sensitive && !widget.reveal
+          child: widget.client == null
+              ? Center(
+                  child: Icon(
+                    Icons.offline_pin_outlined,
+                    size: 22,
+                    color: colors.muted,
+                  ),
+                )
+              : widget.sensitive && !widget.reveal
               ? const _SensitivePlaceholder()
               : FutureBuilder<ThumbnailResult>(
                   future: _result,
@@ -463,7 +467,7 @@ class IndexRow extends StatelessWidget {
   });
 
   final DocumentSummary document;
-  final SuchiClient client;
+  final SuchiClient? client;
   final ThumbnailMemoryCache cache;
   final VoidCallback onTap;
   final DocumentListMode mode;

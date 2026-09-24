@@ -24,6 +24,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.io.RandomAccessFile
 import java.util.UUID
 
 @RunWith(AndroidJUnit4::class)
@@ -117,23 +118,62 @@ class NativeAdapterInstrumentedTest {
     }
 
     @Test
-    fun documentHandoffRejectsFilesOutsideExportDirectory() {
-        val root = File(targetContext.cacheDir, "document-export-test-${UUID.randomUUID()}")
+    fun documentHandoffAcceptsOnlyExactExportAndOfflinePayloads() {
+        val base = File(targetContext.cacheDir, "document-export-test-${UUID.randomUUID()}")
+        val exportRoot = File(base, "suchi-document-exports")
+        val offlineRoot = File(base, "suchi-offline-documents")
+        val roots = listOf(
+            DocumentRoot(exportRoot, "document-"),
+            DocumentRoot(offlineRoot, "offline-"),
+        )
         try {
-            val operation = File(root, "document-test").apply { mkdirs() }
-            val file = File(operation, "document-91.pdf").apply { writeText("%PDF-test") }
-            assertEquals(file.canonicalFile, DocumentExport.file(root, file.path))
-            val outside = File(root, "private.pdf").apply { writeText("private") }
+            val exportOperation = File(exportRoot, "document-test").apply { mkdirs() }
+            val exported = File(exportOperation, "document-91.pdf").apply { writeText("%PDF-test") }
+            assertEquals(exported.canonicalFile, DocumentExport.file(roots, exported.path))
+
+            val offlineOperation = File(offlineRoot, "offline-test").apply { mkdirs() }
+            val offline = File(offlineOperation, "document-91.pdf").apply { writeText("%PDF-offline") }
+            assertEquals(offline.canonicalFile, DocumentExport.file(roots, offline.path))
+
+            val outside = File(base, "private.pdf").apply { writeText("private") }
             assertThrows(IllegalArgumentException::class.java) {
-                DocumentExport.file(root, outside.path)
+                DocumentExport.file(roots, outside.path)
             }
-            val link = File(operation, "linked.pdf")
-            android.system.Os.symlink(outside.path, link.path)
+            val nested = File(exportOperation, "nested/document.pdf").apply {
+                parentFile?.mkdirs()
+                writeText("%PDF-nested")
+            }
             assertThrows(IllegalArgumentException::class.java) {
-                DocumentExport.file(root, link.path)
+                DocumentExport.file(roots, nested.path)
+            }
+            val staging = File(offlineRoot, "offline-test.part/document.pdf").apply {
+                parentFile?.mkdirs()
+                writeText("%PDF-staging")
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                DocumentExport.file(roots, staging.path)
+            }
+            val link = File(exportOperation, "linked.pdf")
+            android.system.Os.symlink(offline.path, link.path)
+            assertThrows(IllegalArgumentException::class.java) {
+                DocumentExport.file(roots, link.path)
+            }
+            val outsideDirectory = File(base, "outside-directory").apply { mkdirs() }
+            val outsidePayload = File(outsideDirectory, "document.pdf").apply { writeText("%PDF-outside") }
+            val linkedOperation = File(offlineRoot, "offline-linked")
+            android.system.Os.symlink(outsideDirectory.path, linkedOperation.path)
+            assertThrows(IllegalArgumentException::class.java) {
+                DocumentExport.file(roots, File(linkedOperation, outsidePayload.name).path)
+            }
+            val oversized = File(offlineOperation, "oversized.pdf")
+            RandomAccessFile(oversized, "rw").use {
+                it.setLength(64L * 1024 * 1024 + 1)
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                DocumentExport.file(roots, oversized.path)
             }
         } finally {
-            root.deleteRecursively()
+            base.deleteRecursively()
         }
     }
 

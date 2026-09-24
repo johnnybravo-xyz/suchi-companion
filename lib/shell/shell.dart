@@ -14,6 +14,7 @@ import '../documents/documents_screen.dart';
 import '../documents/jd_category_store.dart';
 import '../inbox/inbox_screen.dart';
 import '../more/more_screen.dart';
+import '../offline/offline_document_store.dart';
 import '../scan/capture_mode_picker.dart';
 import '../scan/scan_database.dart';
 import '../scan/scan_queue_screen.dart';
@@ -35,8 +36,8 @@ class SuchiShell extends StatefulWidget {
 }
 
 class _SuchiShellState extends State<SuchiShell> {
-  late final SuchiClient _client;
-  late final JdCategoryStore _categories;
+  late final SuchiClient? _client;
+  late final JdCategoryStore? _categories;
   late final SavedViewController _savedViews;
   int _selected = 0;
   SavedView? _requestedSavedView;
@@ -55,12 +56,15 @@ class _SuchiShellState extends State<SuchiShell> {
     super.initState();
     _listMode = widget.services.settings.documentListMode;
     widget.services.settings.addListener(_settingsChanged);
-    _client = widget.services.session.client!;
-    _categories = JdCategoryStore(
-      client: _client,
-      onUnauthorized: widget.services.session.expire,
-    );
-    _categories.load();
+    _client = widget.services.session.client;
+    final client = _client;
+    _categories = client == null
+        ? null
+        : JdCategoryStore(
+            client: client,
+            onUnauthorized: widget.services.session.expire,
+          );
+    _categories?.load();
     _savedViews = SavedViewController(session: widget.services.session);
     _syncIdentity();
     widget.services.session.addListener(_syncIdentity);
@@ -79,7 +83,7 @@ class _SuchiShellState extends State<SuchiShell> {
     unawaited(_queueSubscription.cancel());
     _queueRows.dispose();
     _queueUnavailable.dispose();
-    _categories.dispose();
+    _categories?.dispose();
     _savedViews.dispose();
     super.dispose();
   }
@@ -139,7 +143,8 @@ class _SuchiShellState extends State<SuchiShell> {
 
   void _capture() {
     final services = widget.services;
-    if (_choosingCaptureMode ||
+    if (_client == null ||
+        _choosingCaptureMode ||
         !services.settings.loaded ||
         services.capture.isBusy ||
         services.capture.hasPendingCapture ||
@@ -153,7 +158,8 @@ class _SuchiShellState extends State<SuchiShell> {
 
   Future<void> _chooseCaptureMode(Rect anchor) async {
     final services = widget.services;
-    if (_choosingCaptureMode ||
+    if (_client == null ||
+        _choosingCaptureMode ||
         !services.settings.loaded ||
         services.capture.isBusy ||
         services.capture.hasPendingCapture) {
@@ -182,11 +188,16 @@ class _SuchiShellState extends State<SuchiShell> {
   }
 
   void _refreshArchive() {
-    if (!mounted || !identical(_client, widget.services.session.client)) return;
+    if (!mounted ||
+        _client == null ||
+        !identical(_client, widget.services.session.client)) {
+      return;
+    }
     setState(() => _readerRevision++);
   }
 
   void _openSavedView(SavedView view) {
+    if (_client == null) return;
     setState(() {
       _requestedSavedView = view;
       _savedViewRevision++;
@@ -194,43 +205,127 @@ class _SuchiShellState extends State<SuchiShell> {
     });
   }
 
-  Future<void> _openDocument(int id) => Navigator.of(context).push<void>(
-    MaterialPageRoute(
-      settings: RouteSettings(name: '/documents/$id'),
-      builder: (context) => DocumentDetailScreen(
-        documentId: id,
-        client: _client,
-        session: widget.services.session,
-        cache: widget.services.thumbnails,
-        categories: _categories,
-        files: widget.services.documentFiles,
-        onChanged: _refreshArchive,
+  Future<void> _openDocument(int id) {
+    final client = _client;
+    final categories = _categories;
+    if (client == null || categories == null) return Future.value();
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        settings: RouteSettings(name: '/documents/$id'),
+        builder: (context) => DocumentDetailScreen(
+          documentId: id,
+          client: client,
+          session: widget.services.session,
+          cache: widget.services.thumbnails,
+          categories: categories,
+          files: widget.services.documentFiles,
+          offlineDocuments: widget.services.offlineDocuments,
+          onChanged: _refreshArchive,
+        ),
       ),
-    ),
-  );
+    );
+  }
 
-  Future<void> _openTrash() => Navigator.of(context).push<void>(
-    MaterialPageRoute(
-      settings: const RouteSettings(name: '/trash'),
-      builder: (context) => TrashScreen(
-        client: _client,
-        session: widget.services.session,
-        onRestored: _refreshArchive,
+  Future<void> _openOfflineDocument(OfflineDocument entry) async {
+    final identity = _currentIdentity;
+    if (identity == null || entry.identity != identity) return;
+    if (entry.document.isSensitive) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Open sensitive document?'),
+          content: const Text(
+            'The document will be handed to another app and may remain visible there.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Open'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted || _currentIdentity != identity) return;
+    }
+    if (!mounted || _currentIdentity != identity) return;
+    try {
+      await widget.services.offlineDocuments.handoff(
+        identity: identity,
+        entry: entry,
+        share: false,
+      );
+    } catch (_) {
+      if (!mounted || _currentIdentity != identity) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('The offline document could not be opened.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openTrash() {
+    final client = _client;
+    if (client == null) return Future.value();
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/trash'),
+        builder: (context) => TrashScreen(
+          client: client,
+          session: widget.services.session,
+          onRestored: _refreshArchive,
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final client = _client;
+    final categories = _categories;
+    if (client == null || categories == null) {
+      final offlineSelected = _selected == 1 ? 1 : 0;
+      final screens = <Widget>[
+        DocumentsScreen(
+          key: const ValueKey('offline-documents'),
+          listMode: _listMode,
+          client: null,
+          session: widget.services.session,
+          cache: widget.services.thumbnails,
+          categories: null,
+          offlineDocuments: widget.services.offlineDocuments,
+          network: widget.services.network,
+          onOpenSearch: () {},
+          onOpenDocument: (_) {},
+          onOpenOfflineDocument: _openOfflineDocument,
+        ),
+        MoreScreen(
+          session: widget.services.session,
+          settings: widget.services.settings,
+          offlineDocuments: widget.services.offlineDocuments,
+        ),
+      ];
+      return Scaffold(
+        body: IndexedStack(index: offlineSelected, children: screens),
+        bottomNavigationBar: _OfflineDock(
+          selected: offlineSelected,
+          onSelected: (index) => setState(() => _selected = index),
+        ),
+      );
+    }
     final screens = <Widget>[
       InboxScreen(
         key: const ValueKey('inbox'),
         listMode: _listMode,
         refreshRevision: _readerRevision,
-        client: _client,
+        client: client,
         session: widget.services.session,
         cache: widget.services.thumbnails,
-        categories: _categories,
+        categories: categories,
         onOpenDocument: _openDocument,
       ),
       DocumentsScreen(
@@ -239,12 +334,15 @@ class _SuchiShellState extends State<SuchiShell> {
         refreshRevision: _readerRevision,
         savedView: _requestedSavedView,
         savedViewRevision: _savedViewRevision,
-        client: _client,
+        client: client,
         session: widget.services.session,
         cache: widget.services.thumbnails,
-        categories: _categories,
+        categories: categories,
+        offlineDocuments: widget.services.offlineDocuments,
+        network: widget.services.network,
         onOpenSearch: () => _select(3),
         onOpenDocument: _openDocument,
+        onOpenOfflineDocument: _openOfflineDocument,
       ),
       ScanQueueScreen(
         queue: widget.services.queue,
@@ -257,7 +355,7 @@ class _SuchiShellState extends State<SuchiShell> {
         onOpenDocument: _openDocument,
       ),
       SearchScreen(
-        client: _client,
+        client: client,
         session: widget.services.session,
         cache: widget.services.thumbnails,
         onOpenDocument: _openDocument,
@@ -268,6 +366,7 @@ class _SuchiShellState extends State<SuchiShell> {
         session: widget.services.session,
         settings: widget.services.settings,
         onOpenTrash: _openTrash,
+        offlineDocuments: widget.services.offlineDocuments,
       ),
     ];
     return Scaffold(
@@ -313,6 +412,48 @@ class _SuchiShellState extends State<SuchiShell> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _OfflineDock extends StatelessWidget {
+  const _OfflineDock({required this.selected, required this.onSelected});
+
+  final int selected;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = SuchiColors.of(context);
+    return Material(
+      color: colors.surface,
+      elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 78,
+          child: Row(
+            children: [
+              Expanded(
+                child: _DockItem(
+                  label: 'Documents',
+                  icon: Icons.folder_outlined,
+                  selected: selected == 0,
+                  onTap: () => onSelected(0),
+                ),
+              ),
+              Expanded(
+                child: _DockItem(
+                  label: 'More',
+                  icon: Icons.more_horiz,
+                  selected: selected == 1,
+                  onTap: () => onSelected(1),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

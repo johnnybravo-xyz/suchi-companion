@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api/api_error.dart';
 import '../api/api_models.dart';
 import '../api/suchi_client.dart';
 import '../auth/session_controller.dart';
+import '../offline/offline_document_store.dart';
+import '../scan/network_monitor.dart';
 import '../theme/suchi_theme.dart';
 import '../widgets/suchi_widgets.dart';
 import 'document_list_mode.dart';
@@ -20,18 +24,24 @@ class DocumentsScreen extends StatefulWidget {
     required this.onOpenSearch,
     required this.onOpenDocument,
     required this.listMode,
+    this.offlineDocuments,
+    this.network,
+    this.onOpenOfflineDocument,
     this.savedView,
     this.savedViewRevision = 0,
     this.refreshRevision = 0,
     super.key,
   });
 
-  final SuchiClient client;
+  final SuchiClient? client;
   final SessionController session;
   final ThumbnailMemoryCache cache;
-  final JdCategoryStore categories;
+  final JdCategoryStore? categories;
   final VoidCallback onOpenSearch;
   final ValueChanged<int> onOpenDocument;
+  final ValueChanged<OfflineDocument>? onOpenOfflineDocument;
+  final OfflineDocumentStore? offlineDocuments;
+  final NetworkMonitor? network;
   final DocumentListMode listMode;
   final SavedView? savedView;
   final int savedViewRevision;
@@ -45,6 +55,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _scroll = ScrollController();
   List<DocumentSummary> _documents = const [];
+  Map<int, OfflineDocument> _offlineById = const {};
+  StreamSubscription<bool>? _networkSubscription;
   ApiException? _error;
   int? _categoryId;
   String _ordering = '-created_at';
@@ -56,29 +68,50 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   bool _loading = false;
   bool _loadingMore = false;
   bool _hasMore = false;
+  bool _offlineSelected = false;
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
-    _activeView = widget.savedView;
+    _offlineSelected =
+        widget.session.state == SessionState.offline || widget.client == null;
+    _activeView = _offlineSelected ? null : widget.savedView;
     _ordering = _activeView?.filter?.ordering ?? '-created_at';
-    widget.categories.load();
-    _load(reset: true);
+    widget.categories?.load();
+    widget.offlineDocuments?.addListener(_offlineDocumentsChanged);
+    _listenToNetwork();
+    if (_offlineSelected) {
+      _loadOffline();
+    } else {
+      _startOnlineLoad();
+    }
   }
 
   @override
   void didUpdateWidget(covariant DocumentsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.offlineDocuments != widget.offlineDocuments) {
+      oldWidget.offlineDocuments?.removeListener(_offlineDocumentsChanged);
+      widget.offlineDocuments?.addListener(_offlineDocumentsChanged);
+    }
+    if (oldWidget.network != widget.network) _listenToNetwork();
     if (oldWidget.client != widget.client) {
       _categoryId = null;
       _activeView = null;
       _scopeError = null;
       _ordering = '-created_at';
-      widget.categories.load();
-      _load(reset: true);
+      _offlineSelected =
+          widget.session.state == SessionState.offline || widget.client == null;
+      widget.categories?.load();
+      if (_offlineSelected) {
+        _loadOffline();
+      } else {
+        _startOnlineLoad();
+      }
       if (_scroll.hasClients) _scroll.jumpTo(0);
-    } else if (oldWidget.savedViewRevision != widget.savedViewRevision) {
+    } else if (oldWidget.savedViewRevision != widget.savedViewRevision &&
+        widget.client != null) {
       _activateSavedView(widget.savedView);
     } else if (oldWidget.refreshRevision != widget.refreshRevision) {
       _load(reset: true);
@@ -89,15 +122,57 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   @override
   void dispose() {
     _generation++;
+    _networkSubscription?.cancel();
+    widget.offlineDocuments?.removeListener(_offlineDocumentsChanged);
     _scroll.dispose();
     super.dispose();
   }
 
+  void _listenToNetwork() {
+    unawaited(_networkSubscription?.cancel());
+    _networkSubscription = widget.network?.changes.listen(_connectivityChanged);
+  }
+
+  void _startOnlineLoad() {
+    final network = widget.network;
+    if (network == null) {
+      _load(reset: true);
+      return;
+    }
+    unawaited(_loadWhenConnected(network));
+  }
+
+  Future<void> _loadWhenConnected(NetworkMonitor network) async {
+    var online = true;
+    try {
+      online = await network.isOnline();
+    } catch (_) {
+      // The API request remains the authoritative connectivity check.
+    }
+    if (!mounted || _offlineSelected || network != widget.network) return;
+    if (!online) {
+      _selectOffline(closeDrawer: false);
+    } else {
+      await _load(reset: true);
+    }
+  }
+
+  void _connectivityChanged(bool online) {
+    if (!online && widget.client != null && !_offlineSelected) {
+      _selectOffline(closeDrawer: false);
+    }
+  }
+
+  void _offlineDocumentsChanged() {
+    if (mounted && _offlineSelected) _loadOffline();
+  }
+
   void _onScroll() {
-    if (_scroll.position.extentAfter < 280) _loadMore();
+    if (!_offlineSelected && _scroll.position.extentAfter < 280) _loadMore();
   }
 
   void _activateSavedView(SavedView? view) {
+    _offlineSelected = false;
     _activeView = view;
     _categoryId = null;
     _scopeError = null;
@@ -107,12 +182,17 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 
   Future<void> _load({required bool reset}) async {
+    if (_offlineSelected || widget.client == null) {
+      _loadOffline();
+      return;
+    }
     if (!reset && (_loading || _loadingMore)) return;
     final activeView = _activeView;
     if (activeView != null && !activeView.available) {
       ++_generation;
       setState(() {
         _documents = const [];
+        _offlineById = const {};
         _count = 0;
         _page = 0;
         _hasMore = false;
@@ -133,6 +213,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         _loading = true;
         _loadingMore = false;
         _documents = const [];
+        _offlineById = const {};
         _count = 0;
         _page = 0;
         _hasMore = false;
@@ -142,7 +223,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     });
     final requestedPage = reset ? 1 : _page + 1;
     try {
-      final result = await widget.client.listDocuments(
+      final result = await widget.client!.listDocuments(
         page: requestedPage,
         pageSize: 30,
         jdCategoryId: _categoryId,
@@ -160,8 +241,16 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       });
     } on ApiException catch (error) {
       if (!mounted || generation != _generation) return;
-      if (error.expiresSession) widget.session.expire(error);
-      setState(() => _error = error);
+      if (error.expiresSession) {
+        widget.session.expire(error);
+      } else if ((error.kind == ApiFailureKind.network ||
+              error.kind == ApiFailureKind.timeout) &&
+          widget.offlineDocuments != null) {
+        _selectOffline(closeDrawer: false);
+        return;
+      } else {
+        setState(() => _error = error);
+      }
     } finally {
       if (mounted && generation == _generation) {
         setState(() {
@@ -172,16 +261,64 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     }
   }
 
+  void _loadOffline() {
+    final generation = ++_generation;
+    final entries = widget.offlineDocuments
+        ?.entriesFor(widget.session.identity)
+        .toList(growable: false);
+    final sorted = entries ?? <OfflineDocument>[];
+    sorted.sort((left, right) {
+      final comparison = switch (_ordering) {
+        'created_at' => left.document.createdAt.compareTo(
+          right.document.createdAt,
+        ),
+        'title' => left.document.title.toLowerCase().compareTo(
+          right.document.title.toLowerCase(),
+        ),
+        '-title' => right.document.title.toLowerCase().compareTo(
+          left.document.title.toLowerCase(),
+        ),
+        'updated_at' => left.document.updatedAt.compareTo(
+          right.document.updatedAt,
+        ),
+        '-updated_at' => right.document.updatedAt.compareTo(
+          left.document.updatedAt,
+        ),
+        _ => right.document.createdAt.compareTo(left.document.createdAt),
+      };
+      return comparison != 0
+          ? comparison
+          : left.document.id.compareTo(right.document.id);
+    });
+    if (!mounted || generation != _generation) return;
+    setState(() {
+      _documents = List.unmodifiable(sorted.map((entry) => entry.summary));
+      _offlineById = Map.unmodifiable({
+        for (final entry in sorted) entry.document.id: entry,
+      });
+      _count = sorted.length;
+      _page = 1;
+      _hasMore = false;
+      _loading = false;
+      _loadingMore = false;
+      _error = null;
+      _scopeError = null;
+    });
+  }
+
   Future<void> _loadMore() async {
-    if (!_hasMore || _loading || _loadingMore) return;
+    if (_offlineSelected || !_hasMore || _loading || _loadingMore) return;
     await _load(reset: false);
   }
 
   void _selectCategory(JDCategory? category) {
     Navigator.maybePop(context);
     final selected = category?.id;
-    if (_activeView == null && selected == _categoryId) return;
+    if (!_offlineSelected && _activeView == null && selected == _categoryId) {
+      return;
+    }
     setState(() {
+      _offlineSelected = false;
       _activeView = null;
       _scopeError = null;
       _categoryId = selected;
@@ -191,36 +328,52 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
+  void _selectOffline({bool closeDrawer = true}) {
+    if (closeDrawer) Navigator.maybePop(context);
+    if (_offlineSelected) return;
+    setState(() {
+      _offlineSelected = true;
+      _activeView = null;
+      _categoryId = null;
+      _scopeError = null;
+      _ordering = '-created_at';
+    });
+    _loadOffline();
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
   void _selectSort(String ordering) {
     if (_activeView != null) return;
     if (ordering == _ordering) return;
     setState(() => _ordering = ordering);
-    _load(reset: true);
+    if (_offlineSelected) {
+      _loadOffline();
+    } else {
+      _load(reset: true);
+    }
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = SuchiColors.of(context);
-    final selectedCategory = widget.categories.categories
-        .where((category) => category.id == _categoryId)
-        .firstOrNull;
+    final categories = widget.categories;
+    JDCategory? selectedCategory;
+    if (categories != null) {
+      for (final category in categories.categories) {
+        if (category.id == _categoryId) {
+          selectedCategory = category;
+          break;
+        }
+      }
+    }
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: colors.paper,
       endDrawer: Drawer(
         backgroundColor: colors.paper,
         width: MediaQuery.sizeOf(context).width * 0.9,
-        child: SafeArea(
-          child: JdIndex(
-            store: widget.categories,
-            title: 'Filter by JD Index',
-            selectedId: _categoryId,
-            includeAll: true,
-            onAllSelected: () => _selectCategory(null),
-            onSelected: _selectCategory,
-          ),
-        ),
+        child: SafeArea(child: _scopeDrawer(categories)),
       ),
       body: SafeArea(
         bottom: false,
@@ -245,15 +398,16 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        tooltip: 'Search documents',
-                        constraints: const BoxConstraints(
-                          minWidth: 48,
-                          minHeight: 48,
+                      if (widget.client != null)
+                        IconButton(
+                          tooltip: 'Search documents',
+                          constraints: const BoxConstraints(
+                            minWidth: 48,
+                            minHeight: 48,
+                          ),
+                          onPressed: widget.onOpenSearch,
+                          icon: const Icon(Icons.search),
                         ),
-                        onPressed: widget.onOpenSearch,
-                        icon: const Icon(Icons.search),
-                      ),
                       PopupMenuButton<String>(
                         tooltip: _activeView == null
                             ? 'Sort documents'
@@ -303,13 +457,16 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                           children: [
                             Flexible(
                               child: Text(
-                                _activeView?.name ??
-                                    selectedCategory?.label ??
-                                    'All documents',
+                                _offlineSelected
+                                    ? 'Offline'
+                                    : _activeView?.name ??
+                                          selectedCategory?.label ??
+                                          'All documents',
                                 style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(
                                       color:
-                                          _activeView == null &&
+                                          !_offlineSelected &&
+                                              _activeView == null &&
                                               selectedCategory == null
                                           ? colors.muted
                                           : colors.accent,
@@ -338,6 +495,45 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         ),
       ),
     );
+  }
+
+  Widget _scopeDrawer(JdCategoryStore? categories) {
+    if (categories != null) {
+      return JdIndex(
+        store: categories,
+        title: 'Choose documents',
+        selectedId: _categoryId,
+        includeAll: true,
+        includeOffline: true,
+        offlineSelected: _offlineSelected,
+        onOfflineSelected: _selectOffline,
+        onAllSelected: () => _selectCategory(null),
+        onSelected: _selectCategory,
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 24, 18, 28),
+      children: [
+        Text('Choose documents', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 18),
+        ListTile(
+          minTileHeight: 52,
+          selected: true,
+          leading: const Icon(Icons.offline_pin_outlined),
+          title: const Text('Offline'),
+          onTap: () => Navigator.maybePop(context),
+        ),
+      ],
+    );
+  }
+
+  void _openSummary(DocumentSummary document) {
+    if (!_offlineSelected || widget.client != null) {
+      widget.onOpenDocument(document.id);
+      return;
+    }
+    final entry = _offlineById[document.id];
+    if (entry != null) widget.onOpenOfflineDocument?.call(entry);
   }
 
   Widget _body() {
@@ -372,12 +568,18 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       return RefreshIndicator(
         onRefresh: () => _load(reset: true),
         child: ListView(
-          children: const [
-            SizedBox(height: 80),
+          children: [
+            const SizedBox(height: 80),
             EmptyState(
-              title: 'No documents here',
-              message: 'Scan a document or choose another JD category or Saved View.',
-              icon: Icons.folder_open_outlined,
+              title: _offlineSelected
+                  ? 'No offline documents'
+                  : 'No documents here',
+              message: _offlineSelected
+                  ? 'Make a document available offline while connected.'
+                  : 'Scan a document or choose another JD category or Saved View.',
+              icon: _offlineSelected
+                  ? Icons.offline_pin_outlined
+                  : Icons.folder_open_outlined,
             ),
           ],
         ),
@@ -405,9 +607,9 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 child: IndexRow(
                   document: document,
                   mode: widget.listMode,
-                  client: widget.client,
+                  client: _offlineSelected ? null : widget.client,
                   cache: widget.cache,
-                  onTap: () => widget.onOpenDocument(document.id),
+                  onTap: () => _openSummary(document),
                   onUnauthorized: widget.session.expire,
                 ),
               ),

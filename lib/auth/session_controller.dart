@@ -8,7 +8,7 @@ import 'credential_vault.dart';
 import 'pairing_link.dart';
 import 'server_origin.dart';
 
-enum SessionState { loading, signedOut, verifying, signedIn, expired }
+enum SessionState { loading, signedOut, verifying, signedIn, offline, expired }
 
 typedef SuchiClientFactory = SuchiClient Function(Uri origin, String? token);
 
@@ -20,6 +20,7 @@ final class SessionController extends ChangeNotifier {
     this.allowDevelopmentHttp = true,
     this.onClearMemoryCaches,
     this.onResumeUploads,
+    this.onClearOfflineDocuments,
   }) : _clientFactory =
            clientFactory ??
            ((origin, token) => SuchiClient(origin: origin, token: token));
@@ -28,6 +29,8 @@ final class SessionController extends ChangeNotifier {
   final Future<void> Function()? onPauseUploads;
   final VoidCallback? onClearMemoryCaches;
   final Future<void> Function()? onResumeUploads;
+  final Future<void> Function(AccountIdentity identity)?
+  onClearOfflineDocuments;
   // The production policy always rejects HTTP outside debug, even if true.
   final bool allowDevelopmentHttp;
   final SuchiClientFactory _clientFactory;
@@ -49,7 +52,9 @@ final class SessionController extends ChangeNotifier {
   AccountIdentity? get identity {
     final user = _user;
     final origin = _origin;
-    if (_state != SessionState.signedIn || user == null || origin == null) {
+    if ((_state != SessionState.signedIn && _state != SessionState.offline) ||
+        user == null ||
+        origin == null) {
       return null;
     }
     return AccountIdentity(
@@ -222,19 +227,24 @@ final class SessionController extends ChangeNotifier {
   }
 
   Future<bool> signOut() async {
+    final previousState = _state;
+    final account = identity;
     ++_generation;
     try {
       await onPauseUploads?.call();
+      if (account != null) await onClearOfflineDocuments?.call(account);
       await vault.clear();
     } catch (_) {
       _setState(
-        SessionState.signedIn,
+        previousState,
         error: 'This device could not clear protected local data. You are still signed in.',
       );
-      try {
-        await onResumeUploads?.call();
-      } catch (_) {
-        // The credential remains usable even if queued work cannot resume yet.
+      if (previousState == SessionState.signedIn) {
+        try {
+          await onResumeUploads?.call();
+        } catch (_) {
+          // The credential remains usable even if queued work cannot resume yet.
+        }
       }
       return false;
     }
@@ -352,19 +362,43 @@ final class SessionController extends ChangeNotifier {
         );
       }
       if (generation != _generation) return;
-      if (!restoring) await vault.save(credentials);
+      final verifiedCredentials = credentials.withUserSnapshot(user);
+      await vault.save(verifiedCredentials);
       if (generation != _generation) return;
       _closeClient();
       _client = client;
       client = null;
       _user = user;
       _origin = origin;
-      _retryCredentials = credentials;
+      _retryCredentials = verifiedCredentials;
       _preparedOrigin = null;
       _setState(SessionState.signedIn);
       await onResumeUploads?.call();
     } on ApiException catch (error) {
       if (generation != _generation) return;
+      if (restoring &&
+          credentials.userSnapshot != null &&
+          (error.kind == ApiFailureKind.network ||
+              error.kind == ApiFailureKind.timeout)) {
+        _closeClient();
+        _client = null;
+        _user = credentials.userSnapshot;
+        _origin = origin;
+        _retryCredentials = credentials;
+        _preparedOrigin = null;
+        try {
+          await onPauseUploads?.call();
+        } catch (_) {
+          // Local-only access remains safe when already-paused work fails.
+        }
+        if (generation != _generation) return;
+        _setState(
+          SessionState.offline,
+          error: 'Suchi could not be reached. Only documents kept offline are available.',
+          requestId: error.requestId,
+        );
+        return;
+      }
       if (restoring && error.expiresSession) {
         try {
           await vault.clear();

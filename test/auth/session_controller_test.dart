@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:suchi_mobile/api/suchi_client.dart';
+import 'package:suchi_mobile/api/api_models.dart';
 import 'package:suchi_mobile/api/api_error.dart';
 import 'package:suchi_mobile/auth/credential_vault.dart';
 import 'package:suchi_mobile/auth/session_controller.dart';
@@ -15,6 +16,15 @@ final _origin = Uri.parse('https://suchi.example.com');
 
 String _fixture(String name) =>
     File('test/fixtures/api/v1/$name').readAsStringSync();
+
+UserSelf _userSnapshot() =>
+    UserSelf.fromJson(jsonDecode(_fixture('whoami.json')));
+
+StoredCredentials _storedWithSnapshot() => StoredCredentials(
+  origin: _origin,
+  token: _token,
+  userSnapshot: _userSnapshot(),
+);
 
 void main() {
   test('pairing probes without credentials before sending the token', () async {
@@ -51,6 +61,7 @@ void main() {
     expect(controller.state, SessionState.signedIn);
     expect(controller.user?.email, 'reader@example.com');
     expect(vault.saved?.token, _token);
+    expect(vault.saved?.userSnapshot?.email, 'reader@example.com');
     expect(requests.map((request) => request.url.path), [
       '/api/handshake',
       '/api/whoami',
@@ -183,9 +194,7 @@ void main() {
   });
 
   test('a rejected saved credential becomes expired and is deleted', () async {
-    final vault = _MemoryVault(
-      initial: StoredCredentials(origin: _origin, token: _token),
-    );
+    final vault = _MemoryVault(initial: _storedWithSnapshot());
     final controller = SessionController(
       vault: vault,
       clientFactory: (origin, token) => SuchiClient(
@@ -218,6 +227,162 @@ void main() {
     expect(vault.clearCount, 1);
     expect(controller.client, isNull);
   });
+
+  for (final failurePoint in ['handshake', 'whoami']) {
+    test(
+      'restored verified snapshot enters offline when $failurePoint is unreachable',
+      () async {
+        final requests = <http.Request>[];
+        final pauses = <String>[];
+        Future<http.Response> handle(http.Request request) async {
+          requests.add(request);
+          if (request.url.path == '/api/handshake') {
+            if (failurePoint == 'handshake') {
+              throw const SocketException('offline');
+            }
+            return http.Response(
+              _fixture('handshake.json'),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          throw const SocketException('offline');
+        }
+
+        final vault = _MemoryVault(initial: _storedWithSnapshot());
+        final controller = SessionController(
+          vault: vault,
+          onPauseUploads: () async => pauses.add('pause'),
+          clientFactory: (origin, token) => SuchiClient(
+            origin: origin,
+            token: token,
+            httpClient: MockClient(handle),
+          ),
+        );
+        addTearDown(controller.dispose);
+
+        await controller.initialize();
+
+        expect(controller.state, SessionState.offline);
+        expect(controller.client, isNull);
+        expect(controller.user?.email, 'reader@example.com');
+        expect(controller.identity?.userId, 7);
+        expect(pauses, ['pause']);
+        expect(vault.clearCount, 0);
+        expect(
+          requests.map((request) => request.url.path),
+          failurePoint == 'handshake'
+              ? ['/api/handshake']
+              : ['/api/handshake', '/api/whoami'],
+        );
+        expect(requests.first.headers.containsKey('Authorization'), isFalse);
+        if (failurePoint == 'whoami') {
+          expect(requests.last.headers['Authorization'], 'Token $_token');
+        }
+      },
+    );
+  }
+
+  test('offline retry probes anonymously before reusing the token', () async {
+    var reachable = false;
+    final requests = <http.Request>[];
+    Future<http.Response> handle(http.Request request) async {
+      requests.add(request);
+      if (!reachable) throw const SocketException('offline');
+      return http.Response(
+        request.url.path == '/api/handshake'
+            ? _fixture('handshake.json')
+            : _fixture('whoami.json'),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+
+    final vault = _MemoryVault(initial: _storedWithSnapshot());
+    final controller = SessionController(
+      vault: vault,
+      clientFactory: (origin, token) => SuchiClient(
+        origin: origin,
+        token: token,
+        httpClient: MockClient(handle),
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    expect(controller.state, SessionState.offline);
+
+    reachable = true;
+    requests.clear();
+    await controller.retryStoredCredentials();
+
+    expect(controller.state, SessionState.signedIn);
+    expect(requests.map((request) => request.url.path), [
+      '/api/handshake',
+      '/api/whoami',
+    ]);
+    expect(requests.first.headers.containsKey('Authorization'), isFalse);
+    expect(requests.last.headers['Authorization'], 'Token $_token');
+    expect(vault.saved?.userSnapshot?.userId, 7);
+  });
+
+  for (final failure in ['redirect', 'malformed']) {
+    test(
+      'verified snapshot does not enter offline after $failure handshake',
+      () async {
+        final controller = SessionController(
+          vault: _MemoryVault(initial: _storedWithSnapshot()),
+          clientFactory: (origin, token) => SuchiClient(
+            origin: origin,
+            token: token,
+            httpClient: MockClient(
+              (_) async => failure == 'redirect'
+                  ? http.Response(
+                      '',
+                      302,
+                      headers: {'location': 'https://other.example.com/'},
+                    )
+                  : http.Response(
+                      'not-json',
+                      200,
+                      headers: {'content-type': 'application/json'},
+                    ),
+            ),
+          ),
+        );
+        addTearDown(controller.dispose);
+
+        await controller.initialize();
+
+        expect(controller.state, SessionState.signedOut);
+        expect(controller.client, isNull);
+        expect(controller.user, isNull);
+      },
+    );
+  }
+
+  test(
+    'legacy credential without a verified snapshot cannot enter offline',
+    () async {
+      final controller = SessionController(
+        vault: _MemoryVault(
+          initial: StoredCredentials(origin: _origin, token: _token),
+        ),
+        clientFactory: (origin, token) => SuchiClient(
+          origin: origin,
+          token: token,
+          httpClient: MockClient(
+            (_) async => throw const SocketException('offline'),
+          ),
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+
+      expect(controller.state, SessionState.signedOut);
+      expect(controller.identity, isNull);
+    },
+  );
 
   test(
     'restored HTTP token is retained for HTTPS repair without any request',
@@ -289,6 +454,8 @@ void main() {
       final controller = SessionController(
         vault: vault,
         onPauseUploads: () async => events.add('pause'),
+        onClearOfflineDocuments: (identity) async =>
+            events.add('offline:${identity.userId}'),
         onClearMemoryCaches: () => events.add('cache'),
         clientFactory: (origin, token) =>
             SuchiClient(origin: origin, token: token, httpClient: transport),
@@ -300,7 +467,7 @@ void main() {
 
       await controller.signOut();
 
-      expect(events, ['pause', 'clear', 'logout', 'cache']);
+      expect(events, ['pause', 'offline:7', 'clear', 'logout', 'cache']);
       expect(controller.state, SessionState.signedOut);
       expect(controller.client, isNull);
     },
@@ -355,6 +522,42 @@ void main() {
     expect(controller.client, isNotNull);
     expect(vault.saved?.token, _token);
   });
+
+  test(
+    'failed offline-copy cleanup keeps the offline session active',
+    () async {
+      final events = <String>[];
+      final vault = _MemoryVault(initial: _storedWithSnapshot());
+      final controller = SessionController(
+        vault: vault,
+        onPauseUploads: () async => events.add('pause'),
+        onResumeUploads: () async => events.add('resume'),
+        onClearOfflineDocuments: (identity) async {
+          events.add('offline:${identity.userId}');
+          throw const FileSystemException('offline cleanup failed');
+        },
+        clientFactory: (origin, token) => SuchiClient(
+          origin: origin,
+          token: token,
+          httpClient: MockClient(
+            (_) async => throw const SocketException('offline'),
+          ),
+        ),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(controller.state, SessionState.offline);
+      events.clear();
+
+      expect(await controller.signOut(), isFalse);
+
+      expect(controller.state, SessionState.offline);
+      expect(controller.client, isNull);
+      expect(controller.identity?.userId, 7);
+      expect(vault.clearCount, 0);
+      expect(events, ['pause', 'offline:7']);
+    },
+  );
 
   test(
     'failed local cleanup keeps sign-out retryable but expiry fails closed',

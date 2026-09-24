@@ -75,6 +75,22 @@ final class UserSelf {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'kind': kind,
+    'user_id': userId,
+    'email': email,
+    'display_name': displayName,
+    'instance_host': instanceHost,
+    'role': role,
+    'authn_by': authenticatedBy,
+    'avatar_url': avatarUrl,
+    'system_id': systemId,
+    'system_name': systemName,
+    'system_code': systemCode,
+    'capabilities': capabilities,
+    'scopes': scopes,
+  };
+
   final String kind;
   final int userId;
   final String email;
@@ -479,6 +495,7 @@ final class DocumentDetail {
     required this.title,
     required this.mimeType,
     required this.originalSize,
+    required this.originalBlob,
     required this.jdCategoryId,
     required this.jdCategoryCode,
     required this.jdCategoryName,
@@ -504,11 +521,18 @@ final class DocumentDetail {
         'metadata-only document response unexpectedly included content',
       );
     }
+    final originalBlob = _string(json, 'original_blob');
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(originalBlob)) {
+      throw const ApiFormatException(
+        'document original_blob must be a SHA-256 digest',
+      );
+    }
     return DocumentDetail(
       id: _positiveInteger(json, 'id'),
       title: _string(json, 'title'),
       mimeType: _string(json, 'mime_type'),
       originalSize: _nonNegativeInteger(json, 'original_size'),
+      originalBlob: originalBlob,
       jdCategoryId: _optionalPositiveInteger(json, 'jd_category_id'),
       jdCategoryCode: _optionalNonNegativeInteger(json, 'jd_category_code'),
       jdCategoryName: _optionalString(json, 'jd_category_name'),
@@ -537,6 +561,7 @@ final class DocumentDetail {
   final String title;
   final String mimeType;
   final int originalSize;
+  final String originalBlob;
   final int? jdCategoryId;
   final int? jdCategoryCode;
   final String? jdCategoryName;

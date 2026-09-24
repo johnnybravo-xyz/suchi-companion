@@ -11,6 +11,7 @@ import '../auth/session_controller.dart';
 import '../documents/jd_category_store.dart';
 import '../documents/jd_index.dart';
 import '../documents/thumbnail_cache.dart';
+import '../offline/offline_document_store.dart';
 import '../theme/suchi_theme.dart';
 import '../widgets/suchi_widgets.dart';
 import 'document_files.dart';
@@ -26,6 +27,7 @@ class DocumentDetailScreen extends StatefulWidget {
     required this.cache,
     required this.categories,
     required this.files,
+    this.offlineDocuments,
     this.onChanged,
     super.key,
   });
@@ -36,6 +38,7 @@ class DocumentDetailScreen extends StatefulWidget {
   final ThumbnailMemoryCache cache;
   final JdCategoryStore categories;
   final DocumentFiles files;
+  final OfflineDocumentStore? offlineDocuments;
   final VoidCallback? onChanged;
 
   @override
@@ -47,6 +50,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
   DocumentDetail? _document;
   Uint8List? _preview;
   String? _emailHtml;
+  OfflineDocument? _offlineFallback;
   ApiException? _error;
   String? _previewMessage;
   bool _loading = true;
@@ -54,6 +58,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
   bool _revealed = false;
   bool _mutating = false;
   bool _fileLoading = false;
+  bool _offlineMutating = false;
+  String _offlineProgressLabel = 'Saving offline copy…';
   int _generation = 0;
   int _previewGeneration = 0;
   int _sensitivePreviewEpoch = 0;
@@ -61,7 +67,12 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
 
   bool get _sameAccount =>
       widget.session.state == SessionState.signedIn &&
-      identical(widget.session.client, widget.client);
+          identical(widget.session.client, widget.client) ||
+      _offlineFallback != null &&
+          widget.session.identity == _offlineFallback!.identity;
+
+  OfflineDocument? get _offlineEntry =>
+      widget.offlineDocuments?.find(widget.session.identity, widget.documentId);
 
   @override
   void initState() {
@@ -69,6 +80,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     WidgetsBinding.instance.addObserver(this);
     widget.session.addListener(_sessionChanged);
     widget.categories.load();
+    widget.offlineDocuments?.addListener(_offlineStoreChanged);
     _load();
   }
 
@@ -77,6 +89,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     WidgetsBinding.instance.removeObserver(this);
     widget.session.removeListener(_sessionChanged);
     if (_fileLoading) widget.files.cancelPending();
+    widget.offlineDocuments?.removeListener(_offlineStoreChanged);
+    if (_offlineMutating) widget.offlineDocuments?.cancelPending();
     _generation++;
     _previewGeneration++;
     _evictRevealedPreview();
@@ -105,9 +119,15 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  void _offlineStoreChanged() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> _openFile({required bool share}) async {
     final document = _document;
-    if (document == null || _fileLoading || _mutating) return;
+    if (document == null || _fileLoading || _mutating || _offlineMutating) {
+      return;
+    }
     final generation = _generation;
     final confirmed =
         !document.isSensitive ||
@@ -120,7 +140,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
                 ),
                 content: Text(
                   '${document.isSensitive ? 'This document is ${sensitivityLabel(document.sensitivity).toLowerCase()}. ' : ''}'
-                  '${share || Platform.isAndroid ? 'A copy will be available to the app you choose. That app may retain it.' : 'The full document will download to this device. The viewer also lets you save or share a copy.'}',
+                  '${_offlineFallback != null || share || Platform.isAndroid ? 'A copy will be available to the app you choose. That app may retain it.' : 'The full document will download to this device. The viewer also lets you save or share a copy.'}',
                 ),
                 actions: [
                   TextButton(
@@ -135,23 +155,39 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
               ),
             ) ==
             true;
+    final identity = widget.session.identity;
     if (confirmed != true ||
         !mounted ||
         generation != _generation ||
-        !_sameAccount) {
+        !_sameAccount ||
+        identity == null) {
       return;
     }
     setState(() => _fileLoading = true);
     try {
-      await widget.files.handoff(
-        client: widget.client,
-        documentId: document.id,
-        reveal: document.isSensitive,
-        share: share,
-      );
+      final offline = _offlineFallback;
+      if (offline != null) {
+        await widget.offlineDocuments!.handoff(
+          identity: identity,
+          entry: offline,
+          share: share,
+        );
+      } else {
+        await widget.files.handoff(
+          client: widget.client,
+          documentId: document.id,
+          reveal: document.isSensitive,
+          share: share,
+        );
+      }
     } on ApiException catch (error) {
       if (error.expiresSession) widget.session.expire(error);
-      if (!mounted || error.kind == ApiFailureKind.cancelled) return;
+      if (!mounted ||
+          generation != _generation ||
+          widget.session.identity != identity ||
+          error.kind == ApiFailureKind.cancelled) {
+        return;
+      }
       _showFileError(
         friendlyApiMessage(
           error,
@@ -159,11 +195,15 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
         ),
       );
     } on PlatformException catch (error) {
-      if (mounted) {
+      if (mounted &&
+          generation == _generation &&
+          widget.session.identity == identity) {
         _showFileError(error.message ?? 'The document could not be opened.');
       }
     } on FileSystemException {
-      if (mounted) {
+      if (mounted &&
+          generation == _generation &&
+          widget.session.identity == identity) {
         _showFileError(
           'The document could not be saved temporarily. Check available device storage and try again.',
         );
@@ -177,6 +217,143 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
 
+  Future<void> _saveOffline() async {
+    final store = widget.offlineDocuments;
+    final document = _document;
+    final identity = widget.session.identity;
+    if (store == null ||
+        document == null ||
+        identity == null ||
+        _offlineFallback != null ||
+        _offlineMutating ||
+        _fileLoading ||
+        _mutating ||
+        !_sameAccount) {
+      return;
+    }
+    if (document.isSensitive) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Keep sensitive document offline?'),
+          content: const Text(
+            'A protected full copy will remain on this device until you remove it or sign out.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Keep offline'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted || !_sameAccount) return;
+    }
+    final updating = store.find(identity, document.id) != null;
+    setState(() {
+      _offlineProgressLabel = updating
+          ? 'Updating offline copy…'
+          : 'Saving offline copy…';
+      _offlineMutating = true;
+    });
+    try {
+      await store.save(
+        identity: identity,
+        document: document,
+        client: widget.client,
+        reveal: document.isSensitive,
+      );
+      if (!mounted || !_sameAccount) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Document is available offline.')),
+      );
+    } on ApiException catch (error) {
+      if (error.expiresSession) widget.session.expire(error);
+      if (!mounted || error.kind == ApiFailureKind.cancelled) return;
+      _showFileError(
+        friendlyApiMessage(
+          error,
+          fallback: 'The offline copy could not be saved.',
+        ),
+      );
+    } on OfflineDocumentException catch (error) {
+      if (mounted && error.code != 'offline_cancelled') {
+        _showFileError(error.message);
+      }
+    } on FileSystemException {
+      if (mounted) {
+        _showFileError(
+          'The offline copy could not be saved. Check available device storage and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _offlineMutating = false);
+    }
+  }
+
+  Future<void> _removeOffline() async {
+    final store = widget.offlineDocuments;
+    final entry = _offlineEntry ?? _offlineFallback;
+    final identity = widget.session.identity;
+    if (store == null ||
+        entry == null ||
+        identity == null ||
+        entry.identity != identity ||
+        _offlineMutating) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove offline copy?'),
+        content: const Text(
+          'The document will remain in Suchi but will no longer be available without a connection.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true ||
+        !mounted ||
+        !_sameAccount ||
+        widget.session.identity != identity) {
+      return;
+    }
+    setState(() {
+      _offlineProgressLabel = 'Removing offline copy…';
+      _offlineMutating = true;
+    });
+    try {
+      await store.remove(identity, entry.document.id);
+      if (!mounted || widget.session.identity != identity) return;
+      if (_offlineFallback != null) {
+        Navigator.pop(context);
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Offline copy removed.')));
+      }
+    } on FileSystemException {
+      if (mounted && widget.session.identity == identity) {
+        _showFileError('The offline copy could not be removed.');
+      }
+    } finally {
+      if (mounted) setState(() => _offlineMutating = false);
+    }
+  }
+
   @override
   void didHaveMemoryPressure() => _concealPreview();
 
@@ -188,6 +365,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     setState(() {
       _loading = true;
       _error = null;
+      _offlineFallback = null;
       _revealed = false;
       _preview = null;
       _emailHtml = null;
@@ -199,6 +377,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
       if (!mounted || generation != _generation || !_sameAccount) return;
       setState(() {
         _document = document;
+        _offlineFallback = null;
         _loading = false;
         _revealed = false;
         _preview = null;
@@ -206,6 +385,25 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
       if (!document.isSensitive) await _loadPreview(reveal: false);
     } on ApiException catch (error) {
       if (!mounted || generation != _generation || !_sameAccount) return;
+      final offline = widget.offlineDocuments?.find(
+        widget.session.identity,
+        widget.documentId,
+      );
+      if ((error.kind == ApiFailureKind.network ||
+              error.kind == ApiFailureKind.timeout) &&
+          offline != null) {
+        setState(() {
+          _document = offline.document;
+          _offlineFallback = offline;
+          _loading = false;
+          _error = null;
+          _preview = null;
+          _emailHtml = null;
+          _previewMessage = 'Preview is unavailable while offline.';
+          _previewLoading = false;
+        });
+        return;
+      }
       if (error.expiresSession) widget.session.expire(error);
       setState(() {
         _error = error;
@@ -215,7 +413,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
   }
 
   Future<void> _loadPreview({required bool reveal}) async {
-    if (!_sameAccount) return;
+    if (!_sameAccount || _offlineFallback != null) return;
     final document = _document;
     if (document == null) return;
     final generation = ++_previewGeneration;
@@ -336,7 +534,12 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
 
   Future<void> _edit() async {
     final document = _document;
-    if (document == null || _mutating || _fileLoading) return;
+    if (document == null ||
+        _mutating ||
+        _fileLoading ||
+        _offlineFallback != null) {
+      return;
+    }
     final generation = _generation;
     final changed = await Navigator.push<bool>(
       context,
@@ -362,6 +565,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     if (document == null ||
         _mutating ||
         _fileLoading ||
+        _offlineFallback != null ||
         widget.session.state != SessionState.signedIn ||
         !identical(widget.session.client, widget.client)) {
       return;
@@ -382,7 +586,13 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
 
   Future<void> _fileUnder() async {
     final document = _document;
-    if (document == null || _mutating || _fileLoading || !_sameAccount) return;
+    if (document == null ||
+        _mutating ||
+        _fileLoading ||
+        _offlineFallback != null ||
+        !_sameAccount) {
+      return;
+    }
     final generation = _generation;
     final category = await showJdCategorySheet(
       context,
@@ -424,7 +634,12 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
   }
 
   Future<void> _trash() async {
-    if (_mutating || _fileLoading || !_sameAccount) return;
+    if (_mutating ||
+        _fileLoading ||
+        _offlineFallback != null ||
+        !_sameAccount) {
+      return;
+    }
     final generation = _generation;
     final client = widget.client;
     final session = widget.session;
@@ -519,14 +734,24 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
       actions: [
         IconButton(
           tooltip: 'Edit document',
-          onPressed: _mutating || _fileLoading || _document == null
+          onPressed:
+              _mutating ||
+                  _fileLoading ||
+                  _offlineMutating ||
+                  _offlineFallback != null ||
+                  _document == null
               ? null
               : _edit,
           icon: const Icon(Icons.edit_outlined),
         ),
         IconButton(
           tooltip: 'Move to Trash',
-          onPressed: _mutating || _fileLoading || _document == null
+          onPressed:
+              _mutating ||
+                  _fileLoading ||
+                  _offlineMutating ||
+                  _offlineFallback != null ||
+                  _document == null
               ? null
               : _trash,
           icon: const Icon(Icons.delete_outline),
@@ -551,6 +776,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     final document = _document!;
     final colors = SuchiColors.of(context);
     final textTheme = Theme.of(context).textTheme;
+    final offlineEntry = _offlineEntry ?? _offlineFallback;
+    final offlineOutdated =
+        offlineEntry != null &&
+        offlineEntry.document.originalBlob != document.originalBlob;
     final date = DateFormat.yMMMd().format(
       DateTime.fromMillisecondsSinceEpoch(
         document.createdAt * 1000,
@@ -598,6 +827,19 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
           const SizedBox(height: 6),
           Text('Showing last loaded information.', style: textTheme.bodySmall),
         ],
+        if (_offlineFallback != null) ...[
+          const SizedBox(height: 12),
+          const SuchiCard(
+            elevated: false,
+            child: ListTile(
+              leading: Icon(Icons.cloud_off_outlined),
+              title: Text('Showing offline copy'),
+              subtitle: Text(
+                'Document details are read-only until Suchi is reachable.',
+              ),
+            ),
+          ),
+        ],
         if (_loading) ...[
           const SizedBox(height: 12),
           const Row(
@@ -636,7 +878,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
         else
           FilledButton.icon(
             style: FilledButton.styleFrom(minimumSize: const Size(0, 52)),
-            onPressed: _mutating ? null : () => _openFile(share: false),
+            onPressed: _mutating || _offlineMutating
+                ? null
+                : () => _openFile(share: false),
             icon: const Icon(Icons.open_in_new),
             label: const Text('Open document'),
           ),
@@ -648,7 +892,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
                 .floor()
                 .clamp(1, 3);
             final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
-            final enabled = !_mutating && !_fileLoading;
+            final enabled = !_mutating && !_fileLoading && !_offlineMutating;
+            final online = _offlineFallback == null;
             return Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -663,18 +908,65 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
                   width: width,
                   icon: Icons.article_outlined,
                   label: 'Read text',
-                  onPressed: enabled ? _readText : null,
+                  onPressed: enabled && online ? _readText : null,
                 ),
                 _secondaryAction(
                   width: width,
                   icon: Icons.drive_file_move_outline,
                   label: 'File under',
-                  onPressed: enabled ? _fileUnder : null,
+                  onPressed: enabled && online ? _fileUnder : null,
                 ),
               ],
             );
           },
         ),
+        if (widget.offlineDocuments != null) ...[
+          const SizedBox(height: 12),
+          if (_offlineMutating)
+            Row(
+              children: [
+                const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text(_offlineProgressLabel)),
+                TextButton(
+                  onPressed: widget.offlineDocuments!.cancelPending,
+                  child: const Text('Cancel'),
+                ),
+              ],
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (offlineEntry != null && !offlineOutdated)
+                  const Chip(
+                    avatar: Icon(Icons.offline_pin, size: 18),
+                    label: Text('Available offline'),
+                  ),
+                if (_offlineFallback == null &&
+                    (offlineEntry == null || offlineOutdated))
+                  OutlinedButton.icon(
+                    onPressed: _saveOffline,
+                    icon: const Icon(Icons.download_for_offline_outlined),
+                    label: Text(
+                      offlineEntry == null
+                          ? 'Make available offline'
+                          : 'Update offline copy',
+                    ),
+                  ),
+                if (offlineEntry != null)
+                  OutlinedButton.icon(
+                    onPressed: _removeOffline,
+                    icon: const Icon(Icons.remove_circle_outline),
+                    label: const Text('Remove offline copy'),
+                  ),
+              ],
+            ),
+        ],
         const SizedBox(height: 18),
         SuchiCard(
           child: ExpansionTile(
@@ -762,6 +1054,36 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
 
   Widget _previewPane(DocumentDetail document) {
     final colors = SuchiColors.of(context);
+    if (_offlineFallback != null) {
+      return SuchiCard(
+        child: SizedBox(
+          height: 220,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.cloud_off_outlined, size: 36, color: colors.muted),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Preview unavailable offline',
+                    style: Theme.of(context).textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Open the protected full copy to view this document.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     final concealed = document.isSensitive && !_revealed;
     final content = concealed
         ? _SensitiveGate(document: document, onReveal: _reveal)

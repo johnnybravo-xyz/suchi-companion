@@ -133,7 +133,10 @@ class _SuchiMobileAppState extends State<SuchiMobileApp> {
           listenable: widget.services.session,
           builder: (context, _) => switch (widget.services.session.state) {
             SessionState.loading => const _SessionLoadingScreen(),
-            SessionState.signedIn => SuchiShell(services: widget.services),
+            SessionState.signedIn || SessionState.offline => SuchiShell(
+              key: ValueKey(widget.services.session.state),
+              services: widget.services,
+            ),
             SessionState.signedOut ||
             SessionState.verifying ||
             SessionState.expired => PairScreen(

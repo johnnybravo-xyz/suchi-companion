@@ -2,16 +2,33 @@ import Flutter
 import QuickLook
 import UIKit
 
+struct DocumentRoot {
+  let directory: URL
+  let operationPrefix: String
+}
+
 enum DocumentExport {
-  static func file(root: URL, path: String) throws -> URL {
-    let directory = root.standardizedFileURL.resolvingSymlinksInPath()
-    let file = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
-    let values = try file.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+  static func file(roots: [DocumentRoot], path: String) throws -> URL {
+    let requested = URL(fileURLWithPath: path).standardizedFileURL
+    let requestedParent = requested.deletingLastPathComponent()
+    let requestedValues = try requested.resourceValues(
+      forKeys: [.isSymbolicLinkKey, .isRegularFileKey, .fileSizeKey]
+    )
+    let parentValues = try requestedParent.resourceValues(forKeys: [.isSymbolicLinkKey])
+    let file = requested.resolvingSymlinksInPath()
+    let parent = file.deletingLastPathComponent()
+    let allowed = roots.contains { root in
+      let directory = root.directory.standardizedFileURL.resolvingSymlinksInPath()
+      return parent.deletingLastPathComponent() == directory
+        && parent.lastPathComponent.hasPrefix(root.operationPrefix)
+        && !parent.lastPathComponent.hasSuffix(".part")
+    }
     guard
-      file.deletingLastPathComponent().deletingLastPathComponent() == directory,
-      file.deletingLastPathComponent().lastPathComponent.hasPrefix("document-"),
-      values.isRegularFile == true,
-      let count = values.fileSize,
+      requestedValues.isSymbolicLink != true,
+      parentValues.isSymbolicLink != true,
+      allowed,
+      requestedValues.isRegularFile == true,
+      let count = requestedValues.fileSize,
       count > 0, count <= 64 * 1024 * 1024
     else { throw CocoaError(.fileReadNoPermission) }
     return file
@@ -66,7 +83,16 @@ final class DocumentChannel: NSObject, QLPreviewControllerDataSource {
     }
     do {
       let file = try DocumentExport.file(
-        root: support.appendingPathComponent("suchi-document-exports", isDirectory: true),
+        roots: [
+          DocumentRoot(
+            directory: support.appendingPathComponent("suchi-document-exports", isDirectory: true),
+            operationPrefix: "document-"
+          ),
+          DocumentRoot(
+            directory: support.appendingPathComponent("suchi-offline-documents", isDirectory: true),
+            operationPrefix: "offline-"
+          ),
+        ],
         path: path
       )
       let controller: UIViewController

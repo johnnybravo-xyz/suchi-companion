@@ -70,6 +70,32 @@ final class DocumentFiles {
     }
   }
 
+  Future<void> handoffLocal({
+    required File file,
+    required String mimeType,
+    required bool share,
+  }) async {
+    final generation = _generation;
+    await _cleanup;
+    if (generation != _generation) return;
+    if (_operation != null) {
+      throw PlatformException(
+        code: 'document_busy',
+        message: 'Another document is already being prepared.',
+      );
+    }
+    final operation = _channel.invokeMethod<void>(share ? 'share' : 'open', {
+      'path': file.path,
+      'mime_type': mimeType,
+    });
+    _operation = operation;
+    try {
+      await operation;
+    } finally {
+      _operation = null;
+    }
+  }
+
   Future<void> _handoff({
     required SuchiClient client,
     required int documentId,
@@ -94,7 +120,7 @@ final class DocumentFiles {
       final file = await partial.rename(
         path.join(
           directory.path,
-          'document-$documentId${_extension(mimeType)}',
+          'document-$documentId${extensionForMimeType(mimeType)}',
         ),
       );
       if (generation != _generation) return;
@@ -149,7 +175,7 @@ final class DocumentFiles {
     }
   }
 
-  static String _extension(String mimeType) => switch (mimeType) {
+  static String extensionForMimeType(String mimeType) => switch (mimeType) {
     'application/pdf' => '.pdf',
     'image/jpeg' => '.jpg',
     'image/png' => '.png',

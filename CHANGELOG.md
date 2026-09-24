@@ -74,6 +74,13 @@
   Named queries can be created, opened as an exact Documents scope and deleted;
   flat legacy and snapshot filters are preserved, while unsupported future
   filters remain visible and fail closed without a partial document request.
+- Keep selected full documents available offline in protected,
+  backup-excluded, account-scoped storage with atomic updates, restart
+  reconciliation, 64 MiB limits and no persistent previews or extracted text.
+  Documents and More expose offline copies; verified saved sessions can enter a
+  local-only Documents/More shell after network failure and explicitly retry the
+  anonymous handshake. Sensitive retention/handoff requires confirmation, and
+  sign-out removes offline copies before credentials.
 - Document capture keeps each platform's full native scanner pipeline for edge
   detection, perspective straightening, rotation, lighting cleanup, page edits
   and review before the shared upload flow.

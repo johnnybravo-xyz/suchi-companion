@@ -11,13 +11,28 @@ import java.io.File
 
 class DocumentExportProvider : FileProvider()
 
+internal data class DocumentRoot(val directory: File, val operationPrefix: String)
+
 internal object DocumentExport {
-    fun file(root: File, path: String): File {
-        val directory = root.canonicalFile
-        val file = File(path).canonicalFile
+    fun file(roots: List<DocumentRoot>, path: String): File {
+        val requested = File(path).absoluteFile
+        val requestedParent = requireNotNull(requested.parentFile)
+        val file = requested.canonicalFile
+        val parent = requireNotNull(file.parentFile)
+        require(
+            requested.name == file.name &&
+                requestedParent.canonicalFile == parent &&
+                requestedParent.name == parent.name &&
+                requestedParent.parentFile?.canonicalFile == parent.parentFile,
+        )
         require(file.isFile && file.length() in 1..(64L * 1024 * 1024))
-        require(file.parentFile?.parentFile == directory)
-        require(file.parentFile?.name?.startsWith("document-") == true)
+        require(
+            roots.any { candidate ->
+                parent?.parentFile == candidate.directory.canonicalFile &&
+                    parent.name.startsWith(candidate.operationPrefix) &&
+                    !parent.name.endsWith(".part")
+            },
+        )
         return file
     }
 
@@ -68,7 +83,17 @@ class DocumentChannel(private val activity: MainActivity) {
         }
         try {
             val file = DocumentExport.file(
-                File(activity.filesDir, "suchi-document-exports"), path,
+                listOf(
+                    DocumentRoot(
+                        File(activity.filesDir, "suchi-document-exports"),
+                        "document-",
+                    ),
+                    DocumentRoot(
+                        File(activity.filesDir, "suchi-offline-documents"),
+                        "offline-",
+                    ),
+                ),
+                path,
             )
             val uri = FileProvider.getUriForFile(
                 activity, "${activity.packageName}.document-exports", file,

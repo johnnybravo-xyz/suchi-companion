@@ -18,20 +18,67 @@ final class RunnerTests: XCTestCase {
     temporaryRoot = nil
   }
 
-  func testDocumentExportsRejectFilesOutsideTheirDedicatedDirectory() throws {
-    let root = temporaryRoot.appendingPathComponent("exports", isDirectory: true)
-    let operation = root.appendingPathComponent("document-test", isDirectory: true)
-    try FileManager.default.createDirectory(at: operation, withIntermediateDirectories: true)
-    let file = operation.appendingPathComponent("document-91.pdf")
-    try Data("%PDF-test".utf8).write(to: file)
-    XCTAssertEqual(try DocumentExport.file(root: root, path: file.path), file)
+  func testDocumentExportsAcceptOnlyExactTemporaryAndOfflinePayloads() throws {
+    let exportRoot = temporaryRoot.appendingPathComponent("suchi-document-exports", isDirectory: true)
+    let offlineRoot = temporaryRoot.appendingPathComponent("suchi-offline-documents", isDirectory: true)
+    let roots = [
+      DocumentRoot(directory: exportRoot, operationPrefix: "document-"),
+      DocumentRoot(directory: offlineRoot, operationPrefix: "offline-"),
+    ]
+    let exportOperation = exportRoot.appendingPathComponent("document-test", isDirectory: true)
+    try FileManager.default.createDirectory(at: exportOperation, withIntermediateDirectories: true)
+    let exported = exportOperation.appendingPathComponent("document-91.pdf")
+    try Data("%PDF-test".utf8).write(to: exported)
+    XCTAssertEqual(try DocumentExport.file(roots: roots, path: exported.path), exported)
+
+    let offlineOperation = offlineRoot.appendingPathComponent("offline-test", isDirectory: true)
+    try FileManager.default.createDirectory(at: offlineOperation, withIntermediateDirectories: true)
+    let offline = offlineOperation.appendingPathComponent("document-91.pdf")
+    try Data("%PDF-offline".utf8).write(to: offline)
+    XCTAssertEqual(try DocumentExport.file(roots: roots, path: offline.path), offline)
 
     let outside = temporaryRoot.appendingPathComponent("private.pdf")
     try Data("private".utf8).write(to: outside)
-    XCTAssertThrowsError(try DocumentExport.file(root: root, path: outside.path))
-    let link = operation.appendingPathComponent("linked.pdf")
-    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outside)
-    XCTAssertThrowsError(try DocumentExport.file(root: root, path: link.path))
+    XCTAssertThrowsError(try DocumentExport.file(roots: roots, path: outside.path))
+    let nested = exportOperation
+      .appendingPathComponent("nested", isDirectory: true)
+      .appendingPathComponent("document.pdf")
+    try FileManager.default.createDirectory(
+      at: nested.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    try Data("%PDF-nested".utf8).write(to: nested)
+    XCTAssertThrowsError(try DocumentExport.file(roots: roots, path: nested.path))
+    let staging = offlineRoot
+      .appendingPathComponent("offline-test.part", isDirectory: true)
+      .appendingPathComponent("document.pdf")
+    try FileManager.default.createDirectory(
+      at: staging.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    try Data("%PDF-staging".utf8).write(to: staging)
+    XCTAssertThrowsError(try DocumentExport.file(roots: roots, path: staging.path))
+    let link = exportOperation.appendingPathComponent("linked.pdf")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: offline)
+    XCTAssertThrowsError(try DocumentExport.file(roots: roots, path: link.path))
+    let outsideDirectory = temporaryRoot.appendingPathComponent("outside-directory", isDirectory: true)
+    try FileManager.default.createDirectory(at: outsideDirectory, withIntermediateDirectories: true)
+    let outsidePayload = outsideDirectory.appendingPathComponent("document.pdf")
+    try Data("%PDF-outside".utf8).write(to: outsidePayload)
+    let linkedOperation = offlineRoot.appendingPathComponent("offline-linked", isDirectory: true)
+    try FileManager.default.createSymbolicLink(at: linkedOperation, withDestinationURL: outsideDirectory)
+    XCTAssertThrowsError(
+      try DocumentExport.file(
+        roots: roots,
+        path: linkedOperation.appendingPathComponent(outsidePayload.lastPathComponent).path
+      )
+    )
+    let oversized = offlineOperation.appendingPathComponent("oversized.pdf")
+    XCTAssertTrue(FileManager.default.createFile(atPath: oversized.path, contents: nil))
+    let handle = try FileHandle(forWritingTo: oversized)
+    try handle.truncate(atOffset: UInt64(64 * 1024 * 1024 + 1))
+    try handle.close()
+    XCTAssertThrowsError(try DocumentExport.file(roots: roots, path: oversized.path))
   }
 
   func testManifestAndPayloadRoundTrip() throws {

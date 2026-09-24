@@ -360,8 +360,8 @@ void main() {
     final openBounds = tester.getRect(
       find.widgetWithText(FilledButton, 'Open'),
     );
-    expect(openBounds.center.dy, greaterThan(previewBounds.center.dy));
-    expect(openBounds.center.dx, greaterThan(previewBounds.center.dx));
+    expect(openBounds.bottom, lessThan(previewBounds.bottom));
+    expect(openBounds.right, closeTo(previewBounds.right - 10, 2));
     expect(open.onPressed, isNotNull);
     await invokeAndWait(open.onPressed!, 1);
     expect(
@@ -426,7 +426,7 @@ void main() {
 
     Future<void> chooseRestricted(String current) async {
       final row = find.bySemanticsLabel('Sensitivity: $current');
-      await tester.ensureVisible(row);
+      await tester.scrollUntilVisible(row, 200);
       await tester.pumpAndSettle();
       await tester.tap(row);
       await tester.pumpAndSettle();
@@ -457,7 +457,7 @@ void main() {
     expect(changes, 1);
 
     final restricted = find.bySemanticsLabel('Sensitivity: Restricted');
-    await tester.ensureVisible(restricted);
+    await tester.scrollUntilVisible(restricted, 200);
     await tester.pumpAndSettle();
     await tester.tap(restricted);
     await tester.pumpAndSettle();
@@ -483,7 +483,7 @@ void main() {
     final requests = <http.Request>[];
     final session = await _openDetail(tester, requests: requests);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Sensitivity'));
+    await tester.scrollUntilVisible(find.text('Sensitivity'), 200);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sensitivity'));
     await tester.pumpAndSettle();

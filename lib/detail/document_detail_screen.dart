@@ -1117,37 +1117,6 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
                         label: const Text('Hide'),
                       ),
                     ),
-                  if (!concealed)
-                    Positioned(
-                      bottom: 12,
-                      right: 12,
-                      child: Tooltip(
-                        message: _fileLoading
-                            ? 'Cancel document handoff'
-                            : 'Open document',
-                        child: FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size(48, 48),
-                            backgroundColor: colors.accent.withValues(
-                              alpha: 0.96,
-                            ),
-                            foregroundColor: colors.onAccent,
-                          ),
-                          onPressed: _fileLoading
-                              ? widget.files.cancelPending
-                              : activate,
-                          icon: _fileLoading
-                              ? const SizedBox.square(
-                                  dimension: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.open_in_new, size: 18),
-                          label: Text(_fileLoading ? 'Cancel' : 'Open'),
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -1156,6 +1125,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
             document,
             offlineEntry: offlineEntry,
             offlineOutdated: offlineOutdated,
+            concealed: concealed,
+            activate: activate,
           ),
         ],
       ),
@@ -1191,6 +1162,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     DocumentDetail document, {
     required OfflineDocument? offlineEntry,
     required bool offlineOutdated,
+    required bool concealed,
+    required VoidCallback? activate,
   }) {
     final colors = SuchiColors.of(context);
     final control = _offlineControl(offlineEntry, offlineOutdated);
@@ -1214,26 +1187,56 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
       padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-          final stacked = constraints.maxWidth < 420 || scale > 1.25;
-          if (control == null) return fileInfo;
-          if (stacked) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                fileInfo,
-                const SizedBox(height: 6),
-                Align(alignment: Alignment.centerLeft, child: control),
-              ],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(child: fileInfo),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Align(alignment: Alignment.centerRight, child: control),
+          final open = Tooltip(
+            message: _fileLoading ? 'Cancel document handoff' : 'Open document',
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(48, 48),
+                backgroundColor: colors.accent.withValues(alpha: 0.96),
+                foregroundColor: colors.onAccent,
               ),
+              onPressed: _fileLoading ? widget.files.cancelPending : activate,
+              icon: _fileLoading
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.open_in_new, size: 18),
+              label: Text(_fileLoading ? 'Cancel' : 'Open'),
+            ),
+          );
+          final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+          final stacked = constraints.maxWidth < 310 || scale > 1.25;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (control != null || !concealed) ...[
+                if (stacked)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (control != null)
+                        Align(alignment: Alignment.centerLeft, child: control),
+                      if (control != null && !concealed)
+                        const SizedBox(height: 6),
+                      if (!concealed)
+                        Align(alignment: Alignment.centerRight, child: open),
+                    ],
+                  )
+                else
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      if (control != null) Expanded(child: control),
+                      if (control != null && !concealed)
+                        const SizedBox(width: 8),
+                      if (!concealed) open,
+                    ],
+                  ),
+                const SizedBox(height: 8),
+              ],
+              fileInfo,
             ],
           );
         },
@@ -1286,7 +1289,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
               children: [
                 Icon(Icons.offline_pin, size: 18),
                 SizedBox(width: 6),
-                Text('Available offline'),
+                Flexible(child: Text('Available offline')),
               ],
             ),
           ),

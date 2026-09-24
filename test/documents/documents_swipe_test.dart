@@ -25,21 +25,29 @@ void main() {
   tearDown(() async => fixture.close());
 
   testWidgets(
-    'swipe reveals a separate action; copy uses current detail and row still opens',
+    'right swipe reveals an operable offline action; left swipe does not',
     (tester) async {
+      _phoneViewport(tester);
       final opened = <int>[];
       await fixture.show(tester, onOpen: opened.add);
+      final rowY = tester.getCenter(find.text('Receipt')).dy;
       await tester.tap(find.text('Receipt'));
       expect(opened, [91]);
+      final action = find.text('Make available offline').hitTestable();
+      expect(action, findsNothing);
       await tester.drag(find.text('Receipt'), const Offset(-220, 0));
       await tester.pumpAndSettle();
-      expect(find.text('Receipt'), findsOneWidget);
-      expect(find.text('Make available offline'), findsOneWidget);
+      expect(action, findsNothing);
       expect(fixture.detailRequests, 0);
       expect(fixture.downloadRequests, 0);
-      await tester.tap(find.text('Receipt'));
+      await tester.drag(find.text('Receipt'), const Offset(220, 0));
+      await tester.pumpAndSettle();
+      expect(action, findsOneWidget);
+      expect(fixture.detailRequests, 0);
+      expect(fixture.downloadRequests, 0);
+      await tester.tapAt(Offset(340, rowY));
       expect(opened, [91, 91]);
-      await tester.tap(find.text('Make available offline'));
+      await tester.tap(action);
       await _waitForCopy(tester, fixture, downloads: 1);
       final entry = fixture.store.find(fixture.session.identity, 91);
       expect(entry?.document.title, 'Authoritative receipt');
@@ -59,12 +67,28 @@ void main() {
     },
   );
 
+  testWidgets('offline action remains tappable with large phone text', (
+    tester,
+  ) async {
+    _phoneViewport(tester);
+    await fixture.show(tester, textScaler: const TextScaler.linear(2));
+    await tester.drag(find.text('Receipt'), const Offset(220, 0));
+    await tester.pumpAndSettle();
+    final action = find.text('Save offline').hitTestable();
+    expect(action, findsOneWidget);
+    expect(fixture.detailRequests, 0);
+    await tester.tap(action);
+    await _waitForCopy(tester, fixture, downloads: 1);
+    expect(fixture.store.entriesFor(fixture.session.identity), hasLength(1));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('fresh sensitive detail needs consent; refusal never downloads', (
     tester,
   ) async {
     fixture.sensitivity = 'confidential';
     await fixture.show(tester);
-    await tester.drag(find.text('Receipt'), const Offset(-220, 0));
+    await tester.drag(find.text('Receipt'), const Offset(220, 0));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Make available offline'));
     await tester.pump();
@@ -83,7 +107,7 @@ void main() {
   ) async {
     fixture.failDownload = true;
     await fixture.show(tester);
-    await tester.drag(find.text('Receipt'), const Offset(-220, 0));
+    await tester.drag(find.text('Receipt'), const Offset(220, 0));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Make available offline'));
     await _waitForCopy(tester, fixture, downloads: 1);
@@ -101,7 +125,7 @@ void main() {
       fixture.delayedDetail = detail;
       await fixture.show(tester);
       final oldIdentity = fixture.session.identity!;
-      await tester.drag(find.text('Receipt'), const Offset(-220, 0));
+      await tester.drag(find.text('Receipt'), const Offset(220, 0));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Make available offline'));
       await tester.pump();
@@ -121,6 +145,13 @@ void main() {
       expect(find.text('Document is available offline.'), findsNothing);
     },
   );
+}
+
+void _phoneViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
 }
 
 Future<void> _waitForCopy(
@@ -243,7 +274,11 @@ final class _Fixture {
     }
   }
 
-  Future<void> show(WidgetTester tester, {ValueChanged<int>? onOpen}) async {
+  Future<void> show(
+    WidgetTester tester, {
+    ValueChanged<int>? onOpen,
+    TextScaler? textScaler,
+  }) async {
     final categories = JdCategoryStore(
       client: session.client!,
       onUnauthorized: session.expire,
@@ -252,6 +287,12 @@ final class _Fixture {
     await tester.pumpWidget(
       MaterialApp(
         theme: SuchiTheme.light,
+        builder: textScaler == null
+            ? null
+            : (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+                child: child!,
+              ),
         home: ListenableBuilder(
           listenable: session,
           builder: (context, _) => session.state == SessionState.signedIn

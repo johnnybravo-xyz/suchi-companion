@@ -762,6 +762,12 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         itemBuilder: (context, index) {
           if (index < _documents.length) {
             final document = _documents[index];
+            final hasOfflineCopy =
+                widget.offlineDocuments?.find(
+                  widget.session.identity,
+                  document.id,
+                ) !=
+                null;
             return Padding(
               key: ValueKey(document.id),
               padding: EdgeInsets.only(
@@ -788,14 +794,12 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                     )
                   : _OfflineSwipeRow(
                       enabled: _copyDocumentId == null,
-                      actionLabel:
-                          widget.offlineDocuments!.find(
-                                widget.session.identity,
-                                document.id,
-                              ) !=
-                              null
+                      actionLabel: hasOfflineCopy
                           ? 'Update offline copy'
                           : 'Make available offline',
+                      compactActionLabel: hasOfflineCopy
+                          ? 'Update offline'
+                          : 'Save offline',
                       progressLabel: _copyDocumentId == document.id
                           ? _copyProgressLabel
                           : null,
@@ -854,6 +858,7 @@ class _OfflineSwipeRow extends StatefulWidget {
   const _OfflineSwipeRow({
     required this.enabled,
     required this.actionLabel,
+    required this.compactActionLabel,
     required this.progressLabel,
     required this.onAction,
     required this.onCancel,
@@ -862,6 +867,7 @@ class _OfflineSwipeRow extends StatefulWidget {
 
   final bool enabled;
   final String actionLabel;
+  final String compactActionLabel;
   final String? progressLabel;
   final VoidCallback onAction;
   final VoidCallback onCancel;
@@ -879,6 +885,10 @@ class _OfflineSwipeRowState extends State<_OfflineSwipeRow> {
   @override
   Widget build(BuildContext context) {
     final colors = SuchiColors.of(context);
+    final compactLabel = MediaQuery.textScalerOf(context).scale(14) >= 21;
+    final visibleLabel = compactLabel
+        ? widget.compactActionLabel
+        : widget.actionLabel;
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = _actionWidth.clamp(0.0, constraints.maxWidth).toDouble();
@@ -886,85 +896,53 @@ class _OfflineSwipeRowState extends State<_OfflineSwipeRow> {
           borderRadius: BorderRadius.circular(17),
           child: Stack(
             children: [
-              Semantics(
-                customSemanticsActions:
-                    widget.enabled && widget.progressLabel == null
-                    ? {
-                        CustomSemanticsAction(label: widget.actionLabel): () =>
-                            _startAction(width),
-                      }
-                    : const {},
-                child: GestureDetector(
-                  behavior: HitTestBehavior.deferToChild,
-                  onHorizontalDragStart: (_) =>
-                      setState(() => _dragging = true),
-                  onHorizontalDragUpdate: (details) => setState(() {
-                    _exposed = (_exposed - details.delta.dx)
-                        .clamp(0.0, width)
-                        .toDouble();
-                  }),
-                  onHorizontalDragEnd: (details) => setState(() {
-                    _dragging = false;
-                    _exposed =
-                        _exposed > width / 3 ||
-                            (details.primaryVelocity ?? 0) < -300
-                        ? width
-                        : 0;
-                  }),
-                  onHorizontalDragCancel: () => setState(() {
-                    _dragging = false;
-                    _exposed = _exposed > width / 2 ? width : 0;
-                  }),
-                  child: widget.child,
-                ),
-              ),
               Positioned(
                 top: 0,
                 bottom: 0,
-                right: 0,
+                left: 0,
                 width: width,
-                child: AnimatedSlide(
-                  offset: Offset(width == 0 ? 1 : 1 - _exposed / width, 0),
-                  duration: _dragging
-                      ? Duration.zero
-                      : SuchiMotion.standard(context),
-                  curve: Curves.easeOutCubic,
-                  child: IgnorePointer(
-                    ignoring: _exposed == 0,
-                    child: ExcludeSemantics(
-                      excluding: _exposed == 0,
-                      child: ColoredBox(
-                        color: colors.accent.withValues(alpha: 0.12),
-                        child: widget.progressLabel != null
-                            ? Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox.square(
-                                    dimension: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      semanticsLabel: widget.progressLabel!,
-                                    ),
+                child: IgnorePointer(
+                  ignoring: _exposed == 0,
+                  child: ExcludeSemantics(
+                    excluding: _exposed == 0,
+                    child: ColoredBox(
+                      color: colors.success,
+                      child: widget.progressLabel != null
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: colors.onAccent,
+                                    semanticsLabel: widget.progressLabel!,
                                   ),
-                                  const SizedBox(width: 6),
-                                  Flexible(
-                                    child: Text(
-                                      widget.progressLabel!,
-                                      maxLines: 2,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall,
-                                    ),
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    widget.progressLabel!,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(color: colors.onAccent),
                                   ),
-                                  IconButton(
-                                    tooltip: 'Cancel offline copy',
-                                    onPressed: widget.onCancel,
-                                    icon: const Icon(Icons.close, size: 18),
-                                  ),
-                                ],
-                              )
-                            : TextButton.icon(
+                                ),
+                                IconButton(
+                                  tooltip: 'Cancel offline copy',
+                                  color: colors.onAccent,
+                                  onPressed: widget.onCancel,
+                                  icon: const Icon(Icons.close, size: 18),
+                                ),
+                              ],
+                            )
+                          : SizedBox.expand(
+                              child: TextButton.icon(
                                 style: TextButton.styleFrom(
+                                  foregroundColor: colors.onAccent,
+                                  disabledForegroundColor: colors.onAccent
+                                      .withValues(alpha: 0.7),
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 4,
                                   ),
@@ -979,13 +957,59 @@ class _OfflineSwipeRowState extends State<_OfflineSwipeRow> {
                                   Icons.download_for_offline_outlined,
                                 ),
                                 label: Text(
-                                  widget.actionLabel,
+                                  visibleLabel,
                                   textAlign: TextAlign.center,
                                   maxLines: 2,
                                 ),
                               ),
-                      ),
+                            ),
                     ),
+                  ),
+                ),
+              ),
+              AnimatedSlide(
+                offset: Offset(
+                  constraints.maxWidth == 0
+                      ? 0
+                      : _exposed / constraints.maxWidth,
+                  0,
+                ),
+                duration: _dragging
+                    ? Duration.zero
+                    : SuchiMotion.standard(context),
+                curve: Curves.easeOutCubic,
+                child: Semantics(
+                  customSemanticsActions:
+                      widget.enabled && widget.progressLabel == null
+                      ? {
+                          CustomSemanticsAction(
+                            label: widget.actionLabel,
+                          ): () =>
+                              _startAction(width),
+                        }
+                      : const {},
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.deferToChild,
+                    onHorizontalDragStart: (_) =>
+                        setState(() => _dragging = true),
+                    onHorizontalDragUpdate: (details) => setState(() {
+                      _exposed = (_exposed + details.delta.dx)
+                          .clamp(0.0, width)
+                          .toDouble();
+                    }),
+                    onHorizontalDragEnd: (details) => setState(() {
+                      _dragging = false;
+                      _exposed =
+                          _exposed > width / 3 ||
+                              (details.primaryVelocity ?? 0) > 300
+                          ? width
+                          : 0;
+                    }),
+                    onHorizontalDragCancel: () => setState(() {
+                      _dragging = false;
+                      _exposed = _exposed > width / 2 ? width : 0;
+                    }),
+                    child: widget.child,
                   ),
                 ),
               ),

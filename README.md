@@ -74,11 +74,12 @@ are limited to 64 MiB; use the web app for larger files. Temporary copies are
 removed when signing out or on the next cold launch, and older copies are
 pruned during later exports.
 
-Choose **Make available offline** in document detail, or swipe left on an online
-Documents row to reveal it. The app checks current server metadata before
-retaining the verified full file in protected, backup-excluded app storage. A
-saved row offers **Update offline copy**; detail also offers **Remove offline
-copy**, which deletes only the device copy. Each file remains subject to the
+Choose **Make available offline** in document detail, or swipe right on an online
+Documents row to reveal a solid offline action. The app checks current server
+metadata before retaining the verified full file in protected,
+backup-excluded app storage. A saved row offers **Update offline copy**;
+detail also offers **Remove offline copy**, which deletes only the device
+copy. Each file remains subject to the
 64 MiB limit. Sensitive files ask before retention and again before handoff to
 another app. Previews, email HTML and extracted text are never written into
 the offline store.
@@ -92,14 +93,19 @@ Connectivity returning does not silently leave Offline. Signing out removes the
 account's offline copies before deleting its credential; if protected cleanup
 fails, sign-out fails and the session remains active.
 
-Document detail opens on a large preview: tap the page or the softly translucent
-**Open** button at its lower right to hand off the full file. **Share**, **Edit**
-and **Trash** remain in the top bar; file type, size and offline controls stay
-with the preview. Below it, **Read text** and **File under…** are the two primary
+Document detail opens on a large preview: tap the page or **Open** on the right
+of its action row to hand off the full file. Offline controls sit to the left
+of **Open**; **Share**, **Edit** and **Trash** remain in the top bar. File type
+and size stay with the preview. Below it, **Read text** and **File under…**
 actions. The always-visible **Details** card includes filing, sender, tags,
 sensitivity, languages, added date and source. Tap its **Sensitivity** row
 to change classification directly; choosing a sensitive level conceals the
 preview immediately. Offline details remain read-only.
+
+Saving a title, language, filing, sensitivity or tag change removes
+`needs-review` only when the server's classifier added it. A tag added by you,
+a rule or an import stays until explicitly removed.
+
 Sensitive previews still require **Reveal preview**; **Hide** removes them
 immediately. If a refresh fails, the last loaded information stays labelled
 with an error and Retry rather than appearing current.

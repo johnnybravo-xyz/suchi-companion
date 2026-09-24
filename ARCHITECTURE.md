@@ -237,19 +237,21 @@ staging/malformed/unknown entries and retains only the newest valid duplicate.
 Thumbnails, email HTML and extracted text are never persisted there.
 
 Documents can select Offline while signed in and sorts manifest-backed rows
-without HTTP. Swiping left on an online Documents row reveals Make/Update
-offline copy; it fetches current detail before saving, asks consent for a newly
-sensitive document and rejects late work after an account transition. A
-network/timeout detail failure may fall back only to the matching account
-manifest and becomes read-only; authorization and malformed failures do not.
+without HTTP. Swiping right on an online Documents row reveals a solid
+Make/Update offline action; it fetches current detail before saving, asks
+consent for newly sensitive documents and rejects late work after an account
+transition. A network/timeout detail failure may fall back only to the
+matching account manifest and becomes read-only; authorization and malformed
+failures do not.
 Detail compares `original_blob` for Update, and offers explicit Make, Update
 and Remove actions. Sensitive retention and local file handoff require
 confirmation. More reports offline count/bytes and offers local Open/Remove.
 
 Document detail owns a preview-first workspace. The preview card couples the
-openable page with friendly type, exact byte size and account-scoped offline
-control; Share, Edit and Trash remain route actions. Responsive reader/filing
-actions lead into an always-visible metadata card. Its sender is the first
+openable page with friendly type and exact byte size. Its action row places
+the account-scoped offline control left of right-aligned Open; Share, Edit and
+Trash remain route actions. Responsive reader/filing actions lead into an
+always-visible metadata card. Its sender is the first
 `sender` correspondent, falling back to the first correspondent, and missing
 fields render explicitly rather than being inferred. Provenance displays the
 actual added time and first source label/kind; the validated `original_blob`
@@ -257,6 +259,10 @@ remains internal to offline freshness checks and manifests, not the Details
 card. Ordinary preview states may fade; sensitive concealment replaces
 the whole animation subtree and evicts revealed bytes before the next frame. A
 failed metadata refresh retains clearly labelled stale information with Retry.
+
+The server's metadata PATCH and bulk edit transactions clear only classifier-owned
+`needs-review` tags after a write. The edit screen reconciles a server-cleared
+marker before retrying partial saves, rather than re-adding it as a manual tag.
 
 `message/rfc822` previews use a separate bounded `text/html; charset=utf-8`
 request. Dart authenticates that request, injects a restrictive CSP at the start

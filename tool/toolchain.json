@@ -65,7 +65,7 @@
   },
   "server": {
     "path": "../suchi",
-    "compatible_ref": "4fbd3f97088f506c28accefc49705233de23f506",
+    "compatible_ref": "0ab0af12b7416bce81cc6dbff45c43f095862b9b",
     "api_version": 1
   }
 }

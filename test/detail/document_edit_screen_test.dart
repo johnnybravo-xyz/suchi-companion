@@ -265,6 +265,66 @@ void main() {
     },
   );
 
+  testWidgets('retry does not re-add a review tag cleared by the server', (
+    tester,
+  ) async {
+    var currentTitle =
+        (jsonDecode(_fixture('document-detail.json'))
+                as Map<String, dynamic>)['title']
+            as String;
+    final currentTags = {'utilities', 'needs-review'};
+    final writes = <String>[];
+    var rejectFirstTagWrite = true;
+    final session = await _session(
+      (request) async {
+        currentTitle =
+            (jsonDecode(request.body) as Map<String, dynamic>)['title']
+                as String;
+        currentTags.remove('needs-review');
+        return _json({'id': 91});
+      },
+      detail: () => _detailWithTags(currentTags)..['title'] = currentTitle,
+      tags: (_) async => _json({
+        'count': 3,
+        'results': [
+          _tag(1, 'Utilities', 'utilities'),
+          _tag(99, 'Needs review', 'needs-review'),
+          _tag(3, 'Travel', 'travel'),
+        ],
+      }),
+      bulk: (request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        writes.add('${body['method']}:${body['parameters']['tag_id']}');
+        if (rejectFirstTagWrite) {
+          rejectFirstTagWrite = false;
+          return _json({'error': 'write refused'}, status: 403);
+        }
+        currentTags.add('travel');
+        return _bulkOk(body);
+      },
+    );
+    final result = await _openEditor(
+      tester,
+      session,
+      initialTags: {'utilities', 'needs-review'},
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Title'),
+      'Reviewed receipt',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Find existing tags'),
+      'travel',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Travel'));
+    await _save(tester);
+    expect(result.value, isNull);
+    await _save(tester);
+    expect(writes, ['add_tag:3', 'add_tag:3']);
+    expect(result.value, isTrue);
+  });
+
   testWidgets(
     'stops remaining tag writes when the original account signs out',
     (tester) async {
@@ -356,11 +416,13 @@ Future<ValueNotifier<bool?>> _openEditor(
   bool languagesLocked = false,
   TargetPlatform platform = TargetPlatform.android,
   double textScale = 1,
+  Set<String>? initialTags,
 }) async {
   final result = ValueNotifier<bool?>(null);
   final detail =
       jsonDecode(_fixture('document-detail.json')) as Map<String, dynamic>;
   detail['languages_locked'] = languagesLocked;
+  if (initialTags != null) detail['tags'] = initialTags.toList();
   await tester.pumpWidget(
     MaterialApp(
       theme: SuchiTheme.light.copyWith(platform: platform),

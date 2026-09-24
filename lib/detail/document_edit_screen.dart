@@ -120,10 +120,16 @@ class _DocumentEditScreenState extends State<DocumentEditScreen> {
   Future<void> _reconcile() async {
     final current = await _client.document(widget.document.id);
     if (!mounted || !_sameAccount) return;
+    // A successful edit may have cleared the classifier's review marker.
+    // A retry must not turn that server removal into a user-owned tag.
+    final clearedReview =
+        _serverTags.contains('needs-review') &&
+        !current.tags.contains('needs-review');
     setState(() {
       _savedTitle = current.title;
       _savedLanguages = _languageCodes(current.languages);
       _serverTags = current.tags.toSet();
+      if (clearedReview) _selectedTags.remove('needs-review');
       _needsReconcile = false;
     });
   }

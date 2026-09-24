@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../auth/session_controller.dart';
 import '../documents/document_list_mode.dart';
-import '../offline/offline_document_store.dart';
 import '../scan/scanner_bridge.dart';
 import '../theme/suchi_theme.dart';
 import '../widgets/suchi_widgets.dart';
@@ -16,14 +15,12 @@ class MoreScreen extends StatefulWidget {
     required this.session,
     required this.settings,
     this.onOpenTrash,
-    this.offlineDocuments,
     super.key,
   });
 
   final SessionController session;
   final AppSettingsController settings;
   final VoidCallback? onOpenTrash;
-  final OfflineDocumentStore? offlineDocuments;
 
   @override
   State<MoreScreen> createState() => _MoreScreenState();
@@ -465,156 +462,6 @@ class _MoreScreenState extends State<MoreScreen> {
     );
   }
 
-  Future<bool> _confirmSensitiveOpen(BuildContext context) async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Open sensitive document?'),
-          content: const Text(
-            'The document will be handed to another app and may remain visible there.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Open'),
-            ),
-          ],
-        ),
-      ) ??
-      false;
-
-  Future<void> _openOfflineDocument(
-    BuildContext context,
-    OfflineDocument entry,
-  ) async {
-    final identity = widget.session.identity;
-    if (identity == null || entry.identity != identity) return;
-    if (entry.document.isSensitive && !await _confirmSensitiveOpen(context)) {
-      return;
-    }
-    if (!context.mounted || widget.session.identity != identity) return;
-    try {
-      await widget.offlineDocuments!.handoff(
-        identity: identity,
-        entry: entry,
-        share: false,
-      );
-    } catch (_) {
-      if (!context.mounted || widget.session.identity != identity) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('The offline document could not be opened.'),
-        ),
-      );
-    }
-  }
-
-  Future<void> _removeOfflineDocument(
-    BuildContext context,
-    OfflineDocument entry,
-  ) async {
-    final identity = widget.session.identity;
-    if (identity == null || entry.identity != identity) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove offline copy?'),
-        content: Text(
-          '${entry.document.title} will remain in Suchi but will no longer be available without a connection.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true ||
-        !context.mounted ||
-        widget.session.identity != identity) {
-      return;
-    }
-    try {
-      await widget.offlineDocuments!.remove(identity, entry.document.id);
-    } catch (_) {
-      if (!context.mounted || widget.session.identity != identity) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('The offline copy could not be removed.')),
-      );
-    }
-  }
-
-  Future<void> _showOfflineDocuments() async {
-    final store = widget.offlineDocuments;
-    final identity = widget.session.identity;
-    if (store == null || identity == null) return;
-    await _showSettingsSheet<void>(
-      title: 'Offline documents',
-      accountBearing: true,
-      builder: (context) => ListenableBuilder(
-        listenable: store,
-        builder: (context, _) {
-          final entries = store.entriesFor(identity);
-          final totalBytes = store.totalBytesFor(identity);
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '${entries.length} ${entries.length == 1 ? 'document' : 'documents'} · ${_formatBytes(totalBytes)}',
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: SuchiColors.of(context).muted),
-              ),
-              if (store.errorMessage case final error?) ...[
-                const SizedBox(height: 12),
-                InlineError(message: error),
-              ],
-              const SizedBox(height: 12),
-              if (entries.isEmpty)
-                const EmptyState(
-                  title: 'No offline documents',
-                  message: 'Open a document while connected to keep it on this device.',
-                  icon: Icons.offline_pin_outlined,
-                )
-              else
-                for (final entry in entries)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.offline_pin_outlined),
-                    title: Text(entry.document.title),
-                    subtitle: Text(_formatBytes(entry.byteSize)),
-                    onTap: () => _openOfflineDocument(context, entry),
-                    trailing: PopupMenuButton<String>(
-                      tooltip: 'Offline document actions',
-                      onSelected: (action) {
-                        if (action == 'open') {
-                          unawaited(_openOfflineDocument(context, entry));
-                        } else {
-                          unawaited(_removeOfflineDocument(context, entry));
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(value: 'open', child: Text('Open')),
-                        PopupMenuItem(value: 'remove', child: Text('Remove')),
-                      ],
-                    ),
-                  ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
   Future<void> _retryConnection() async {
     if (_retrying || !widget.session.canRetryStoredCredentials) return;
     setState(() => _retrying = true);
@@ -626,14 +473,6 @@ class _MoreScreenState extends State<MoreScreen> {
         const SnackBar(content: Text('Suchi is still unavailable.')),
       );
     }
-  }
-
-  static String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    }
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   Future<void> _showPrivacyDetails() => _showSettingsSheet<void>(
@@ -680,11 +519,7 @@ class _MoreScreenState extends State<MoreScreen> {
   Widget build(BuildContext context) => SafeArea(
     bottom: false,
     child: ListenableBuilder(
-      listenable: Listenable.merge([
-        widget.settings,
-        widget.session,
-        if (widget.offlineDocuments != null) widget.offlineDocuments!,
-      ]),
+      listenable: Listenable.merge([widget.settings, widget.session]),
       builder: (context, _) {
         final colors = SuchiColors.of(context);
         final user = widget.session.user;
@@ -751,7 +586,7 @@ class _MoreScreenState extends State<MoreScreen> {
                     leading: const Icon(Icons.cloud_off_outlined),
                     title: const Text('Working offline'),
                     subtitle: const Text(
-                      'Only documents kept on this device are available.',
+                      'Saved documents and Scan remain available. Uploads wait for verification.',
                     ),
                     trailing: _retrying
                         ? const SizedBox.square(
@@ -817,18 +652,6 @@ class _MoreScreenState extends State<MoreScreen> {
                 elevated: false,
                 child: Column(
                   children: [
-                    ListTile(
-                      leading: const Icon(Icons.offline_pin_outlined),
-                      title: const Text('Offline documents'),
-                      subtitle: Text(
-                        '${widget.offlineDocuments?.entriesFor(widget.session.identity).length ?? 0} on this device',
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: widget.offlineDocuments == null
-                          ? null
-                          : _showOfflineDocuments,
-                    ),
-                    Divider(height: 1, thickness: 1, color: colors.line),
                     ListTile(
                       leading: const Icon(Icons.delete_outline),
                       title: const Text('Trash'),

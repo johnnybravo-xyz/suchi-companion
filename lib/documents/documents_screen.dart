@@ -478,8 +478,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     await _load(reset: false);
   }
 
-  void _selectCategory(JDCategory? category) {
-    Navigator.maybePop(context);
+  void _selectCategory(JDCategory? category, {bool closeDrawer = true}) {
+    if (closeDrawer) Navigator.maybePop(context);
     final selected = category?.id;
     if (!_offlineSelected && _activeView == null && selected == _categoryId) {
       return;
@@ -538,11 +538,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: colors.paper,
-      endDrawer: Drawer(
-        backgroundColor: colors.paper,
-        width: MediaQuery.sizeOf(context).width * 0.9,
-        child: SafeArea(child: _scopeDrawer(categories)),
-      ),
+      endDrawer: categories == null
+          ? null
+          : Drawer(
+              backgroundColor: colors.paper,
+              width: MediaQuery.sizeOf(context).width * 0.9,
+              child: SafeArea(child: _scopeDrawer(categories)),
+            ),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -614,9 +616,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Tooltip(
-                    message: 'Open JD Index',
+                    message: categories == null
+                        ? 'Offline documents'
+                        : 'Open JD Index',
                     child: InkWell(
-                      onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
+                      onTap: categories == null
+                          ? null
+                          : () => _scaffoldKey.currentState?.openEndDrawer(),
                       borderRadius: BorderRadius.circular(8),
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(minHeight: 48),
@@ -642,8 +648,10 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                                     ),
                               ),
                             ),
-                            const SizedBox(width: 4),
-                            Icon(Icons.expand_more, color: colors.muted),
+                            if (categories != null) ...[
+                              const SizedBox(width: 4),
+                              Icon(Icons.expand_more, color: colors.muted),
+                            ],
                           ],
                         ),
                       ),
@@ -655,6 +663,23 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: colors.muted),
                     ),
+                  if (widget.offlineDocuments != null)
+                    FilterChip(
+                      avatar: const Icon(Icons.offline_pin_outlined, size: 18),
+                      label: Text(
+                        'Saved offline · ${widget.offlineDocuments!.entriesFor(widget.session.identity).length}',
+                      ),
+                      selected: _offlineSelected,
+                      onSelected: widget.client == null
+                          ? null
+                          : (selected) {
+                              if (selected) {
+                                _selectOffline(closeDrawer: false);
+                              } else {
+                                _selectCategory(null, closeDrawer: false);
+                              }
+                            },
+                    ),
                 ],
               ),
             ),
@@ -665,38 +690,17 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     );
   }
 
-  Widget _scopeDrawer(JdCategoryStore? categories) {
-    if (categories != null) {
-      return JdIndex(
-        store: categories,
-        title: 'Choose documents',
-        selectedId: _categoryId,
-        includeAll: true,
-        includeOffline: true,
-        offlineSelected: _offlineSelected,
-        onOfflineSelected: _selectOffline,
-        onAllSelected: () => _selectCategory(null),
-        onSelected: _selectCategory,
-      );
-    }
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 24, 18, 28),
-      children: [
-        Text('Choose documents', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 18),
-        ListTile(
-          minTileHeight: 52,
-          selected: true,
-          leading: const Icon(Icons.offline_pin_outlined),
-          title: const Text('Offline'),
-          onTap: () => Navigator.maybePop(context),
-        ),
-      ],
-    );
-  }
+  Widget _scopeDrawer(JdCategoryStore categories) => JdIndex(
+    store: categories,
+    title: 'Choose documents',
+    selectedId: _categoryId,
+    includeAll: true,
+    onAllSelected: () => _selectCategory(null),
+    onSelected: _selectCategory,
+  );
 
   void _openSummary(DocumentSummary document) {
-    if (!_offlineSelected || widget.client != null) {
+    if (!_offlineSelected) {
       widget.onOpenDocument(document.id);
       return;
     }
@@ -950,9 +954,7 @@ class _OfflineSwipeRowState extends State<_OfflineSwipeRow> {
                                   tapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
                                 ),
-                                onPressed: widget.enabled
-                                    ? () => _startAction(width)
-                                    : null,
+                                onPressed: widget.enabled ? _startAction : null,
                                 icon: const Icon(
                                   Icons.download_for_offline_outlined,
                                 ),
@@ -982,10 +984,8 @@ class _OfflineSwipeRowState extends State<_OfflineSwipeRow> {
                   customSemanticsActions:
                       widget.enabled && widget.progressLabel == null
                       ? {
-                          CustomSemanticsAction(
-                            label: widget.actionLabel,
-                          ): () =>
-                              _startAction(width),
+                          CustomSemanticsAction(label: widget.actionLabel):
+                              _startAction,
                         }
                       : const {},
                   child: GestureDetector(
@@ -1020,8 +1020,8 @@ class _OfflineSwipeRowState extends State<_OfflineSwipeRow> {
     );
   }
 
-  void _startAction(double width) {
-    setState(() => _exposed = width);
+  void _startAction() {
+    setState(() => _exposed = 0);
     widget.onAction();
   }
 }

@@ -14,6 +14,11 @@ class DocumentExportProvider : FileProvider()
 internal data class DocumentRoot(val directory: File, val operationPrefix: String)
 
 internal object DocumentExport {
+    private val committedOfflineName = Regex(
+        "^offline-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    )
+    private val savedPayloadName = Regex("^document-[1-9][0-9]*\\.[a-z0-9]+$")
+
     fun file(roots: List<DocumentRoot>, path: String): File {
         val requested = File(path).absoluteFile
         val requestedParent = requireNotNull(requested.parentFile)
@@ -28,9 +33,12 @@ internal object DocumentExport {
         require(file.isFile && file.length() in 1..(64L * 1024 * 1024))
         require(
             roots.any { candidate ->
-                parent?.parentFile == candidate.directory.canonicalFile &&
+                parent.parentFile == candidate.directory.canonicalFile &&
                     parent.name.startsWith(candidate.operationPrefix) &&
-                    !parent.name.endsWith(".part")
+                    !parent.name.endsWith(".part") &&
+                    (candidate.operationPrefix != "offline-" ||
+                        (committedOfflineName.matches(parent.name) &&
+                            savedPayloadName.matches(file.name)))
             },
         )
         return file

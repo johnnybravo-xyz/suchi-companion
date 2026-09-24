@@ -19,9 +19,21 @@ enum DocumentExport {
     let parent = file.deletingLastPathComponent()
     let allowed = roots.contains { root in
       let directory = root.directory.standardizedFileURL.resolvingSymlinksInPath()
+      let operation = parent.lastPathComponent
+      let committedOfflinePayload = root.operationPrefix != "offline-" || (
+        operation.range(
+          of: "^offline-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          options: .regularExpression
+        ) != nil &&
+        file.lastPathComponent.range(
+          of: "^document-[1-9][0-9]*\\.[a-z0-9]+$",
+          options: .regularExpression
+        ) != nil
+      )
       return parent.deletingLastPathComponent() == directory
-        && parent.lastPathComponent.hasPrefix(root.operationPrefix)
-        && !parent.lastPathComponent.hasSuffix(".part")
+        && operation.hasPrefix(root.operationPrefix)
+        && !operation.hasSuffix(".part")
+        && committedOfflinePayload
     }
     guard
       requestedValues.isSymbolicLink != true,

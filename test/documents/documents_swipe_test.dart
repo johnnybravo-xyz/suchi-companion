@@ -48,6 +48,8 @@ void main() {
       await tester.tapAt(Offset(340, rowY));
       expect(opened, [91, 91]);
       await tester.tap(action);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(action, findsNothing);
       await _waitForCopy(tester, fixture, downloads: 1);
       final entry = fixture.store.find(fixture.session.identity, 91);
       expect(entry?.document.title, 'Authoritative receipt');
@@ -57,8 +59,13 @@ void main() {
       );
       expect(fixture.detailRequests, 1);
       expect(fixture.downloadRequests, 1);
-      expect(find.text('Update offline copy'), findsOneWidget);
+      expect(find.text('Update offline copy').hitTestable(), findsNothing);
+      await tester.drag(find.text('Receipt'), const Offset(220, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Update offline copy').hitTestable(), findsOneWidget);
       await tester.tap(find.text('Update offline copy'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Update offline copy').hitTestable(), findsNothing);
       await _waitForCopy(tester, fixture, downloads: 2);
       expect(fixture.store.entriesFor(fixture.session.identity), hasLength(1));
       expect(fixture.detailRequests, 2);
@@ -78,6 +85,8 @@ void main() {
     expect(action, findsOneWidget);
     expect(fixture.detailRequests, 0);
     await tester.tap(action);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(action, findsNothing);
     await _waitForCopy(tester, fixture, downloads: 1);
     expect(fixture.store.entriesFor(fixture.session.identity), hasLength(1));
     expect(tester.takeException(), isNull);
@@ -111,6 +120,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Make available offline'));
     await _waitForCopy(tester, fixture, downloads: 1);
+    await tester.pumpAndSettle();
+    expect(find.text('Make available offline').hitTestable(), findsNothing);
     expect(fixture.detailRequests, 1);
     expect(fixture.downloadRequests, 1);
     expect(fixture.store.entriesFor(fixture.session.identity), isEmpty);

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -86,6 +87,78 @@ void main() {
     expect(recovered!.document.title, 'Quarterly report');
     expect(await recovered.payload.readAsBytes(), bytes);
   });
+
+  test(
+    'saved payload reaches the native viewer directly and survives refusal',
+    () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      const channel = MethodChannel('test.suchi/offline-handoff');
+      final calls = <MethodCall>[];
+      var refuse = false;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            if (refuse) throw PlatformException(code: 'viewer_unavailable');
+            return null;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+      final protectedFiles = DocumentFiles(
+        root: await Directory('${temporary.path}/exports').create(),
+        channel: channel,
+      );
+      final store = await _openStore(
+        root,
+        protectedFiles,
+        protection,
+        uuids: [_uuid(1)],
+      );
+      addTearDown(store.close);
+      final bytes = utf8.encode('%PDF-offline');
+      final entry = await store.save(
+        identity: _identity,
+        document: _document(size: bytes.length),
+        client: _client((_) async => _download(bytes)),
+      );
+
+      await store.handoff(identity: _identity, entry: entry, share: false);
+      expect(calls.single.method, 'open');
+      expect((calls.single.arguments as Map)['path'], entry.payload.path);
+      expect((calls.single.arguments as Map)['mime_type'], 'application/pdf');
+      expect(
+        entry.payload.path,
+        endsWith('/offline-${_uuid(1)}/document-91.pdf'),
+      );
+      expect(await entry.payload.readAsBytes(), bytes);
+
+      refuse = true;
+      await expectLater(
+        store.handoff(identity: _identity, entry: entry, share: false),
+        throwsA(
+          isA<PlatformException>().having(
+            (error) => error.code,
+            'code',
+            'viewer_unavailable',
+          ),
+        ),
+      );
+      expect(await entry.payload.readAsBytes(), bytes);
+      expect(
+        () =>
+            store.handoff(identity: _otherIdentity, entry: entry, share: false),
+        throwsA(
+          isA<OfflineDocumentException>().having(
+            (error) => error.code,
+            'code',
+            'offline_account',
+          ),
+        ),
+      );
+      expect(calls, hasLength(2));
+    },
+  );
 
   test('refuses a linked offline storage root', () async {
     final outside = await Directory('${temporary.path}/outside').create();

@@ -131,9 +131,23 @@ class NativeAdapterInstrumentedTest {
             val exported = File(exportOperation, "document-91.pdf").apply { writeText("%PDF-test") }
             assertEquals(exported.canonicalFile, DocumentExport.file(roots, exported.path))
 
-            val offlineOperation = File(offlineRoot, "offline-test").apply { mkdirs() }
+            val offlineOperation = File(
+                offlineRoot,
+                "offline-00000000-0000-4000-8000-000000000001",
+            ).apply { mkdirs() }
             val offline = File(offlineOperation, "document-91.pdf").apply { writeText("%PDF-offline") }
             assertEquals(offline.canonicalFile, DocumentExport.file(roots, offline.path))
+            val manifest = File(offlineOperation, "manifest.json").apply { writeText("private metadata") }
+            assertThrows(IllegalArgumentException::class.java) {
+                DocumentExport.file(roots, manifest.path)
+            }
+            val uncommitted = File(offlineRoot, "offline-test/document-91.pdf").apply {
+                parentFile?.mkdirs()
+                writeText("%PDF-uncommitted")
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                DocumentExport.file(roots, uncommitted.path)
+            }
 
             val outside = File(base, "private.pdf").apply { writeText("private") }
             assertThrows(IllegalArgumentException::class.java) {
@@ -174,6 +188,36 @@ class NativeAdapterInstrumentedTest {
             }
         } finally {
             base.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun savedPayloadOpensThroughTheConfiguredFileProviderWithoutCopying() {
+        val offlineRoot = File(targetContext.filesDir, "suchi-offline-documents")
+        val operation = File(offlineRoot, "offline-${UUID.randomUUID()}")
+        assertTrue(operation.mkdirs())
+        try {
+            val payload = File(operation, "document-91.pdf").apply {
+                writeText("%PDF-saved")
+            }
+            val accepted = DocumentExport.file(
+                listOf(DocumentRoot(offlineRoot, "offline-")),
+                payload.path,
+            )
+            assertEquals(payload.canonicalFile, accepted)
+            val uri = FileProvider.getUriForFile(
+                targetContext,
+                "${targetContext.packageName}.document-exports",
+                accepted,
+            )
+            assertEquals("content", uri.scheme)
+            assertEquals(
+                "%PDF-saved",
+                targetContext.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() },
+            )
+            assertTrue(payload.isFile)
+        } finally {
+            operation.deleteRecursively()
         }
     }
 

@@ -125,8 +125,8 @@ void main() {
     expect(listRequests, 0);
 
     await tester.tap(find.text('Quarterly report'));
-    expect(openedDocument, 91);
-    expect(handedOff, isNull);
+    expect(openedDocument, isNull);
+    expect(handedOff, same(store.find(session.identity, 91)));
 
     network.setOnline(true);
     await tester.pumpAndSettle();
@@ -158,7 +158,7 @@ void main() {
     },
   );
 
-  testWidgets('online selector opens Offline without requesting previews', (
+  testWidgets('visible offline filter opens saved copy without a fetch', (
     tester,
   ) async {
     listFails = false;
@@ -169,6 +169,7 @@ void main() {
     );
     addTearDown(categories.dispose);
     int? openedDocument;
+    OfflineDocument? handedOff;
     await _pumpDocuments(
       tester,
       session: session,
@@ -177,20 +178,55 @@ void main() {
       network: network,
       categories: categories,
       onOpenDocument: (id) => openedDocument = id,
+      onOpenOffline: (entry) => handedOff = entry,
     );
 
     expect(find.text('All documents'), findsOneWidget);
+    expect(
+      find.widgetWithText(FilterChip, 'Saved offline · 1'),
+      findsOneWidget,
+    );
     expect(listRequests, 1);
     await tester.tap(find.byTooltip('Open JD Index'));
     await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, 'Offline'), findsNothing);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
     final beforeOffline = apiRequests.length;
-    await tester.tap(find.text('Offline').last);
+    await tester.tap(find.widgetWithText(FilterChip, 'Saved offline · 1'));
     await tester.pumpAndSettle();
 
     expect(find.text('Quarterly report'), findsOneWidget);
     expect(apiRequests, hasLength(beforeOffline));
     await tester.tap(find.text('Quarterly report'));
-    expect(openedDocument, 91);
+    expect(openedDocument, isNull);
+    expect(handedOff, same(store.find(session.identity, 91)));
+    expect(apiRequests, hasLength(beforeOffline));
+  });
+
+  testWidgets('narrow large-text offline filter still opens the local copy', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    listFails = false;
+    network.online = true;
+    await _pumpDocuments(
+      tester,
+      session: session,
+      client: client,
+      store: store,
+      network: network,
+      textScaler: const TextScaler.linear(2),
+    );
+
+    expect(tester.takeException(), isNull);
+    final beforeOffline = apiRequests.length;
+    await tester.tap(find.widgetWithText(FilterChip, 'Saved offline · 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('Quarterly report'), findsOneWidget);
+    expect(apiRequests, hasLength(beforeOffline));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('local-only Documents hands the protected payload off directly', (
@@ -222,9 +258,16 @@ Future<void> _pumpDocuments(
   JdCategoryStore? categories,
   ValueChanged<int>? onOpenDocument,
   ValueChanged<OfflineDocument>? onOpenOffline,
+  TextScaler? textScaler,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      builder: textScaler == null
+          ? null
+          : (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+              child: child!,
+            ),
       theme: SuchiTheme.light,
       home: DocumentsScreen(
         client: client,

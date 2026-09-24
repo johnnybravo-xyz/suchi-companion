@@ -31,11 +31,21 @@ final class RunnerTests: XCTestCase {
     try Data("%PDF-test".utf8).write(to: exported)
     XCTAssertEqual(try DocumentExport.file(roots: roots, path: exported.path), exported)
 
-    let offlineOperation = offlineRoot.appendingPathComponent("offline-test", isDirectory: true)
-    try FileManager.default.createDirectory(at: offlineOperation, withIntermediateDirectories: true)
+    let offlineOperation = offlineRoot.appendingPathComponent(
+      "offline-00000000-0000-4000-8000-000000000001", isDirectory: true
+    )
+    try SuchiShareStorage.createProtectedDirectory(offlineOperation)
     let offline = offlineOperation.appendingPathComponent("document-91.pdf")
     try Data("%PDF-offline".utf8).write(to: offline)
     XCTAssertEqual(try DocumentExport.file(roots: roots, path: offline.path), offline)
+    let manifest = offlineOperation.appendingPathComponent("manifest.json")
+    try Data("private metadata".utf8).write(to: manifest)
+    XCTAssertThrowsError(try DocumentExport.file(roots: roots, path: manifest.path))
+    let uncommitted = offlineRoot.appendingPathComponent("offline-test", isDirectory: true)
+    try FileManager.default.createDirectory(at: uncommitted, withIntermediateDirectories: true)
+    let uncommittedPayload = uncommitted.appendingPathComponent("document-91.pdf")
+    try Data("%PDF-uncommitted".utf8).write(to: uncommittedPayload)
+    XCTAssertThrowsError(try DocumentExport.file(roots: roots, path: uncommittedPayload.path))
 
     let outside = temporaryRoot.appendingPathComponent("private.pdf")
     try Data("private".utf8).write(to: outside)

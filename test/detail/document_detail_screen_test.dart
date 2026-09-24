@@ -250,6 +250,9 @@ void main() {
     expect(find.text('electricity'), findsNothing);
 
     expect(find.text('Document information'), findsOneWidget);
+    await tester.drag(find.text('Document information'), const Offset(0, -100));
+    await tester.pumpAndSettle();
+    expect(find.text('reader@example.com / INBOX'), findsNothing);
     await tester.tap(find.text('Document information'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('reader@example.com / INBOX'));

@@ -8,14 +8,14 @@ The Android/iOS app and share surfaces use **Suchi Companion**. The repository
 and Dart package remain `suchi-mobile` and `suchi_mobile`; bundle IDs, app groups,
 pairing links and private storage identities are unchanged.
 
-The first tap on the centre camera button opens Scanner directly. Later taps
-use your last-picked mode. The up chevron beside **Scan / Photo** signals the
-mode picker: touch and hold the icon or label for a light haptic cue and nearby
-choices. Release, then tap **Scanner** (clean up pages) or **Photo** (keep the
-full frame) to save the mode and open the camera. Releasing the hold alone
-does not start capture. Tap outside to cancel. **More → Camera mode** changes
-the same device preference in a bottom sheet, like Appearance and Document view,
-without opening the camera. Scanner detects and cleans up pages; Photo keeps the
+The first tap on the raised centre camera button opens Scanner directly.
+Later taps use your last-picked mode. Touch and hold the button for a light
+haptic cue and nearby choices; release, then tap **Scanner** (clean up pages)
+or **Photo** (keep the full frame) to save the mode and open the camera.
+Releasing the hold alone does not start capture. Tap outside to cancel.
+**More → Camera mode** changes the same device preference in a bottom sheet,
+like Appearance and Document view, without opening the camera. Scanner
+detects and cleans up pages; Photo keeps the
 full frame as a one-page PDF without document cropping or cleanup. Both use the
 same protected queue, OCR and retry flow. Queue payloads, OCR text and the SQLite
 state that identifies their archive stay together in the device-protected,
@@ -75,8 +75,9 @@ removed when signing out or on the next cold launch, and older copies are
 pruned during later exports.
 
 The detail workspace keeps the first-page preview and file actions together.
-**Document information** expands file type, size, sources and tags. Sensitive
-previews still require **Reveal preview**; **Hide** removes them immediately.
+**Document information** expands file type, size, sources and tags when tapped
+on its collapsed header. Sensitive previews still require **Reveal preview**;
+**Hide** removes them immediately.
 If a refresh fails, the last loaded information stays labelled with an error
 and Retry rather than appearing current.
 

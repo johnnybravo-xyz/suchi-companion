@@ -32,9 +32,9 @@ void main() {
       );
 
       expect(find.bySemanticsLabel('Scan document, 3 queued'), findsOneWidget);
-      expect(find.text('Scan'), findsOneWidget);
+      expect(find.text('Scan'), findsNothing);
 
-      await tester.tap(find.text('Scan'));
+      await tester.tap(find.byType(ScanDockButton));
       await tester.pump();
 
       expect(taps, 1);
@@ -76,12 +76,7 @@ void main() {
       await tester.tapAt(Offset(control.center.dx, control.top + 10));
       await _frames(tester);
       expect(harness.captureModes, ['scanner']);
-      await tester.longPress(
-        find.descendant(
-          of: find.byType(ScanDockButton),
-          matching: find.text('Scan'),
-        ),
-      );
+      await tester.longPress(find.byType(ScanDockButton));
       await _frames(tester);
       expect(harness.captures, 1);
       expect(find.text('Scanner'), findsOneWidget);
@@ -93,6 +88,13 @@ void main() {
       await tester.tap(find.text('Photo'));
       await _frames(tester);
       expect(harness.captureModes, ['scanner', 'photo']);
+      expect(
+        find.descendant(
+          of: find.byType(ScanDockButton),
+          matching: find.text('Photo'),
+        ),
+        findsNothing,
+      );
       expect(harness.services.settings.captureMode, CaptureMode.photo);
       await tester.tap(find.text('Documents').last);
       await _frames(tester);

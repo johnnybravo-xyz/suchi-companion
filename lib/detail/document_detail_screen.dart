@@ -55,6 +55,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
   int _generation = 0;
   int _previewGeneration = 0;
   int _sensitivePreviewEpoch = 0;
+  final ExpansibleController _informationController = ExpansibleController();
 
   bool get _sameAccount =>
       widget.session.state == SessionState.signedIn &&
@@ -77,6 +78,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     _generation++;
     _previewGeneration++;
     _evictRevealedPreview();
+    _informationController.dispose();
     super.dispose();
   }
 
@@ -634,6 +636,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
         const SizedBox(height: 18),
         SuchiCard(
           child: ExpansionTile(
+            controller: _informationController,
+            onExpansionChanged: (_) => setState(() {}),
             title: const Text('Document information'),
             subtitle: const Text('Type, size, sources, tags'),
             expansionAnimationStyle: SuchiMotion.standardStyle(context),
@@ -675,7 +679,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
                     runSpacing: 7,
                     children: [
                       for (final tag in document.tags)
-                        Chip(label: Text(tag), backgroundColor: colors.manila),
+                        Chip(
+                          label: Text(tag),
+                          backgroundColor: colors.manila,
+                        ),
                     ],
                   ),
                 ),

@@ -35,11 +35,12 @@
 - Add a visible **More → Privacy policy** link to the public HTTPS website.
   That draft needs deployment and a monitored owner privacy contact before
   any store submission; it is not a claim of store approval.
-- Tap the centre camera button to use the last mode; long-press for a nearby
-  Scanner/Photo picker that remembers the choice and starts capture. An up
-  chevron, haptic hold feedback and short mode descriptions make the choice
-  clearer; both the icon and label accept tap/hold, and the picker respects
-  reduced motion. Release the hold, then tap a mode—release alone never captures.
+- Tap the raised centre camera button to use the last mode; long-press for a
+  nearby Scanner/Photo picker that remembers the choice and starts capture.
+  The tiny label below the icon is removed; haptic hold feedback, a spoken
+  button label and the Camera mode setting retain the alternative controls.
+  Release the hold, then tap a mode—release alone never captures. The picker
+  respects reduced motion.
   More's Camera mode preference uses the same bottom-sheet presentation as
   Appearance and Document view, without starting capture.
   Ordinary photos retain the full frame as a one-page PDF

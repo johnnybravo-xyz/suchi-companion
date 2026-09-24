@@ -912,88 +912,64 @@ class _ScanDockButtonState extends State<ScanDockButton> {
         onLongPress: widget.onLongPress == null ? null : _longPress,
         onHighlightChanged: (pressed) => setState(() => _pressed = pressed),
         enableFeedback: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedScale(
-              scale: _pressed ? 0.95 : 1,
-              duration: SuchiMotion.fast(context),
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 74,
-                    height: 74,
+        child: AnimatedScale(
+          scale: _pressed ? 0.95 : 1,
+          duration: SuchiMotion.fast(context),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 74,
+                height: 74,
+                decoration: BoxDecoration(
+                  color: SuchiColors.light.accent,
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(color: colors.surface, width: 5),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x4D0575B6),
+                      blurRadius: 18,
+                      offset: Offset(0, 7),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  widget.mode == CaptureMode.photo
+                      ? Icons.photo_camera_outlined
+                      : Icons.document_scanner_outlined,
+                  size: 32,
+                  color: Colors.white,
+                ),
+              ),
+              if (widget.pendingCount > 0)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    constraints: const BoxConstraints(
+                      minWidth: 20,
+                      minHeight: 20,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
                     decoration: BoxDecoration(
-                      color: SuchiColors.light.accent,
-                      borderRadius: BorderRadius.circular(26),
-                      border: Border.all(color: colors.surface, width: 5),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x4D0575B6),
-                          blurRadius: 18,
-                          offset: Offset(0, 7),
-                        ),
-                      ],
+                      color: colors.danger,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: colors.surface, width: 2),
                     ),
-                    child: Icon(
-                      widget.mode == CaptureMode.photo
-                          ? Icons.photo_camera_outlined
-                          : Icons.document_scanner_outlined,
-                      size: 32,
-                      color: Colors.white,
-                    ),
-                  ),
-                  if (widget.pendingCount > 0)
-                    Positioned(
-                      top: -2,
-                      right: -2,
-                      child: Container(
-                        constraints: const BoxConstraints(
-                          minWidth: 20,
-                          minHeight: 20,
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 5),
-                        decoration: BoxDecoration(
-                          color: colors.danger,
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: colors.surface, width: 2),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          widget.pendingCount > 99
-                              ? '99+'
-                              : '${widget.pendingCount}',
-                          style: SuchiTheme.monoLabel.copyWith(
-                            color: colors.onAccent,
-                            fontSize: 8,
-                          ),
-                        ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      widget.pendingCount > 99
+                          ? '99+'
+                          : '${widget.pendingCount}',
+                      style: SuchiTheme.monoLabel.copyWith(
+                        color: colors.onAccent,
+                        fontSize: 8,
                       ),
                     ),
-                ],
-              ),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  widget.mode == CaptureMode.photo ? 'Photo' : 'Scan',
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: widget.selected ? colors.accent : colors.muted,
                   ),
                 ),
-                if (widget.onLongPress != null)
-                  Icon(
-                    Icons.keyboard_arrow_up,
-                    size: 14,
-                    color: widget.selected ? colors.accent : colors.muted,
-                  ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

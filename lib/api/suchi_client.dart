@@ -339,6 +339,58 @@ final class SuchiClient {
     await _request('POST', '/api/documents/$id/restore', timeout: _readTimeout);
   }
 
+  Future<String> emailPreview(int id, {bool reveal = false}) async {
+    final response = await _request(
+      'GET',
+      '/api/documents/$id/preview',
+      query: reveal ? const {'reveal': '1'} : null,
+      timeout: _readTimeout,
+      expectedStatuses: const {200, 202},
+      bodyLimit: _jsonBodyLimit,
+      accept: 'text/html',
+    );
+    if (response.statusCode == 202) {
+      final json = _parseSuccess(
+        response,
+        (value) => _asObject(value, 'email preview gate'),
+      );
+      if (json['gated'] != true || json['sensitivity'] is! String) {
+        throw _malformed(
+          response,
+          'Suchi returned an invalid email preview gate.',
+        );
+      }
+      throw ApiException(
+        kind: ApiFailureKind.rejected,
+        message: 'Reveal this sensitive document before previewing it.',
+        statusCode: response.statusCode,
+        requestId: response.requestId,
+      );
+    }
+    final contentType = response.contentType;
+    late final MediaType mediaType;
+    try {
+      mediaType = MediaType.parse(contentType ?? '');
+    } on FormatException {
+      throw _malformed(
+        response,
+        'Suchi returned an invalid email preview type.',
+      );
+    }
+    if (mediaType.mimeType != 'text/html' ||
+        mediaType.parameters['charset']?.toLowerCase() != 'utf-8') {
+      throw _malformed(
+        response,
+        'Suchi returned an unsupported email preview type.',
+      );
+    }
+    try {
+      return utf8.decode(response.body, allowMalformed: false);
+    } on FormatException {
+      throw _malformed(response, 'Suchi returned invalid UTF-8.');
+    }
+  }
+
   Future<String> downloadDocument(
     int id, {
     required File destination,
@@ -689,6 +741,7 @@ final class SuchiClient {
     required Duration timeout,
     Set<int> expectedStatuses = const {200, 201},
     int bodyLimit = _jsonBodyLimit,
+    String accept = 'application/json',
   }) {
     return _requestUnbounded(
       method,
@@ -698,6 +751,7 @@ final class SuchiClient {
       authenticated: authenticated,
       expectedStatuses: expectedStatuses,
       bodyLimit: bodyLimit,
+      accept: accept,
     ).timeout(
       timeout,
       onTimeout: () => throw const ApiException(
@@ -715,6 +769,7 @@ final class SuchiClient {
     required bool authenticated,
     required Set<int> expectedStatuses,
     required int bodyLimit,
+    required String accept,
   }) async {
     if (!path.startsWith('/api/') || path.contains('?') || path.contains('#')) {
       throw const ApiException(
@@ -726,7 +781,7 @@ final class SuchiClient {
     final request = http.Request(method, uri)
       ..followRedirects = false
       ..maxRedirects = 0
-      ..headers['Accept'] = 'application/json';
+      ..headers['Accept'] = accept;
     if (authenticated) {
       final authToken = token;
       if (authToken == null || !_validToken(authToken)) {

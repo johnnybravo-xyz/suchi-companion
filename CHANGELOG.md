@@ -64,6 +64,9 @@
 - Preview-focused document detail with collapsed information, responsive file
   actions and explicit stale-refresh errors. Sensitive Hide and account changes
   immediately remove revealed previews, including during transitions.
+- Render email bodies inline through a sandboxed, credential-free WebView.
+  JavaScript, navigation, forms, frames and remote resources stay blocked;
+  sensitive email still requires Reveal and full-file handoff uses `.eml`.
 - Slightly larger raised Scan action with real hit-test/upload-strip clearance,
   subtle navigation motion, readable queue states and keyboard-aware JD sheets.
 - Compact pairing and Search introductions without changing trust or query flows.

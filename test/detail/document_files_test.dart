@@ -79,6 +79,24 @@ void main() {
     },
   );
 
+  test('email handoff uses the .eml extension and message MIME type', () async {
+    await files.handoff(
+      client: client(
+        (_) async => http.Response(
+          '%PDF-test',
+          200,
+          headers: {'content-type': 'message/rfc822'},
+        ),
+      ),
+      documentId: 91,
+      share: false,
+    );
+
+    final arguments = calls.single.arguments as Map;
+    expect((arguments['path'] as String).endsWith('/document-91.eml'), isTrue);
+    expect(arguments['mime_type'], 'message/rfc822');
+  });
+
   test(
     'share requests the archive without granting raw-original access',
     () async {

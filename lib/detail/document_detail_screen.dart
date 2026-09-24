@@ -14,6 +14,7 @@ import '../documents/thumbnail_cache.dart';
 import '../theme/suchi_theme.dart';
 import '../widgets/suchi_widgets.dart';
 import 'document_files.dart';
+import 'email_preview.dart';
 import 'document_edit_screen.dart';
 import 'document_text_screen.dart';
 
@@ -45,6 +46,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     with WidgetsBindingObserver {
   DocumentDetail? _document;
   Uint8List? _preview;
+  String? _emailHtml;
   ApiException? _error;
   String? _previewMessage;
   bool _loading = true;
@@ -85,7 +87,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) {
-      _concealSensitivePreview();
+      _concealPreview();
       if (_fileLoading) widget.files.cancelPending();
     }
   }
@@ -176,7 +178,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
           .showSnackBar(SnackBar(content: Text(message)));
 
   @override
-  void didHaveMemoryPressure() => _concealSensitivePreview();
+  void didHaveMemoryPressure() => _concealPreview();
 
   Future<void> _load() async {
     final generation = ++_generation;
@@ -188,6 +190,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
       _error = null;
       _revealed = false;
       _preview = null;
+      _emailHtml = null;
       _previewMessage = null;
       _previewLoading = false;
     });
@@ -213,36 +216,56 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
 
   Future<void> _loadPreview({required bool reveal}) async {
     if (!_sameAccount) return;
+    final document = _document;
+    if (document == null) return;
     final generation = ++_previewGeneration;
     setState(() {
       _previewLoading = true;
       _previewMessage = null;
+      _emailHtml = null;
     });
     try {
-      final result = await widget.cache.load(
-        widget.client,
-        widget.documentId,
-        width: 512,
-        reveal: reveal,
-      );
-      if (!mounted ||
-          generation != _previewGeneration ||
-          !_sameAccount ||
-          reveal != _revealed && _document?.isSensitive == true) {
-        return;
-      }
-      setState(() {
-        switch (result) {
-          case ThumbnailImage(:final bytes):
-            _preview = bytes;
-          case ThumbnailGated():
-            _preview = null;
-            _previewMessage = 'Reveal is required to load this preview.';
-          case ThumbnailUnavailable():
-            _preview = null;
-            _previewMessage = 'Preview is still being prepared.';
+      if (_isEmail(document.mimeType)) {
+        final html = hardenEmailPreviewHtml(
+          await widget.client.emailPreview(widget.documentId, reveal: reveal),
+        );
+        if (!mounted ||
+            generation != _previewGeneration ||
+            !_sameAccount ||
+            reveal != _revealed && document.isSensitive) {
+          return;
         }
-      });
+        setState(() {
+          _preview = null;
+          _emailHtml = html;
+        });
+      } else {
+        final result = await widget.cache.load(
+          widget.client,
+          widget.documentId,
+          width: 512,
+          reveal: reveal,
+        );
+        if (!mounted ||
+            generation != _previewGeneration ||
+            !_sameAccount ||
+            reveal != _revealed && document.isSensitive) {
+          return;
+        }
+        setState(() {
+          _emailHtml = null;
+          switch (result) {
+            case ThumbnailImage(:final bytes):
+              _preview = bytes;
+            case ThumbnailGated():
+              _preview = null;
+              _previewMessage = 'Reveal is required to load this preview.';
+            case ThumbnailUnavailable():
+              _preview = null;
+              _previewMessage = 'Preview is still being prepared.';
+          }
+        });
+      }
     } on ApiException catch (error) {
       if (!mounted || generation != _previewGeneration || !_sameAccount) {
         return;
@@ -253,6 +276,13 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
           error,
           fallback: 'The preview could not be loaded.',
         );
+      });
+    } on FormatException {
+      if (!mounted || generation != _previewGeneration || !_sameAccount) {
+        return;
+      }
+      setState(() {
+        _previewMessage = 'Suchi returned an unsafe email preview.';
       });
     } finally {
       if (mounted && generation == _previewGeneration) {
@@ -274,6 +304,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     setState(() {
       _revealed = false;
       _preview = null;
+      _emailHtml = null;
       _previewMessage = null;
       _previewLoading = false;
     });
@@ -286,10 +317,21 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     }
     widget.cache.evict(widget.documentId, reveal: true);
     _preview = null;
+    _emailHtml = null;
   }
 
-  void _concealSensitivePreview() {
-    if (_document?.isSensitive == true) _hide();
+  void _concealPreview() {
+    if (_document?.isSensitive == true) {
+      _hide();
+      return;
+    }
+    if (_emailHtml == null) return;
+    _previewGeneration++;
+    setState(() {
+      _emailHtml = null;
+      _previewMessage = 'Preview hidden after leaving Suchi Companion.';
+      _previewLoading = false;
+    });
   }
 
   Future<void> _edit() async {
@@ -679,10 +721,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
                     runSpacing: 7,
                     children: [
                       for (final tag in document.tags)
-                        Chip(
-                          label: Text(tag),
-                          backgroundColor: colors.manila,
-                        ),
+                        Chip(label: Text(tag), backgroundColor: colors.manila),
                     ],
                   ),
                 ),
@@ -726,12 +765,14 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     final concealed = document.isSensitive && !_revealed;
     final content = concealed
         ? _SensitiveGate(document: document, onReveal: _reveal)
-        : _previewContent();
-    // Concealment replaces the entire animated subtree, never retaining an
-    // outgoing sensitive image (including a previous reveal's loading state).
+        : _previewContent(document);
+    // Concealment and WebView removal replace the entire subtree immediately,
+    // never retaining sensitive bytes or email HTML in an outgoing animation.
     final well = KeyedSubtree(
       key: ValueKey((document.isSensitive, _sensitivePreviewEpoch, concealed)),
-      child: concealed ? content : _animatedPreview(content),
+      child: concealed || _emailHtml != null
+          ? content
+          : _animatedPreview(content),
     );
     return SuchiCard(
       child: Column(
@@ -756,7 +797,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
-                        'First page',
+                        _isEmail(document.mimeType)
+                            ? 'Email body'
+                            : 'First page',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       if (document.isSensitive && _revealed)
@@ -813,7 +856,14 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     );
   }
 
-  Widget _previewContent() {
+  Widget _previewContent(DocumentDetail document) {
+    if (_emailHtml case final html?) {
+      return SandboxedEmailPreview(
+        key: ValueKey(html),
+        html: html,
+        onOpen: () => _openFile(share: false),
+      );
+    }
     if (_preview case final bytes?) {
       return Padding(
         key: const ValueKey('image'),
@@ -880,6 +930,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
+
+  static bool _isEmail(String mimeType) =>
+      mimeType.split(';').first.trim().toLowerCase() == 'message/rfc822';
 }
 
 class _SensitiveGate extends StatelessWidget {

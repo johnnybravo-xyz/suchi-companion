@@ -80,6 +80,10 @@ on its collapsed header. Sensitive previews still require **Reveal preview**;
 **Hide** removes them immediately.
 If a refresh fails, the last loaded information stays labelled with an error
 and Retry rather than appearing current.
+Email documents render the server-produced body inline without giving the
+WebView a server URL or credentials. JavaScript, links, forms, frames and remote
+resources are blocked. Email HTML stays in memory only and is cleared by Hide,
+account changes, memory pressure or leaving the app.
 
 Choose **Read text** in document detail to read or select recognized
 text without exporting a file. Sensitive text requires confirmation. The reader

@@ -10,10 +10,14 @@ import 'package:suchi_mobile/api/suchi_client.dart';
 import 'package:suchi_mobile/auth/credential_vault.dart';
 import 'package:suchi_mobile/auth/session_controller.dart';
 import 'package:suchi_mobile/detail/document_detail_screen.dart';
+import 'package:suchi_mobile/detail/email_preview.dart';
 import 'package:suchi_mobile/detail/document_files.dart';
 import 'package:suchi_mobile/documents/jd_category_store.dart';
 import 'package:suchi_mobile/documents/thumbnail_cache.dart';
 import 'package:suchi_mobile/theme/suchi_theme.dart';
+import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
+
+import '../support/fake_webview.dart';
 
 const _token =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -410,6 +414,110 @@ void main() {
     expect(find.text('No preview available'), findsNothing);
     semantics.dispose();
   });
+
+  testWidgets(
+    'email preview stays in memory and clears on lifecycle concealment',
+    (tester) async {
+      final platform = FakeWebViewPlatform();
+      WebViewPlatform.instance = platform;
+      final requests = <http.Request>[];
+      final detail =
+          jsonDecode(_fixture('document-detail.json')) as Map<String, dynamic>
+            ..['mime_type'] = 'message/rfc822'
+            ..['sensitivity'] = 'public';
+      await _openDetail(
+        tester,
+        detail: detail,
+        requests: requests,
+        respond: (request) async {
+          if (request.url.path.endsWith('/preview')) {
+            return http.Response(
+              '<!doctype html><html><head></head><body>Email body</body></html>',
+              200,
+              headers: {'content-type': 'text/html; charset=utf-8'},
+            );
+          }
+          return null;
+        },
+      );
+      await tester.pumpAndSettle();
+
+      final previews = requests
+          .where((request) => request.url.path.endsWith('/preview'))
+          .toList();
+      expect(previews, hasLength(1));
+      expect(previews.single.url.queryParameters, isEmpty);
+      expect(previews.single.headers['Accept'], 'text/html');
+      expect(
+        requests.where((request) => request.url.path.endsWith('/thumb')),
+        isEmpty,
+      );
+      expect(find.byType(SandboxedEmailPreview), findsOneWidget);
+      expect(
+        platform.controller.loadedHtml.last,
+        contains("default-src 'none'"),
+      );
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      expect(find.byType(SandboxedEmailPreview), findsNothing);
+      expect(platform.controller.loadedHtml.last, emptyWebViewPage);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(
+        requests.where((request) => request.url.path.endsWith('/preview')),
+        hasLength(1),
+      );
+    },
+  );
+
+  testWidgets(
+    'sensitive email fetches HTML only after Reveal and Hide purges it',
+    (tester) async {
+      final platform = FakeWebViewPlatform();
+      WebViewPlatform.instance = platform;
+      final requests = <http.Request>[];
+      final detail =
+          jsonDecode(_fixture('document-detail.json')) as Map<String, dynamic>
+            ..['mime_type'] = 'message/rfc822'
+            ..['sensitivity'] = 'restricted';
+      await _openDetail(
+        tester,
+        detail: detail,
+        requests: requests,
+        respond: (request) async {
+          if (request.url.path.endsWith('/preview')) {
+            return http.Response(
+              '<html><head></head><body>Restricted email</body></html>',
+              200,
+              headers: {'content-type': 'text/html; charset=utf-8'},
+            );
+          }
+          return null;
+        },
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        requests.where((request) => request.url.path.endsWith('/preview')),
+        isEmpty,
+      );
+      await tester.tap(find.text('Reveal preview'));
+      await tester.pumpAndSettle();
+      final previews = requests
+          .where((request) => request.url.path.endsWith('/preview'))
+          .toList();
+      expect(previews, hasLength(1));
+      expect(previews.single.url.queryParameters, {'reveal': '1'});
+      expect(find.byType(SandboxedEmailPreview), findsOneWidget);
+
+      await tester.tap(find.text('Hide'));
+      await tester.pump();
+      expect(find.byType(SandboxedEmailPreview), findsNothing);
+      expect(find.text('Restricted preview hidden'), findsOneWidget);
+      expect(platform.controller.loadedHtml.last, emptyWebViewPage);
+    },
+  );
 
   testWidgets('account transition conceals preview and rejects late reveal', (
     tester,

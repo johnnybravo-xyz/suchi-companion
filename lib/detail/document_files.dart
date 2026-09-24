@@ -159,6 +159,7 @@ final class DocumentFiles {
     'text/plain' => '.txt',
     'text/csv' => '.csv',
     'text/html' => '.html',
+    'message/rfc822' => '.eml',
     'application/rtf' || 'text/rtf' => '.rtf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document' =>
       '.docx',

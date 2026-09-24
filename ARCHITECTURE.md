@@ -202,6 +202,16 @@ disclosure. Ordinary preview states may fade; sensitive concealment replaces the
 whole animation subtree and evicts revealed bytes before the next frame. A failed
 metadata refresh retains clearly labelled stale information with Retry.
 
+`message/rfc822` previews use a separate bounded `text/html; charset=utf-8`
+request. Dart authenticates that request, injects a restrictive CSP at the start
+of the server-generated head, then loads the result into a credential-free
+WebView with JavaScript and navigation disabled. The WebView receives no base
+URL, headers or cookies and cannot fetch network resources. Email HTML remains
+in memory only; Hide, account transitions, backgrounding, memory pressure and
+disposal replace the page and clear WebView cache and local storage. Opening or
+sharing still uses the protected native file handoff, with `message/rfc822`
+saved as `.eml`.
+
 `lib/detail/document_text_screen.dart` is an explicit, memory-only reader.
 Ordinary `document()` reads and `DocumentDetail` continue to require
 `include_content=0`. Only entering the reader calls `documentText()` with

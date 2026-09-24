@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -202,7 +203,7 @@ abstract final class SuchiTheme {
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: _SuchiPageTransitionsBuilder(),
-          TargetPlatform.iOS: _SuchiPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
           TargetPlatform.macOS: _SuchiPageTransitionsBuilder(),
           TargetPlatform.windows: _SuchiPageTransitionsBuilder(),
           TargetPlatform.linux: _SuchiPageTransitionsBuilder(),

@@ -539,6 +539,51 @@ void main() {
     },
   );
 
+  testNavigation('iOS left-edge back preserves the filtered document archive', (
+    tester,
+  ) async {
+    await showShell(tester, platform: TargetPlatform.iOS);
+    await tester.tap(find.text('Documents').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Open JD Index'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Utilities'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Sort documents'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(CheckedPopupMenuItem<String>, 'Title A–Z'),
+    );
+    await tester.pumpAndSettle();
+    await _scrollTo(tester, DocumentsScreen, 'Receipt 035');
+    final offset = _listOffset(tester, DocumentsScreen);
+    final rowPosition = tester.getTopLeft(find.text('Receipt 035'));
+    final requestsBefore = archive.listRequests.length;
+
+    await tester.tap(find.text('Receipt 035'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DocumentDetailScreen), findsOneWidget);
+
+    await tester.dragFrom(const Offset(195, 420), const Offset(180, 0));
+    await tester.pumpAndSettle();
+    expect(find.byType(DocumentDetailScreen), findsOneWidget);
+
+    await tester.dragFrom(const Offset(5, 420), const Offset(370, 0));
+    await tester.pumpAndSettle();
+    expect(find.byType(DocumentDetailScreen), findsNothing);
+    expect(find.text('Receipt 035').hitTestable(), findsOneWidget);
+    expect(_listOffset(tester, DocumentsScreen), closeTo(offset, 0.1));
+    expect(tester.getTopLeft(find.text('Receipt 035')), rowPosition);
+    expect(find.text('31 Utilities'), findsOneWidget);
+    expect(archive.listRequests, hasLength(requestsBefore));
+    expect(
+      tester
+          .widget<PopupMenuButton<String>>(find.byType(PopupMenuButton<String>))
+          .initialValue,
+      'title',
+    );
+  });
+
   for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
     for (final textScale in [1.0, 2.0]) {
       testNavigation(

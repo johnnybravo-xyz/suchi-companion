@@ -10,6 +10,8 @@
 - Require HTTPS for all non-debug server origins, including restored tokens.
   Debug-only localhost/private-LAN HTTP remains available for development;
   redirects never receive credentials, and refused origins leave queued files.
+- Restore the standard iOS left-edge back gesture while preserving the current
+  document list, filter, sort and scroll position.
 
 - Rename the mobile app to **Suchi Companion** across Android/iOS app labels,
   Flutter branding and accessibility, permission descriptions and the iOS share

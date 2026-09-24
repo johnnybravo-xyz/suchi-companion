@@ -123,6 +123,245 @@ final class PageEnvelope<T> {
   final List<T> results;
 }
 
+final class SavedView {
+  const SavedView({
+    required this.id,
+    required this.name,
+    required this.filterJson,
+    required this.filter,
+    required this.filterError,
+    required this.display,
+    required this.position,
+    required this.shared,
+    required this.ownerId,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory SavedView.fromJson(Object? value) {
+    final json = _object(value, 'saved view');
+    final filterJson = _string(json, 'filter_json');
+    SavedViewFilter? filter;
+    String? filterError;
+    try {
+      filter = SavedViewFilter.fromJsonString(filterJson);
+    } on ApiFormatException catch (error) {
+      filterError = error.message;
+    }
+    return SavedView(
+      id: _positiveInteger(json, 'id'),
+      name: _nonEmptyString(json, 'name'),
+      filterJson: filterJson,
+      filter: filter,
+      filterError: filterError,
+      display: _nonEmptyString(json, 'display'),
+      position: _integer(json, 'position'),
+      shared: _optionalBoolean(json, 'shared') ?? false,
+      ownerId: _optionalPositiveInteger(json, 'owner_id'),
+      createdAt: _nonNegativeInteger(json, 'created_at'),
+      updatedAt: _nonNegativeInteger(json, 'updated_at'),
+    );
+  }
+
+  final int id;
+  final String name;
+  final String filterJson;
+  final SavedViewFilter? filter;
+  final String? filterError;
+  final String display;
+  final int position;
+  final bool shared;
+  final int? ownerId;
+  final int createdAt;
+  final int updatedAt;
+
+  bool get available => filter != null;
+}
+
+final class SavedViewFilter {
+  const SavedViewFilter({
+    required this.query,
+    required this.tagIds,
+    required this.correspondentIds,
+    required this.documentTypeId,
+    required this.jdCategoryId,
+    required this.sensitivity,
+    required this.ordering,
+    required this.documentIds,
+  });
+
+  factory SavedViewFilter.fromJsonString(String encoded) {
+    if (utf8.encode(encoded).length > 2048) {
+      throw const ApiFormatException('Saved View filters exceed 2 KiB.');
+    }
+    late final Object? decoded;
+    try {
+      decoded = jsonDecode(encoded);
+    } on FormatException {
+      throw const ApiFormatException('Saved View filters are not valid JSON.');
+    }
+    if (decoded is! Map<String, dynamic>) {
+      throw const ApiFormatException('Saved View filters must be an object.');
+    }
+    const allowedKeys = {
+      'q',
+      'tags__id__in',
+      'correspondents__id__in',
+      'document_type__id',
+      'jd_category_id',
+      'sensitivity',
+      'ordering',
+      'document_ids',
+    };
+    final unknown = decoded.keys.where((key) => !allowedKeys.contains(key));
+    if (unknown.isNotEmpty) {
+      throw ApiFormatException(
+        'Saved View uses an unsupported filter: ${unknown.first}.',
+      );
+    }
+    final query = _filterString(decoded, 'q');
+    final tagIds = _filterIds(decoded, 'tags__id__in', allowCsv: true);
+    final correspondentIds = _filterIds(
+      decoded,
+      'correspondents__id__in',
+      allowCsv: true,
+    );
+    final documentTypeId = _filterId(decoded, 'document_type__id');
+    final jdCategoryId = _filterId(decoded, 'jd_category_id');
+    final sensitivity = _filterString(decoded, 'sensitivity');
+    if (sensitivity != null &&
+        !const {
+          '',
+          'public',
+          'internal',
+          'confidential',
+          'restricted',
+        }.contains(sensitivity)) {
+      throw const ApiFormatException('Saved View sensitivity is unsupported.');
+    }
+    final ordering = _filterString(decoded, 'ordering');
+    if (ordering != null &&
+        !const {
+          'created_at',
+          '-created_at',
+          'updated_at',
+          '-updated_at',
+          'title',
+          '-title',
+        }.contains(ordering)) {
+      throw const ApiFormatException('Saved View ordering is unsupported.');
+    }
+    final documentIds = _filterIds(
+      decoded,
+      'document_ids',
+      requireNonEmpty: decoded.containsKey('document_ids'),
+    );
+    return SavedViewFilter(
+      query: query,
+      tagIds: tagIds,
+      correspondentIds: correspondentIds,
+      documentTypeId: documentTypeId,
+      jdCategoryId: jdCategoryId,
+      sensitivity: sensitivity,
+      ordering: ordering,
+      documentIds: documentIds,
+    );
+  }
+
+  final String? query;
+  final List<int> tagIds;
+  final List<int> correspondentIds;
+  final int? documentTypeId;
+  final int? jdCategoryId;
+  final String? sensitivity;
+  final String? ordering;
+  final List<int> documentIds;
+
+  Map<String, String> get queryParameters => {
+    if (query != null && query!.isNotEmpty) 'q': query!,
+    if (tagIds.isNotEmpty) 'tags__id__in': tagIds.join(','),
+    if (correspondentIds.isNotEmpty)
+      'correspondents__id__in': correspondentIds.join(','),
+    if (documentTypeId != null) 'document_type__id': '$documentTypeId',
+    if (jdCategoryId != null) 'jd_category_id': '$jdCategoryId',
+    if (sensitivity != null && sensitivity!.isNotEmpty)
+      'sensitivity': sensitivity!,
+    'ordering': ?ordering,
+    if (documentIds.isNotEmpty) 'document_ids': documentIds.join(','),
+  };
+
+  String get summary {
+    final parts = <String>[
+      if (query?.trim().isNotEmpty == true) query!.trim(),
+      if (documentIds.isNotEmpty)
+        '${documentIds.length} selected ${documentIds.length == 1 ? 'document' : 'documents'}',
+      if (jdCategoryId != null) 'JD category $jdCategoryId',
+      if (documentTypeId != null) 'Document type $documentTypeId',
+      if (tagIds.isNotEmpty)
+        '${tagIds.length} ${tagIds.length == 1 ? 'tag' : 'tags'}',
+      if (correspondentIds.isNotEmpty)
+        '${correspondentIds.length} ${correspondentIds.length == 1 ? 'correspondent' : 'correspondents'}',
+      if (sensitivity?.isNotEmpty == true) sensitivity!,
+    ];
+    return parts.isEmpty ? 'All documents' : parts.join(' · ');
+  }
+
+  static String? _filterString(Map<String, dynamic> json, String key) {
+    if (!json.containsKey(key)) return null;
+    final value = json[key];
+    if (value is! String) {
+      throw ApiFormatException('Saved View filter $key must be a string.');
+    }
+    return value;
+  }
+
+  static int? _filterId(Map<String, dynamic> json, String key) {
+    if (!json.containsKey(key)) return null;
+    return _positiveFilterId(json[key], key);
+  }
+
+  static List<int> _filterIds(
+    Map<String, dynamic> json,
+    String key, {
+    bool allowCsv = false,
+    bool requireNonEmpty = false,
+  }) {
+    if (!json.containsKey(key)) return const [];
+    final value = json[key];
+    final values = switch (value) {
+      List<Object?> items => items,
+      String text when allowCsv => text.split(',').cast<Object?>(),
+      int number when allowCsv => <Object?>[number],
+      _ => throw ApiFormatException(
+        'Saved View filter $key must be an array of IDs.',
+      ),
+    };
+    if (values.length > 100 || requireNonEmpty && values.isEmpty) {
+      throw ApiFormatException(
+        'Saved View filter $key has an unsupported number of IDs.',
+      );
+    }
+    return List<int>.unmodifiable(
+      values.map((value) => _positiveFilterId(value, key)),
+    );
+  }
+
+  static int _positiveFilterId(Object? value, String key) {
+    final id = switch (value) {
+      int number => number,
+      String text when RegExp(r'^[1-9][0-9]*$').hasMatch(text.trim()) =>
+        int.tryParse(text.trim()),
+      _ => null,
+    };
+    if (id == null || id <= 0) {
+      throw ApiFormatException(
+        'Saved View filter $key must contain positive integer IDs.',
+      );
+    }
+    return id;
+  }
+}
+
 final class DocumentSummary {
   const DocumentSummary({
     required this.id,

@@ -3,16 +3,16 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:suchi_mobile/api/api_models.dart';
 import 'package:suchi_mobile/api/suchi_client.dart';
 import 'package:suchi_mobile/auth/credential_vault.dart';
 import 'package:suchi_mobile/auth/session_controller.dart';
 import 'package:suchi_mobile/documents/thumbnail_cache.dart';
 import 'package:suchi_mobile/search/search_screen.dart';
-import 'package:suchi_mobile/search/saved_searches.dart';
+import 'package:suchi_mobile/search/saved_views.dart';
 import 'package:suchi_mobile/theme/suchi_theme.dart';
 
 const _token =
@@ -78,6 +78,7 @@ void main() {
             session: session,
             cache: ThumbnailMemoryCache(),
             onOpenDocument: (_) {},
+            onOpenSavedView: (_) {},
           ),
         ),
       ),
@@ -104,152 +105,24 @@ void main() {
     expect(find.text('Stale result'), findsNothing);
   });
 
-  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
-    testWidgets('saved searches stay account-scoped and usable on $platform', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      var systemId = 1;
-      final session = await _pairedSession(systemId: () => systemId);
-      addTearDown(session.dispose);
-      final storage = _MemorySecureStorage();
-      var searches = SavedSearchController(session: session, storage: storage);
-      await searches.reload();
-
-      Future<void> showScreen() => tester.pumpWidget(
-        MaterialApp(
-          theme: SuchiTheme.light.copyWith(platform: platform),
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: const TextScaler.linear(2)),
-            child: child!,
-          ),
-          home: Scaffold(
-            body: SearchScreen(
-              client: session.client!,
-              session: session,
-              cache: ThumbnailMemoryCache(),
-              savedSearches: searches,
-              onOpenDocument: (_) {},
-            ),
-          ),
-        ),
-      );
-
-      await showScreen();
-      await tester.enterText(
-        find.byKey(const ValueKey('archive-search')),
-        'annual statements',
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('save-search')));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const ValueKey('saved-search-name')),
-        'Yearly papers',
-      );
-      await tester.pump();
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-      await tester.pumpAndSettle();
-      expect(searches.entries.single.query, 'annual statements');
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      searches.dispose();
-      searches = SavedSearchController(session: session, storage: storage);
-      await searches.reload();
-      await showScreen();
-      await tester.pumpAndSettle();
-      final entry = searches.entries.single;
-      await tester.scrollUntilVisible(
-        find.byKey(ValueKey('saved-search-${entry.id}')),
-        180,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(ValueKey('saved-search-${entry.id}')));
-      await tester.pump(const Duration(milliseconds: 321));
-      await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<TextField>(find.byKey(const ValueKey('archive-search')))
-            .controller!
-            .text,
-        'annual statements',
-      );
-      expect(find.text('Saved-query result'), findsOneWidget);
-      expect(find.byKey(const ValueKey('save-search')), findsOneWidget);
-
-      await session.signOut();
-      systemId = 2;
-      await session.pairWithToken(
-        serverAddress: _origin.toString(),
-        token: _token,
-      );
-      await searches.reload();
-      await showScreen();
-      await tester.pumpAndSettle();
-      expect(searches.entries, isEmpty);
-      expect(find.text('Yearly papers'), findsNothing);
-      await tester.enterText(
-        find.byKey(const ValueKey('archive-search')),
-        'family statements',
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('save-search')));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const ValueKey('saved-search-name')),
-        'Family papers',
-      );
-      await tester.pump();
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-      await tester.pumpAndSettle();
-      expect(searches.entries.single.query, 'family statements');
-
-      await session.signOut();
-      systemId = 1;
-      await session.pairWithToken(
-        serverAddress: _origin.toString(),
-        token: _token,
-      );
-      await searches.reload();
-      await showScreen();
-      await tester.pumpAndSettle();
-      expect(searches.entries.single.name, 'Yearly papers');
-      expect(find.text('Family papers'), findsNothing);
-
-      await tester.scrollUntilVisible(
-        find.byTooltip('Delete Yearly papers'),
-        180,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Delete Yearly papers'));
-      await tester.pumpAndSettle();
-      expect(searches.entries, isEmpty);
-      await searches.reload();
-      expect(searches.entries, isEmpty);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      searches.dispose();
-    });
-  }
-
-  testWidgets('saved-search read failures stay recoverable without promotion', (
+  testWidgets('Saved Views sync, open, create, and delete through the server', (
     tester,
   ) async {
-    final session = await _pairedSession();
+    final server = _SavedViewServer()
+      ..viewsBySystem[1] = [
+        _savedView(
+          id: 7,
+          name: 'Annual statements',
+          filterJson: '{"q":"annual statements"}',
+        ),
+      ];
+    final session = await _pairedSession(server);
     addTearDown(session.dispose);
-    final storage = _MemorySecureStorage();
-    final searches = SavedSearchController(session: session, storage: storage);
-    addTearDown(searches.dispose);
-    await searches.reload();
-    final pending = Completer<String?>();
-    storage.nextRead = pending;
-    final loading = searches.reload();
+    final views = SavedViewController(session: session);
+    addTearDown(views.dispose);
+    await views.reload();
+    SavedView? opened;
+
     await tester.pumpWidget(
       MaterialApp(
         theme: SuchiTheme.light,
@@ -258,172 +131,276 @@ void main() {
             client: session.client!,
             session: session,
             cache: ThumbnailMemoryCache(),
-            savedSearches: searches,
+            savedViews: views,
             onOpenDocument: (_) {},
+            onOpenSavedView: (view) => opened = view,
           ),
         ),
       ),
     );
-    await tester.pump();
-    expect(
-      find.text('Kept on this device for this archive account.'),
-      findsOneWidget,
-    );
-    pending.completeError(StateError('Protected storage unavailable'));
-    await loading;
-    await tester.pump();
-    expect(find.text(searches.errorMessage!), findsOneWidget);
-    expect(
-      find.text('Run a search, then choose Save this search to use it again.'),
-      findsNothing,
-    );
-    await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
-    expect(searches.ready, isTrue);
-    expect(
-      find.text('Run a search, then choose Save this search to use it again.'),
-      findsOneWidget,
-    );
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
 
-  test('failed writes preserve searches and late reads cannot cross filing systems', () async {
-    var userId = 1;
-    var systemId = 1;
-    final session = await _pairedSession(
-      userId: () => userId,
-      systemId: () => systemId,
+    expect(find.text('SAVED VIEWS'), findsOneWidget);
+    expect(find.text('Synced with your Suchi server.'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('saved-view-7')));
+    expect(opened?.id, 7);
+    expect(opened?.filter?.query, 'annual statements');
+
+    await tester.enterText(
+      find.byKey(const ValueKey('archive-search')),
+      'quarterly tax',
     );
-    addTearDown(session.dispose);
-    final storage = _MemorySecureStorage();
-    final searches = SavedSearchController(session: session, storage: storage);
-    addTearDown(searches.dispose);
-    await searches.reload();
+    await tester.pump(const Duration(milliseconds: 321));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('save-view')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('saved-view-name')),
+      'Quarterly review',
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    final create = server.requests.lastWhere(
+      (request) =>
+          request.method == 'POST' && request.url.path == '/api/saved_views/',
+    );
+    expect(jsonDecode(create.body), {
+      'name': 'Quarterly review',
+      'filter_json': '{"q":"quarterly tax"}',
+      'display': 'list',
+      'position': 1,
+      'shared': false,
+    });
     expect(
-      await searches.save(name: 'Private papers', query: 'account one'),
+      views.entries.map((view) => view.name),
+      contains('Quarterly review'),
+    );
+
+    await tester.enterText(find.byKey(const ValueKey('archive-search')), '');
+    await tester.pumpAndSettle();
+    expect(find.text('Quarterly review'), findsOneWidget);
+    await tester.tap(find.byTooltip('Delete Quarterly review'));
+    await tester.pumpAndSettle();
+    expect(
+      views.entries.map((view) => view.name),
+      isNot(contains('Quarterly review')),
+    );
+    expect(
+      server.requests.any(
+        (request) =>
+            request.method == 'DELETE' &&
+            request.url.path == '/api/saved_views/8',
+      ),
       isTrue,
     );
-    final original = storage.values.values.single;
-    storage.failWrites = true;
-    expect(await searches.remove(searches.entries.single.id), isFalse);
-    expect(searches.entries.single.query, 'account one');
-    expect(searches.errorMessage, contains('could not be updated'));
-    expect(storage.values.values.single, original);
-    storage.failWrites = false;
+  });
 
-    final delayedRead = Completer<String?>();
-    storage.nextRead = delayedRead;
-    final reading = searches.reload();
-    await Future<void>.delayed(Duration.zero);
+  test('Saved View failures retain the last server-backed list', () async {
+    final server = _SavedViewServer()
+      ..viewsBySystem[1] = [
+        _savedView(
+          id: 7,
+          name: 'Annual statements',
+          filterJson: '{"q":"annual statements"}',
+        ),
+      ];
+    final session = await _pairedSession(server);
+    addTearDown(session.dispose);
+    final views = SavedViewController(session: session);
+    addTearDown(views.dispose);
+    await views.reload();
+
+    server.failDelete = true;
+    expect(await views.remove(7), isFalse);
+    expect(views.entries.single.id, 7);
+    expect(views.errorMessage, contains('could not be deleted'));
+
+    server.failDelete = false;
+    server.failCreate = true;
+    expect(await views.save(name: 'New View', query: 'tax'), isFalse);
+    expect(views.entries.single.id, 7);
+    expect(views.errorMessage, contains('could not be created'));
+
+    server.failCreate = false;
+    server.failList = true;
+    await views.reload();
+    expect(views.entries.single.id, 7);
+    expect(views.errorMessage, contains('could not be loaded'));
+  });
+
+  test('late Saved View reads cannot cross account transitions', () async {
+    var systemId = 1;
+    final pending = Completer<http.Response>();
+    final started = Completer<void>();
+    final server = _SavedViewServer(systemId: () => systemId)
+      ..viewsBySystem[2] = [
+        _savedView(
+          id: 22,
+          name: 'Family archive',
+          filterJson: '{"q":"family"}',
+        ),
+      ]
+      ..nextList = pending
+      ..nextListStarted = started;
+    final session = await _pairedSession(server);
+    addTearDown(session.dispose);
+    final views = SavedViewController(session: session);
+    addTearDown(views.dispose);
+    await started.future;
+
     await session.signOut();
-    expect(searches.entries, isEmpty);
+    expect(views.entries, isEmpty);
     systemId = 2;
     await session.pairWithToken(
       serverAddress: _origin.toString(),
       token: _token,
     );
-    await searches.reload();
-    expect(searches.entries, isEmpty);
-    delayedRead.complete(original);
-    await reading;
-    expect(searches.entries, isEmpty);
-    expect(
-      await searches.save(name: 'Other papers', query: 'account two'),
-      isTrue,
-    );
-    expect(storage.values.length, 2);
+    await views.reload();
+    expect(views.entries.single.name, 'Family archive');
 
-    await session.signOut();
-    userId = 1;
-    systemId = 1;
-    await session.pairWithToken(
-      serverAddress: _origin.toString(),
-      token: _token,
+    pending.complete(
+      _savedViewsResponse([
+        _savedView(
+          id: 7,
+          name: 'Private archive',
+          filterJson: '{"q":"private"}',
+        ),
+      ]),
     );
-    await searches.reload();
-    expect(searches.entries.single.query, 'account one');
-    expect(
-      storage.values.keys.every((key) => !key.contains(_origin.host)),
-      isTrue,
-    );
+    await Future<void>.delayed(Duration.zero);
+    expect(views.entries.single.name, 'Family archive');
   });
 }
 
-Future<SessionController> _pairedSession({
-  int Function()? userId,
-  int Function()? systemId,
-}) async {
+Future<SessionController> _pairedSession(_SavedViewServer server) async {
   final session = SessionController(
     vault: _MemoryVault(),
     clientFactory: (origin, token) => SuchiClient(
       origin: origin,
       token: token,
-      httpClient: MockClient((request) async {
-        if (request.url.path == '/api/handshake') {
-          return http.Response(
-            _fixture('handshake.json'),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        if (request.url.path == '/api/whoami') {
-          final who =
-              jsonDecode(_fixture('whoami.json')) as Map<String, dynamic>;
-          who['user_id'] = userId?.call() ?? 1;
-          who['system_id'] = systemId?.call() ?? 1;
-          who['system_name'] = who['system_id'] == 1
-              ? 'Archive'
-              : 'Family archive';
-          who['system_code'] = who['system_id'] == 1 ? '' : 'F02';
-          return http.Response(
-            jsonEncode(who),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        return _searchResponse(title: 'Saved-query result');
-      }),
+      httpClient: MockClient(server.handle),
     ),
   );
   await session.pairWithToken(serverAddress: _origin.toString(), token: _token);
   return session;
 }
 
-final class _MemorySecureStorage extends FlutterSecureStorage {
-  final values = <String, String>{};
-  bool failWrites = false;
-  Completer<String?>? nextRead;
+final class _SavedViewServer {
+  _SavedViewServer({int Function()? systemId})
+    : _systemId = systemId ?? (() => 1);
 
-  @override
-  Future<String?> read({
-    required String key,
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    final pending = nextRead;
-    nextRead = null;
-    return pending == null ? values[key] : pending.future;
-  }
+  final int Function() _systemId;
+  final viewsBySystem = <int, List<Map<String, Object?>>>{};
+  final requests = <http.Request>[];
+  bool failList = false;
+  bool failCreate = false;
+  bool failDelete = false;
+  int nextId = 8;
+  Completer<http.Response>? nextList;
+  Completer<void>? nextListStarted;
 
-  @override
-  Future<void> write({
-    required String key,
-    required String? value,
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    if (failWrites) throw StateError('Protected storage unavailable');
-    values[key] = value!;
+  Future<http.Response> handle(http.Request request) async {
+    requests.add(request);
+    final path = request.url.path;
+    if (path == '/api/handshake') {
+      return http.Response(
+        _fixture('handshake.json'),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (path == '/api/whoami') {
+      final who = jsonDecode(_fixture('whoami.json')) as Map<String, dynamic>;
+      final systemId = _systemId();
+      who['system_id'] = systemId;
+      who['system_name'] = systemId == 1 ? 'Archive' : 'Family archive';
+      who['system_code'] = systemId == 1 ? '' : 'F02';
+      return _jsonResponse(who);
+    }
+    if (path == '/api/logout') return http.Response('', 204);
+    if (path == '/api/search/') {
+      return _searchResponse(title: 'Saved-query result');
+    }
+    if (path == '/api/saved_views/' && request.method == 'GET') {
+      final pending = nextList;
+      nextList = null;
+      final started = nextListStarted;
+      nextListStarted = null;
+      if (started != null && !started.isCompleted) started.complete();
+      if (pending != null) return pending.future;
+      if (failList) {
+        return _jsonResponse({
+          'message': 'Saved Views are unavailable.',
+        }, status: 503);
+      }
+      return _savedViewsResponse(viewsBySystem[_systemId()] ?? const []);
+    }
+    if (path == '/api/saved_views/' && request.method == 'POST') {
+      if (failCreate) {
+        return _jsonResponse({
+          'message': 'Saved View already exists.',
+        }, status: 409);
+      }
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      final id = nextId++;
+      (viewsBySystem[_systemId()] ??= []).add(
+        _savedView(
+          id: id,
+          name: body['name'] as String,
+          filterJson: body['filter_json'] as String,
+          position: body['position'] as int,
+        ),
+      );
+      return _jsonResponse({'id': id}, status: 201);
+    }
+    final delete = RegExp(r'^/api/saved_views/(\d+)$').firstMatch(path);
+    if (delete != null && request.method == 'DELETE') {
+      if (failDelete) {
+        return _jsonResponse({
+          'message': 'Saved View could not be deleted.',
+        }, status: 503);
+      }
+      final id = int.parse(delete.group(1)!);
+      viewsBySystem[_systemId()]?.removeWhere((view) => view['id'] == id);
+      return http.Response('', 204);
+    }
+    return http.Response('', 404);
   }
 }
+
+Map<String, Object?> _savedView({
+  required int id,
+  required String name,
+  required String filterJson,
+  int position = 0,
+}) => {
+  'id': id,
+  'name': name,
+  'filter_json': filterJson,
+  'display': 'list',
+  'position': position,
+  'shared': false,
+  'created_at': 1770000000,
+  'updated_at': 1770000000,
+};
+
+http.Response _savedViewsResponse(Iterable<Map<String, Object?>> views) {
+  final results = views.toList();
+  return _jsonResponse({
+    'count': results.length,
+    'next': null,
+    'previous': null,
+    'results': results,
+  });
+}
+
+http.Response _jsonResponse(Object body, {int status = 200}) => http.Response(
+  jsonEncode(body),
+  status,
+  headers: {'content-type': 'application/json'},
+);
 
 http.Response _searchResponse({required String title}) => http.Response(
   jsonEncode({

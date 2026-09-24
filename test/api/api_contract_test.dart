@@ -209,6 +209,90 @@ void main() {
     });
   });
 
+  group('Saved View filters', () {
+    test('preserves every supported flat and snapshot filter', () {
+      final flat = SavedViewFilter.fromJsonString(
+        jsonEncode({
+          'q': 'quarterly tax',
+          'tags__id__in': ['2', 4],
+          'correspondents__id__in': '7,9',
+          'document_type__id': '11',
+          'jd_category_id': 22,
+          'sensitivity': 'confidential',
+          'ordering': '-updated_at',
+        }),
+      );
+      final snapshot = SavedViewFilter.fromJsonString(
+        '{"document_ids":[17,42],"ordering":"title"}',
+      );
+
+      expect(flat.queryParameters, {
+        'q': 'quarterly tax',
+        'tags__id__in': '2,4',
+        'correspondents__id__in': '7,9',
+        'document_type__id': '11',
+        'jd_category_id': '22',
+        'sensitivity': 'confidential',
+        'ordering': '-updated_at',
+      });
+      expect(snapshot.queryParameters, {
+        'ordering': 'title',
+        'document_ids': '17,42',
+      });
+    });
+
+    test('keeps an unsupported server row visible but unavailable', () {
+      final view = SavedView.fromJson({
+        'id': 7,
+        'name': 'Future scope',
+        'filter_json': '{"future_filter":"value"}',
+        'display': 'list',
+        'position': 0,
+        'created_at': 1,
+        'updated_at': 1,
+      });
+
+      expect(view.available, isFalse);
+      expect(view.filter, isNull);
+      expect(view.filterError, contains('unsupported filter'));
+    });
+
+    test('sends a Saved View scope intact to the document list', () async {
+      late http.Request observed;
+      final client = SuchiClient(
+        origin: _origin,
+        token: _token,
+        httpClient: MockClient((request) async {
+          observed = request;
+          return http.Response(
+            jsonEncode({'count': 0, 'results': <Object>[]}),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      final filter = SavedViewFilter.fromJsonString(
+        '{"q":"tax","tags__id__in":[2,4],"document_ids":[17,42],"ordering":"title"}',
+      );
+
+      await client.listDocuments(
+        page: 2,
+        pageSize: 30,
+        ordering: '-created_at',
+        savedViewFilter: filter,
+      );
+
+      expect(observed.url.queryParameters, {
+        'page': '2',
+        'page_size': '30',
+        'ordering': 'title',
+        'q': 'tax',
+        'tags__id__in': '2,4',
+        'document_ids': '17,42',
+      });
+    });
+  });
+
   group('SuchiClient transport boundary', () {
     test('handshake never sends credentials', () async {
       late http.Request observed;

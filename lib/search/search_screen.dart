@@ -10,7 +10,7 @@ import '../auth/session_controller.dart';
 import '../documents/thumbnail_cache.dart';
 import '../theme/suchi_theme.dart';
 import '../widgets/suchi_widgets.dart';
-import 'saved_searches.dart';
+import 'saved_views.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({
@@ -18,7 +18,8 @@ class SearchScreen extends StatefulWidget {
     required this.session,
     required this.cache,
     required this.onOpenDocument,
-    this.savedSearches,
+    required this.onOpenSavedView,
+    this.savedViews,
     super.key,
   });
 
@@ -26,7 +27,8 @@ class SearchScreen extends StatefulWidget {
   final SessionController session;
   final ThumbnailMemoryCache cache;
   final ValueChanged<int> onOpenDocument;
-  final SavedSearchController? savedSearches;
+  final ValueChanged<SavedView> onOpenSavedView;
+  final SavedViewController? savedViews;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -53,7 +55,7 @@ class _SearchScreenState extends State<SearchScreen> {
     _scroll.addListener(_onScroll);
     _identity = _currentIdentity;
     widget.session.addListener(_sessionChanged);
-    widget.savedSearches?.addListener(_savedSearchesChanged);
+    widget.savedViews?.addListener(_savedViewsChanged);
   }
 
   @override
@@ -64,9 +66,9 @@ class _SearchScreenState extends State<SearchScreen> {
       widget.session.addListener(_sessionChanged);
       _sessionChanged();
     }
-    if (oldWidget.savedSearches != widget.savedSearches) {
-      oldWidget.savedSearches?.removeListener(_savedSearchesChanged);
-      widget.savedSearches?.addListener(_savedSearchesChanged);
+    if (oldWidget.savedViews != widget.savedViews) {
+      oldWidget.savedViews?.removeListener(_savedViewsChanged);
+      widget.savedViews?.addListener(_savedViewsChanged);
     }
   }
 
@@ -77,7 +79,7 @@ class _SearchScreenState extends State<SearchScreen> {
     _query.dispose();
     _scroll.dispose();
     widget.session.removeListener(_sessionChanged);
-    widget.savedSearches?.removeListener(_savedSearchesChanged);
+    widget.savedViews?.removeListener(_savedViewsChanged);
     super.dispose();
   }
 
@@ -92,32 +94,47 @@ class _SearchScreenState extends State<SearchScreen> {
     _queryChanged();
   }
 
-  void _savedSearchesChanged() {
+  void _savedViewsChanged() {
     if (mounted) setState(() {});
   }
 
-  Future<void> _saveSearch() async {
-    final savedSearches = widget.savedSearches;
+  Future<void> _saveView() async {
+    final savedViews = widget.savedViews;
     final query = _query.text.trim();
-    if (savedSearches == null || query.isEmpty || !savedSearches.ready) return;
+    if (savedViews == null || query.isEmpty || !savedViews.ready) return;
     final identityGeneration = _identityGeneration;
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => const _SaveSearchDialog(),
+      builder: (context) => const _SaveViewDialog(),
     );
     if (!mounted ||
         name == null ||
         identityGeneration != _identityGeneration ||
-        savedSearches != widget.savedSearches) {
+        savedViews != widget.savedViews) {
       return;
     }
-    final saved = await savedSearches.save(name: name, query: query);
+    final saved = await savedViews.save(name: name, query: query);
     if (mounted &&
         !saved &&
         identityGeneration == _identityGeneration &&
-        savedSearches.errorMessage != null) {
+        savedViews.errorMessage != null) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(savedSearches.errorMessage!)));
+          .showSnackBar(SnackBar(content: Text(savedViews.errorMessage!)));
+    }
+  }
+
+  Future<void> _removeView(SavedView view) async {
+    final savedViews = widget.savedViews;
+    if (savedViews == null || !savedViews.ready) return;
+    final identityGeneration = _identityGeneration;
+    final removed = await savedViews.remove(view.id);
+    if (mounted &&
+        !removed &&
+        identityGeneration == _identityGeneration &&
+        savedViews == widget.savedViews &&
+        savedViews.errorMessage != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(savedViews.errorMessage!)));
     }
   }
 
@@ -245,15 +262,13 @@ class _SearchScreenState extends State<SearchScreen> {
                               ),
                       ),
                     ),
-                    if (widget.savedSearches != null &&
+                    if (widget.savedViews != null &&
                         _query.text.trim().isNotEmpty)
                       TextButton.icon(
-                        key: const ValueKey('save-search'),
-                        onPressed: widget.savedSearches!.ready
-                            ? _saveSearch
-                            : null,
+                        key: const ValueKey('save-view'),
+                        onPressed: widget.savedViews!.ready ? _saveView : null,
                         icon: const Icon(Icons.bookmark_add_outlined, size: 20),
-                        label: const Text('Save this search'),
+                        label: const Text('Save as Saved View'),
                       ),
                   ],
                 ),
@@ -266,7 +281,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _body() {
     final colors = SuchiColors.of(context);
     final query = _query.text.trim();
-    final searches = widget.savedSearches;
+    final searches = widget.savedViews;
     if (query.isEmpty) {
       return ListView(
         padding: const EdgeInsets.fromLTRB(17, 5, 17, 28),
@@ -278,10 +293,10 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
           if (searches != null) ...[
             const SizedBox(height: 22),
-            const SectionLabel('Saved searches'),
+            const SectionLabel('Saved Views'),
             const SizedBox(height: 8),
             Text(
-              'Kept on this device for this archive account.',
+              'Synced with your Suchi server.',
               style: TextStyle(color: colors.muted),
             ),
             const SizedBox(height: 12),
@@ -289,58 +304,67 @@ class _SearchScreenState extends State<SearchScreen> {
               InlineError(message: message, onRetry: searches.reload),
               const SizedBox(height: 12),
             ],
-            if (searches.loading)
-              const LinearProgressIndicator()
-            else if (searches.entries.isEmpty && searches.errorMessage == null)
+            if (searches.loading) ...[
+              const LinearProgressIndicator(),
+              const SizedBox(height: 12),
+            ],
+            if (searches.entries.isEmpty &&
+                !searches.loading &&
+                searches.errorMessage == null)
               Text(
-                'Run a search, then choose Save this search to use it again.',
+                'Run a search, then save it as a Saved View.',
                 style: TextStyle(color: colors.muted),
-              )
-            else
-              for (final entry in searches.entries)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 9),
-                  child: SuchiCard(
-                    padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            key: ValueKey('saved-search-${entry.id}'),
-                            onTap: () => _query.text = entry.query,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    entry.name,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium,
+              ),
+            for (final entry in searches.entries)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: SuchiCard(
+                  padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          key: ValueKey('saved-view-${entry.id}'),
+                          onTap: () => widget.onOpenSavedView(entry),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  entry.name,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  entry.available
+                                      ? entry.filter!.summary
+                                      : 'Unavailable on this app version',
+                                  style: TextStyle(
+                                    color: entry.available
+                                        ? colors.muted
+                                        : Theme.of(context).colorScheme.error,
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    entry.query,
-                                    style: TextStyle(color: colors.muted),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                        IconButton(
-                          tooltip: 'Delete ${entry.name}',
-                          onPressed: searches.ready
-                              ? () => searches.remove(entry.id)
-                              : null,
-                          icon: const Icon(Icons.delete_outline, size: 21),
-                        ),
-                      ],
-                    ),
+                      ),
+                      IconButton(
+                        tooltip: 'Delete ${entry.name}',
+                        onPressed: searches.ready && entry.ownerId == null
+                            ? () => _removeView(entry)
+                            : null,
+                        icon: const Icon(Icons.delete_outline, size: 21),
+                      ),
+                    ],
                   ),
                 ),
+              ),
           ],
         ],
       );
@@ -448,14 +472,14 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 }
 
-class _SaveSearchDialog extends StatefulWidget {
-  const _SaveSearchDialog();
+class _SaveViewDialog extends StatefulWidget {
+  const _SaveViewDialog();
 
   @override
-  State<_SaveSearchDialog> createState() => _SaveSearchDialogState();
+  State<_SaveViewDialog> createState() => _SaveViewDialogState();
 }
 
-class _SaveSearchDialogState extends State<_SaveSearchDialog> {
+class _SaveViewDialogState extends State<_SaveViewDialog> {
   final _name = TextEditingController();
 
   @override
@@ -471,10 +495,10 @@ class _SaveSearchDialogState extends State<_SaveSearchDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Save search'),
+    title: const Text('Save as Saved View'),
     scrollable: true,
     content: TextField(
-      key: const ValueKey('saved-search-name'),
+      key: const ValueKey('saved-view-name'),
       controller: _name,
       autofocus: true,
       textCapitalization: TextCapitalization.sentences,

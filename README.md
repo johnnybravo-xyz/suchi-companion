@@ -115,9 +115,11 @@ Detailed for Documents and Inbox. It changes presentation without refetching or
 resetting your browsing position. Detailed uses existing summary metadata;
 sensitive previews remain hidden.
 
-Saved searches are available to every signed-in user: save a named query, run it
-again, or remove it on this device. They are stored privately for the current
-server, user, and filing system; another account cannot access them.
+Saved Views are synchronized with the paired Suchi server. Save the current
+query, open a View as the active Documents scope, or delete it from either
+platform. The app accepts the pinned server's flat and snapshot filter shapes;
+unsupported future filters stay visible but never issue a partial document
+request.
 
 **More → Privacy policy** opens the public `https://suchi.page/privacy/` route
 in the browser, separate from the paired server. **Privacy & storage** explains

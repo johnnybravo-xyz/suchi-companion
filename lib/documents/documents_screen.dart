@@ -20,6 +20,8 @@ class DocumentsScreen extends StatefulWidget {
     required this.onOpenSearch,
     required this.onOpenDocument,
     required this.listMode,
+    this.savedView,
+    this.savedViewRevision = 0,
     this.refreshRevision = 0,
     super.key,
   });
@@ -31,6 +33,8 @@ class DocumentsScreen extends StatefulWidget {
   final VoidCallback onOpenSearch;
   final ValueChanged<int> onOpenDocument;
   final DocumentListMode listMode;
+  final SavedView? savedView;
+  final int savedViewRevision;
   final int refreshRevision;
 
   @override
@@ -44,6 +48,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   ApiException? _error;
   int? _categoryId;
   String _ordering = '-created_at';
+  SavedView? _activeView;
+  String? _scopeError;
   int _count = 0;
   int _page = 0;
   int _generation = 0;
@@ -55,6 +61,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    _activeView = widget.savedView;
+    _ordering = _activeView?.filter?.ordering ?? '-created_at';
     widget.categories.load();
     _load(reset: true);
   }
@@ -64,10 +72,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.client != widget.client) {
       _categoryId = null;
+      _activeView = null;
+      _scopeError = null;
       _ordering = '-created_at';
       widget.categories.load();
       _load(reset: true);
       if (_scroll.hasClients) _scroll.jumpTo(0);
+    } else if (oldWidget.savedViewRevision != widget.savedViewRevision) {
+      _activateSavedView(widget.savedView);
     } else if (oldWidget.refreshRevision != widget.refreshRevision) {
       _load(reset: true);
       if (_scroll.hasClients) _scroll.jumpTo(0);
@@ -85,11 +97,38 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     if (_scroll.position.extentAfter < 280) _loadMore();
   }
 
+  void _activateSavedView(SavedView? view) {
+    _activeView = view;
+    _categoryId = null;
+    _scopeError = null;
+    _ordering = view?.filter?.ordering ?? '-created_at';
+    _load(reset: true);
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
   Future<void> _load({required bool reset}) async {
     if (!reset && (_loading || _loadingMore)) return;
+    final activeView = _activeView;
+    if (activeView != null && !activeView.available) {
+      ++_generation;
+      setState(() {
+        _documents = const [];
+        _count = 0;
+        _page = 0;
+        _hasMore = false;
+        _loading = false;
+        _loadingMore = false;
+        _error = null;
+        _scopeError =
+            'This Saved View cannot be opened in this app version. '
+            '${activeView.filterError ?? 'Its filters are unsupported.'}';
+      });
+      return;
+    }
     final generation = reset ? ++_generation : _generation;
     setState(() {
       _error = null;
+      _scopeError = null;
       if (reset) {
         _loading = true;
         _loadingMore = false;
@@ -108,6 +147,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         pageSize: 30,
         jdCategoryId: _categoryId,
         ordering: _ordering,
+        savedViewFilter: activeView?.filter,
       );
       if (!mounted || generation != _generation) return;
       setState(() {
@@ -140,12 +180,19 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   void _selectCategory(JDCategory? category) {
     Navigator.maybePop(context);
     final selected = category?.id;
-    if (selected == _categoryId) return;
-    setState(() => _categoryId = selected);
+    if (_activeView == null && selected == _categoryId) return;
+    setState(() {
+      _activeView = null;
+      _scopeError = null;
+      _categoryId = selected;
+      _ordering = '-created_at';
+    });
     _load(reset: true);
+    if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
   void _selectSort(String ordering) {
+    if (_activeView != null) return;
     if (ordering == _ordering) return;
     setState(() => _ordering = ordering);
     _load(reset: true);
@@ -208,7 +255,10 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                         icon: const Icon(Icons.search),
                       ),
                       PopupMenuButton<String>(
-                        tooltip: 'Sort documents',
+                        tooltip: _activeView == null
+                            ? 'Sort documents'
+                            : 'Saved View controls sorting',
+                        enabled: _activeView == null,
                         initialValue: _ordering,
                         onSelected: _selectSort,
                         icon: const Icon(Icons.sort),
@@ -253,10 +303,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                           children: [
                             Flexible(
                               child: Text(
-                                selectedCategory?.label ?? 'All documents',
+                                _activeView?.name ??
+                                    selectedCategory?.label ??
+                                    'All documents',
                                 style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(
-                                      color: selectedCategory == null
+                                      color:
+                                          _activeView == null &&
+                                              selectedCategory == null
                                           ? colors.muted
                                           : colors.accent,
                                       fontWeight: FontWeight.w700,
@@ -270,7 +324,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                       ),
                     ),
                   ),
-                  if (!_loading && _error == null)
+                  if (!_loading && _error == null && _scopeError == null)
                     Text(
                       '$_count ${_count == 1 ? 'document' : 'documents'}',
                       style: Theme.of(context).textTheme.bodySmall
@@ -287,6 +341,12 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 
   Widget _body() {
+    if (_scopeError case final message?) {
+      return ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        children: [InlineError(message: message)],
+      );
+    }
     if (_loading && _documents.isEmpty) {
       return ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -316,7 +376,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             SizedBox(height: 80),
             EmptyState(
               title: 'No documents here',
-              message: 'Scan a document or choose another JD category.',
+              message: 'Scan a document or choose another JD category or Saved View.',
               icon: Icons.folder_open_outlined,
             ),
           ],

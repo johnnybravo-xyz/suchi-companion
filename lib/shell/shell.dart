@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../api/api_models.dart';
 import '../api/suchi_client.dart';
 import '../app/app_services.dart';
 import '../auth/account_identity.dart';
@@ -18,7 +19,7 @@ import '../scan/scan_database.dart';
 import '../scan/scan_queue_screen.dart';
 import '../scan/scan_queue_store.dart';
 import '../scan/scanner_bridge.dart';
-import '../search/saved_searches.dart';
+import '../search/saved_views.dart';
 import '../search/search_screen.dart';
 import '../share/share_import_controller.dart';
 import '../theme/suchi_theme.dart';
@@ -36,8 +37,10 @@ class SuchiShell extends StatefulWidget {
 class _SuchiShellState extends State<SuchiShell> {
   late final SuchiClient _client;
   late final JdCategoryStore _categories;
-  late final SavedSearchController _savedSearches;
+  late final SavedViewController _savedViews;
   int _selected = 0;
+  SavedView? _requestedSavedView;
+  int _savedViewRevision = 0;
   bool _choosingCaptureMode = false;
   int _readerRevision = 0;
   late DocumentListMode _listMode;
@@ -58,9 +61,9 @@ class _SuchiShellState extends State<SuchiShell> {
       onUnauthorized: widget.services.session.expire,
     );
     _categories.load();
-    _savedSearches = SavedSearchController(session: widget.services.session);
-    _syncQueueIdentity();
-    widget.services.session.addListener(_syncQueueIdentity);
+    _savedViews = SavedViewController(session: widget.services.session);
+    _syncIdentity();
+    widget.services.session.addListener(_syncIdentity);
     _queueSubscription = widget.services.queue.watchUploads().listen(
       _queueChanged,
       onError: (Object error, StackTrace stack) {
@@ -72,12 +75,12 @@ class _SuchiShellState extends State<SuchiShell> {
   @override
   void dispose() {
     widget.services.settings.removeListener(_settingsChanged);
-    widget.services.session.removeListener(_syncQueueIdentity);
+    widget.services.session.removeListener(_syncIdentity);
     unawaited(_queueSubscription.cancel());
     _queueRows.dispose();
     _queueUnavailable.dispose();
     _categories.dispose();
-    _savedSearches.dispose();
+    _savedViews.dispose();
     super.dispose();
   }
 
@@ -88,16 +91,23 @@ class _SuchiShellState extends State<SuchiShell> {
 
   AccountIdentity? get _currentIdentity => widget.services.session.identity;
 
-  void _syncQueueIdentity() {
+  void _syncIdentity() {
     final identity = _currentIdentity;
     if (_observedIdentity == identity) return;
+    final previous = _observedIdentity;
     _observedIdentity = identity;
     _previousQueueStates = null;
+    if (previous != null && mounted) {
+      setState(() {
+        _requestedSavedView = null;
+        _savedViewRevision++;
+      });
+    }
   }
 
   void _queueChanged(List<ScanUpload> rows) {
     if (!mounted) return;
-    _syncQueueIdentity();
+    _syncIdentity();
     final identity = _currentIdentity;
     final states = <String, String>{};
     var completed = false;
@@ -176,6 +186,14 @@ class _SuchiShellState extends State<SuchiShell> {
     setState(() => _readerRevision++);
   }
 
+  void _openSavedView(SavedView view) {
+    setState(() {
+      _requestedSavedView = view;
+      _savedViewRevision++;
+      _selected = 1;
+    });
+  }
+
   Future<void> _openDocument(int id) => Navigator.of(context).push<void>(
     MaterialPageRoute(
       settings: RouteSettings(name: '/documents/$id'),
@@ -219,6 +237,8 @@ class _SuchiShellState extends State<SuchiShell> {
         key: const ValueKey('documents'),
         listMode: _listMode,
         refreshRevision: _readerRevision,
+        savedView: _requestedSavedView,
+        savedViewRevision: _savedViewRevision,
         client: _client,
         session: widget.services.session,
         cache: widget.services.thumbnails,
@@ -241,7 +261,8 @@ class _SuchiShellState extends State<SuchiShell> {
         session: widget.services.session,
         cache: widget.services.thumbnails,
         onOpenDocument: _openDocument,
-        savedSearches: _savedSearches,
+        onOpenSavedView: _openSavedView,
+        savedViews: _savedViews,
       ),
       MoreScreen(
         session: widget.services.session,

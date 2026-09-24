@@ -5,7 +5,7 @@
 ### Changed
 
 - Prepare free `1.0.0+1` release candidate without payments, purchases,
-  upgrades or saved-search entitlement gates. Public store approval and source
+  upgrades or Saved View entitlement gates. Public store approval and source
   publication remain separate owner decisions.
 - Require HTTPS for all non-debug server origins, including restored tokens.
   Debug-only localhost/private-LAN HTTP remains available for development;
@@ -18,7 +18,7 @@
   extension. Suchi remains the server/web product name. Package and bundle IDs,
   app groups, pairing links and private storage identities are unchanged.
 - Require the current server identity and pairing contracts. Account, queue,
-  capture, share, search, and saved-search boundaries now include the token's
+  capture, share, search and Saved View boundaries now include the token's
   filing-system ID. Changing filing systems requires pairing again.
 - Use a fresh-install local storage baseline for this unreleased app. Older
   queue databases and recovery manifests fail clearly and remain untouched;
@@ -70,8 +70,10 @@
 - Slightly larger raised Scan action with real hit-test/upload-strip clearance,
   subtle navigation motion, readable queue states and keyboard-aware JD sheets.
 - Compact pairing and Search introductions without changing trust or query flows.
-- Shared Android/iOS saved-search UI with private archive/user/filing-system-bound
-  storage. Every signed-in user can save, run and remove their own queries.
+- Synchronize Saved Views through the paired Suchi server on Android and iOS.
+  Named queries can be created, opened as an exact Documents scope and deleted;
+  flat legacy and snapshot filters are preserved, while unsupported future
+  filters remain visible and fail closed without a partial document request.
 - Document capture keeps each platform's full native scanner pipeline for edge
   detection, perspective straightening, rotation, lighting cleanup, page edits
   and review before the shared upload flow.

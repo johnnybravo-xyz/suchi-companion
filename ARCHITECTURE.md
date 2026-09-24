@@ -18,7 +18,7 @@ and pins one exact compatible server revision.
 | Capture and durable queue | `lib/scan/scan_capture_controller.dart`, `scan_queue_store.dart`, `upload_coordinator.dart` |
 | Native share and explicit Files/Photos intake | `lib/share/`, `ScanQueueScreen`, Android `ShareChannel`, iOS `ShareChannel`/Share Extension and `ios/Shared/` |
 | Archive browsing, filing and retrieval | `lib/documents/`, `lib/inbox/`, `lib/search/`, `lib/detail/` |
-| Archive-bound local saved searches | `lib/search/saved_searches.dart`, owned by the shell |
+| Server-backed Saved Views | `lib/search/saved_views.dart`, `lib/api/api_models.dart`, owned by the shell |
 | Common presentation | `lib/widgets/suchi_widgets.dart`, `lib/theme/suchi_theme.dart` |
 
 Screens keep their own loading, pagination and error state. The shell owns the
@@ -39,10 +39,14 @@ transitions.
 Documents and Inbox keep stable screen keys and receive an explicit refresh
 revision. View changes rebuild rows in place, without invalidating loaded pages.
 
-The shell owns saved searches in device-only secure storage under a hash of the
-account identity (archive origin, server user ID and filing-system ID).
-Reads/writes retain that identity and discard late UI results. Every signed-in
-user can save, list, run and remove their own searches.
+The shell owns the account-bound `SavedViewController`, which lists, creates and
+deletes Views through `/api/saved_views/`; no View copy is persisted on-device.
+The controller keeps the last successful server list across transient failures
+and discards late reads or mutations after an identity transition. Opening a
+View sends a revisioned request from Search to the existing Documents screen.
+Documents applies the complete typed filter and its ordering as one scope;
+choosing a JD category clears that scope. Unknown or malformed future filters
+remain visible and fail closed before any document request.
 
 `lib/trash/trash_screen.dart` uses the existing paginated document list and
 restore API. More opens it through the shell, and successful restoration bumps

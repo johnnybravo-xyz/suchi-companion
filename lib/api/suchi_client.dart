@@ -138,6 +138,7 @@ final class SuchiClient {
     int? jdCategoryId,
     int? splitOriginId,
     bool trashed = false,
+    SavedViewFilter? savedViewFilter,
   }) async {
     final query = <String, String>{
       'page': '$page',
@@ -146,6 +147,7 @@ final class SuchiClient {
       if (jdCategoryId != null) 'jd_category_id': '$jdCategoryId',
       if (splitOriginId != null) 'split_origin_id': '$splitOriginId',
       if (trashed) 'trashed': '1',
+      ...?savedViewFilter?.queryParameters,
     };
     final response = await _request(
       'GET',
@@ -165,6 +167,63 @@ final class SuchiClient {
       );
     }
     return result;
+  }
+
+  Future<PageEnvelope<SavedView>> listSavedViews({
+    int page = 1,
+    int pageSize = 100,
+  }) async {
+    final response = await _request(
+      'GET',
+      '/api/saved_views/',
+      query: {'page': '$page', 'page_size': '$pageSize'},
+      timeout: _readTimeout,
+    );
+    return _parseSuccess(
+      response,
+      (value) => PageEnvelope.fromJson(value, SavedView.fromJson),
+    );
+  }
+
+  Future<int> createSavedView({
+    required String name,
+    required String filterJson,
+    required int position,
+  }) async {
+    final response = await _request(
+      'POST',
+      '/api/saved_views/',
+      jsonBody: {
+        'name': name,
+        'filter_json': filterJson,
+        'display': 'list',
+        'position': position,
+        'shared': false,
+      },
+      timeout: _readTimeout,
+      expectedStatuses: const {201},
+    );
+    return _parseSuccess(response, (value) {
+      if (value is! Map<String, dynamic>) {
+        throw const ApiFormatException(
+          'saved view create response must be an object',
+        );
+      }
+      final id = value['id'];
+      if (id is! int || id <= 0) {
+        throw const ApiFormatException('saved view create id must be positive');
+      }
+      return id;
+    });
+  }
+
+  Future<void> deleteSavedView(int id) async {
+    await _request(
+      'DELETE',
+      '/api/saved_views/$id',
+      timeout: _readTimeout,
+      expectedStatuses: const {204},
+    );
   }
 
   Future<List<DocumentSummary>> splitDocuments(int originId) async {

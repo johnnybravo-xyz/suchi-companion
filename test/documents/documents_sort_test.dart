@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:suchi_mobile/api/api_models.dart';
 import 'package:suchi_mobile/api/suchi_client.dart';
 import 'package:suchi_mobile/auth/credential_vault.dart';
 import 'package:suchi_mobile/auth/session_controller.dart';
@@ -176,6 +177,64 @@ void main() {
     expect(find.text('New page receipt'), findsOneWidget);
   });
 
+  testWidgets('opens a Saved View with its exact document scope', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    final view = SavedView.fromJson({
+      'id': 7,
+      'name': 'Quarterly tax',
+      'filter_json': '{"q":"quarterly tax","tags__id__in":[2,4],"document_ids":[17,42],"ordering":"title"}',
+      'display': 'list',
+      'position': 0,
+      'created_at': 1,
+      'updated_at': 1,
+    });
+
+    await _showDocuments(tester, (request) async {
+      requests.add(request.url);
+      return _page([]);
+    }, savedView: view);
+
+    expect(requests.single.queryParameters, {
+      'page': '1',
+      'page_size': '30',
+      'ordering': 'title',
+      'q': 'quarterly tax',
+      'tags__id__in': '2,4',
+      'document_ids': '17,42',
+    });
+    expect(find.text('Quarterly tax'), findsOneWidget);
+    expect(find.byTooltip('Saved View controls sorting'), findsOneWidget);
+  });
+
+  testWidgets('refuses an unsupported Saved View without a document request', (
+    tester,
+  ) async {
+    var requests = 0;
+    final view = SavedView.fromJson({
+      'id': 8,
+      'name': 'Future scope',
+      'filter_json': '{"future_filter":"value"}',
+      'display': 'list',
+      'position': 0,
+      'created_at': 1,
+      'updated_at': 1,
+    });
+
+    await _showDocuments(tester, (request) async {
+      requests++;
+      return _page([]);
+    }, savedView: view);
+
+    expect(requests, 0);
+    expect(find.text('Future scope'), findsOneWidget);
+    expect(
+      find.textContaining('cannot be opened in this app version'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
     'filing sheet keeps retry, category selection and Close usable above the keyboard',
     (tester) async {
@@ -266,6 +325,7 @@ Future<void> _showDocuments(
   double textScale = 1,
   ValueNotifier<DocumentListMode>? listMode,
   ValueNotifier<int>? refreshRevision,
+  SavedView? savedView,
 }) async {
   final transport = MockClient((request) async {
     switch (request.url.path) {
@@ -314,6 +374,7 @@ Future<void> _showDocuments(
           categories: categories,
           listMode: listMode?.value ?? DocumentListMode.standard,
           refreshRevision: refreshRevision?.value ?? 0,
+          savedView: savedView,
           onOpenSearch: () {},
           onOpenDocument: (_) {},
         ),

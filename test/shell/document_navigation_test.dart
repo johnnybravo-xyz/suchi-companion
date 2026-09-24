@@ -539,6 +539,39 @@ void main() {
     },
   );
 
+  testNavigation('server Saved View opens its exact scope in Documents', (
+    tester,
+  ) async {
+    archive.savedViews.add({
+      'id': 7,
+      'name': 'Quarterly tax',
+      'filter_json': '{"q":"quarterly tax","tags__id__in":[2,4],"document_ids":[17,42],"ordering":"title"}',
+      'display': 'list',
+      'position': 0,
+      'created_at': 1770000000,
+      'updated_at': 1770000000,
+    });
+    await showShell(tester);
+    await tester.tap(find.text('Search').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Quarterly tax').hitTestable(), findsOneWidget);
+
+    final requestsBefore = archive.listRequests.length;
+    await tester.tap(find.byKey(const ValueKey('saved-view-7')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Quarterly tax').hitTestable(), findsOneWidget);
+    expect(archive.listRequests, hasLength(requestsBefore + 1));
+    expect(archive.listRequests.last.url.queryParameters, {
+      'page': '1',
+      'page_size': '30',
+      'ordering': 'title',
+      'q': 'quarterly tax',
+      'tags__id__in': '2,4',
+      'document_ids': '17,42',
+    });
+  });
+
   testNavigation('iOS left-edge back preserves the filtered document archive', (
     tester,
   ) async {
@@ -924,6 +957,7 @@ final class _Archive {
   bool failSplit = false;
   Completer<http.Response>? pendingSplit;
 
+  final savedViews = <Map<String, Object?>>[];
   List<http.Request> get listRequests => requests
       .where((request) => request.url.path == '/api/documents/')
       .toList();
@@ -945,6 +979,13 @@ final class _Archive {
         return _fixture('whoami.json');
       case '/api/jd/categories/':
         return _fixture('jd-categories.json');
+      case '/api/saved_views/':
+        return _json({
+          'count': savedViews.length,
+          'next': null,
+          'previous': null,
+          'results': savedViews,
+        });
       case '/api/documents/':
         final query = request.url.queryParameters;
         if (query.containsKey('split_origin_id')) {

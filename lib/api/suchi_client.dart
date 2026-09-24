@@ -329,6 +329,104 @@ final class SuchiClient {
     );
   }
 
+  Future<PageEnvelope<TagView>> listTags({
+    int page = 1,
+    int pageSize = 500,
+  }) async {
+    if (page < 1 || pageSize < 1 || pageSize > 500) {
+      throw RangeError('Tag page must be positive and page size at most 500.');
+    }
+    final response = await _request(
+      'GET',
+      '/api/tags/',
+      query: {'page': '$page', 'page_size': '$pageSize'},
+      timeout: _readTimeout,
+    );
+    final result = _parseSuccess(
+      response,
+      (value) => PageEnvelope.fromJson(value, TagView.fromJson),
+    );
+    final offset = (page - 1) * pageSize;
+    final remaining = result.count - offset;
+    final expectedLength = remaining < 0
+        ? 0
+        : remaining < pageSize
+        ? remaining
+        : pageSize;
+    final next = result.next;
+    final nextUri = next == null || next.isEmpty ? null : Uri.tryParse(next);
+    if (result.results.length != expectedLength ||
+        (nextUri != null &&
+            (nextUri.hasScheme ||
+                nextUri.hasAuthority ||
+                nextUri.path != '/api/tags/' ||
+                nextUri.queryParameters['page'] != '${page + 1}' ||
+                nextUri.queryParameters['page_size'] != '$pageSize' ||
+                nextUri.queryParameters.length != 2 ||
+                offset + pageSize >= result.count)) ||
+        (next != null && next.isNotEmpty && nextUri == null)) {
+      throw _malformed(response, 'Suchi returned an invalid tag page.');
+    }
+    return result;
+  }
+
+  Future<void> changeDocumentTag(
+    int documentId, {
+    required int tagId,
+    required bool add,
+  }) async {
+    if (documentId <= 0 || tagId <= 0) {
+      throw RangeError('Document and tag ids must be positive.');
+    }
+    final method = add ? 'add_tag' : 'remove_tag';
+    final response = await _request(
+      'POST',
+      '/api/documents/bulk_edit',
+      jsonBody: {
+        'documents': [documentId],
+        'method': method,
+        'parameters': {'tag_id': tagId},
+      },
+      timeout: _readTimeout,
+    );
+    final result = _parseSuccess(response, (value) {
+      final json = _asObject(value, 'bulk edit response');
+      final results = json['results'];
+      if (json['method'] != method ||
+          json['total'] != 1 ||
+          json['applied'] is! int ||
+          (json['applied'] != 0 && json['applied'] != 1) ||
+          results is! List ||
+          results.length != 1 ||
+          results.single is! Map<String, dynamic>) {
+        throw const ApiFormatException('invalid document tag response');
+      }
+      final item = results.single as Map<String, dynamic>;
+      if (item['id'] != documentId || item['ok'] is! bool) {
+        throw const ApiFormatException('invalid document tag result');
+      }
+      final ok = item['ok'] as bool;
+      if (json['applied'] != (ok ? 1 : 0) ||
+          (!ok &&
+              (item['code'] is! String ||
+                  (item['code'] as String).trim().isEmpty))) {
+        throw const ApiFormatException('inconsistent document tag result');
+      }
+      return ok ? null : item['code'] as String;
+    });
+    if (result != null) {
+      throw ApiException(
+        kind: result == 'forbidden'
+            ? ApiFailureKind.forbidden
+            : ApiFailureKind.rejected,
+        message: 'Suchi refused the tag change ($result).',
+        code: result,
+        statusCode: response.statusCode,
+        requestId: response.requestId,
+      );
+    }
+  }
+
   Future<TasksResponse> tasksForDocument(int documentId) async {
     final response = await _request(
       'GET',

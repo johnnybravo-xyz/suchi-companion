@@ -489,6 +489,36 @@ final class DocumentCorrespondent {
   final String role;
 }
 
+final class TagView {
+  const TagView({
+    required this.id,
+    required this.name,
+    required this.slug,
+    required this.color,
+    required this.parentId,
+    required this.childCount,
+  });
+
+  factory TagView.fromJson(Object? value) {
+    final json = _object(value, 'tag');
+    return TagView(
+      id: _positiveInteger(json, 'id'),
+      name: _nonEmptyString(json, 'name'),
+      slug: _nonEmptyString(json, 'slug'),
+      color: _string(json, 'color'),
+      parentId: _optionalPositiveInteger(json, 'parent_id'),
+      childCount: _nonNegativeInteger(json, 'child_count'),
+    );
+  }
+
+  final int id;
+  final String name;
+  final String slug;
+  final String color;
+  final int? parentId;
+  final int childCount;
+}
+
 final class DocumentDetail {
   const DocumentDetail({
     required this.id,

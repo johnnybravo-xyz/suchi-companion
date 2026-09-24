@@ -126,33 +126,209 @@ void main() {
     expect(find.text('Edit document'), findsOneWidget);
   });
 
+  testWidgets('filters paginated tags and stages selection and removal', (
+    tester,
+  ) async {
+    final methods = <String>[];
+    final pages = <int>[];
+    final session = await _session(
+      (_) async => _json({'id': 91}),
+      tags: (request) async {
+        final page = int.parse(request.url.queryParameters['page']!);
+        pages.add(page);
+        expect(request.url.queryParameters['page_size'], '500');
+        return _json({
+          'count': 502,
+          'results': [
+            if (page == 1) ...[
+              _tag(1, 'Utilities', 'utilities'),
+              _tag(2, 'Electricity', 'electricity'),
+              for (var i = 3; i <= 500; i++) _tag(i, 'Other $i', 'other-$i'),
+            ] else ...[
+              _tag(501, 'Travel', 'travel'),
+              _tag(502, 'Transit', 'transit'),
+            ],
+          ],
+        });
+      },
+      bulk: (request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        methods.add('${body['method']}:${body['parameters']['tag_id']}');
+        expect(body['documents'], [91]);
+        return _bulkOk(body);
+      },
+    );
+    final result = await _openEditor(tester, session);
+    expect(pages, [1, 2]);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Find existing tags'),
+      'trav',
+    );
+    await tester.pump();
+    expect(find.text('Travel'), findsOneWidget);
+    await tester.tap(find.text('Travel'));
+    await tester.pump();
+    expect(methods, isEmpty);
+    final utilities = find.widgetWithText(InputChip, 'Utilities');
+    await tester.ensureVisible(utilities);
+    await tester.pump();
+    await tester.tap(find.byTooltip('Remove Utilities'));
+    await tester.pump();
+    expect(methods, isEmpty);
+    await _save(tester);
+    expect(methods, ['remove_tag:1', 'add_tag:501']);
+    expect(result.value, isTrue);
+  });
+
+  testWidgets('a 200 per-document refusal stays visible and can be retried', (
+    tester,
+  ) async {
+    var attempts = 0;
+    var current = {'utilities', 'electricity'};
+    final session = await _session(
+      (_) async => _json({'id': 91}),
+      detail: () => _detailWithTags(current),
+      bulk: (request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        attempts++;
+        if (attempts == 1) {
+          return _json({
+            'method': body['method'],
+            'total': 1,
+            'applied': 0,
+            'results': [
+              {'id': 91, 'ok': false, 'code': 'forbidden'},
+            ],
+          });
+        }
+        current = {...current, 'travel'};
+        return _bulkOk(body);
+      },
+    );
+    final result = await _openEditor(tester, session);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Find existing tags'),
+      'travel',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Travel'));
+    await _save(tester);
+    expect(find.textContaining('refused the tag change'), findsOneWidget);
+    expect(result.value, isNull);
+    await _save(tester);
+    expect(attempts, 2);
+    expect(result.value, isTrue);
+  });
+
+  testWidgets(
+    'reconciles partial writes without replaying successful changes',
+    (tester) async {
+      final methods = <String>[];
+      var current = {'utilities', 'electricity'};
+      final session = await _session(
+        (_) async => _json({'id': 91}),
+        detail: () => _detailWithTags(current),
+        bulk: (request) async {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          methods.add(body['method'] as String);
+          if (body['method'] == 'remove_tag') {
+            current = {'electricity'};
+            return _bulkOk(body);
+          }
+          if (methods.length == 2) {
+            return _json({'error': 'write refused'}, status: 403);
+          }
+          current = {'electricity', 'travel'};
+          return _bulkOk(body);
+        },
+      );
+      final result = await _openEditor(tester, session);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Find existing tags'),
+        'travel',
+      );
+      await tester.pump();
+      await tester.tap(find.text('Travel'));
+      final utilities = find.widgetWithText(InputChip, 'Utilities');
+      await tester.ensureVisible(utilities);
+      await tester.pump();
+      await tester.tap(find.byTooltip('Remove Utilities'));
+      await _save(tester);
+      expect(result.value, isNull);
+      expect(
+        find.text('Your token does not permit this action.'),
+        findsOneWidget,
+      );
+      await _save(tester);
+      expect(methods, ['remove_tag', 'add_tag', 'add_tag']);
+      expect(result.value, isTrue);
+    },
+  );
+
+  testWidgets(
+    'stops remaining tag writes when the original account signs out',
+    (tester) async {
+      final pending = Completer<http.Response>();
+      final methods = <String>[];
+      final session = await _session(
+        (_) async => _json({'id': 91}),
+        bulk: (request) async {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          methods.add(body['method'] as String);
+          return pending.future;
+        },
+      );
+      final result = await _openEditor(tester, session);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Find existing tags'),
+        'travel',
+      );
+      await tester.pump();
+      await tester.tap(find.text('Travel'));
+      final utilities = find.widgetWithText(InputChip, 'Utilities');
+      await tester.ensureVisible(utilities);
+      await tester.pump();
+      await tester.tap(find.byTooltip('Remove Utilities'));
+      await tester.ensureVisible(find.text('Save changes'));
+      await tester.tap(find.text('Save changes'));
+      await tester.pump();
+      expect(methods, ['remove_tag']);
+      await session.signOut();
+      pending.complete(
+        _json({
+          'method': 'remove_tag',
+          'total': 1,
+          'applied': 1,
+          'results': [
+            {'id': 91, 'ok': true},
+          ],
+        }),
+      );
+      await tester.pumpAndSettle();
+      expect(methods, ['remove_tag']);
+      expect(result.value, isNull);
+      expect(
+        find.text('The account changed. Reopen the document to edit it.'),
+        findsOneWidget,
+      );
+    },
+  );
+
   for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
-    testWidgets('edits sensitivity with 200% text on $platform', (
-      tester,
-    ) async {
+    testWidgets('searches tags with 200% text on $platform', (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      final patches = <Map<String, dynamic>>[];
-      final session = await _session((request) async {
-        patches.add(jsonDecode(request.body) as Map<String, dynamic>);
-        return _json({'id': 91});
-      });
-      final result = await _openEditor(
-        tester,
-        session,
-        platform: platform,
-        textScale: 2,
+      final session = await _session((_) async => _json({'id': 91}));
+      await _openEditor(tester, session, platform: platform, textScale: 2);
+      await tester.ensureVisible(
+        find.widgetWithText(TextField, 'Find existing tags'),
       );
-      await tester.ensureVisible(find.text('Not set'));
-      await tester.tap(find.text('Not set'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Restricted').last);
-      await tester.pumpAndSettle();
-      await _save(tester);
-      expect(patches, [
-        {'sensitivity': 'restricted'},
-      ]);
-      expect(result.value, isTrue);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Find existing tags'),
+        'trav',
+      );
+      await tester.pump();
+      expect(find.text('Travel'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
@@ -220,8 +396,11 @@ Future<ValueNotifier<bool?>> _openEditor(
 }
 
 Future<SessionController> _session(
-  Future<http.Response> Function(http.Request) patch,
-) async {
+  Future<http.Response> Function(http.Request) patch, {
+  Future<http.Response> Function(http.Request)? tags,
+  Future<http.Response> Function(http.Request)? bulk,
+  Map<String, dynamic> Function()? detail,
+}) async {
   final transport = MockClient((request) async {
     if (request.url.path == '/api/handshake') {
       return _fixtureResponse('handshake.json');
@@ -232,6 +411,29 @@ Future<SessionController> _session(
     if (request.url.path == '/api/logout') return http.Response('', 204);
     if (request.method == 'PATCH' && request.url.path == '/api/documents/91') {
       return patch(request);
+    }
+    if (request.method == 'GET' && request.url.path == '/api/tags/') {
+      return tags == null
+          ? _json({
+              'count': 3,
+              'results': [
+                _tag(1, 'Utilities', 'utilities'),
+                _tag(2, 'Electricity', 'electricity'),
+                _tag(3, 'Travel', 'travel'),
+              ],
+            })
+          : tags(request);
+    }
+    if (request.method == 'GET' && request.url.path == '/api/documents/91') {
+      return _json(
+        detail?.call() ?? jsonDecode(_fixture('document-detail.json')),
+      );
+    }
+    if (request.method == 'POST' &&
+        request.url.path == '/api/documents/bulk_edit') {
+      return bulk == null
+          ? _bulkOk(jsonDecode(request.body) as Map<String, dynamic>)
+          : bulk(request);
     }
     return http.Response('', 404);
   });
@@ -247,6 +449,28 @@ Future<SessionController> _session(
   addTearDown(session.dispose);
   return session;
 }
+
+Map<String, Object?> _tag(int id, String name, String slug) => {
+  'id': id,
+  'name': name,
+  'slug': slug,
+  'color': '#a6cee3',
+  'parent_id': null,
+  'child_count': 0,
+};
+
+Map<String, dynamic> _detailWithTags(Set<String> tags) =>
+    (jsonDecode(_fixture('document-detail.json')) as Map<String, dynamic>)
+      ..['tags'] = tags.toList();
+
+http.Response _bulkOk(Map<String, dynamic> body) => _json({
+  'method': body['method'],
+  'total': 1,
+  'applied': 1,
+  'results': [
+    {'id': 91, 'ok': true},
+  ],
+});
 
 String _fixture(String name) =>
     File('test/fixtures/api/v1/$name').readAsStringSync();

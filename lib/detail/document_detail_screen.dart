@@ -19,6 +19,14 @@ import 'email_preview.dart';
 import 'document_edit_screen.dart';
 import 'document_text_screen.dart';
 
+const _documentSensitivityOptions = <String, String>{
+  '': 'Not set',
+  'public': 'Public',
+  'internal': 'Internal',
+  'confidential': 'Confidential',
+  'restricted': 'Restricted',
+};
+
 class DocumentDetailScreen extends StatefulWidget {
   const DocumentDetailScreen({
     required this.documentId,
@@ -558,6 +566,89 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     }
   }
 
+  Future<void> _changeSensitivity() async {
+    final document = _document;
+    if (document == null ||
+        _mutating ||
+        _loading ||
+        _fileLoading ||
+        _offlineMutating ||
+        _offlineFallback != null ||
+        widget.session.state != SessionState.signedIn ||
+        !_sameAccount) {
+      return;
+    }
+    final generation = _generation;
+    final colors = SuchiColors.of(context);
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: colors.paper,
+      sheetAnimationStyle: SuchiMotion.sheetStyle(context),
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Sensitivity',
+                style: Theme.of(sheetContext).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 10),
+              for (final entry in _documentSensitivityOptions.entries)
+                ListTile(
+                  title: Text(entry.value),
+                  selected: entry.key == document.sensitivity,
+                  trailing: entry.key == document.sensitivity
+                      ? Icon(Icons.check, color: colors.accent)
+                      : null,
+                  onTap: () => Navigator.pop(sheetContext, entry.key),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted ||
+        generation != _generation ||
+        !_sameAccount ||
+        choice == null ||
+        choice == document.sensitivity) {
+      return;
+    }
+    final becomingSensitive =
+        choice == 'confidential' || choice == 'restricted';
+    if (becomingSensitive && !document.isSensitive) {
+      if (_preview case final bytes?) MemoryImage(bytes).evict();
+      widget.cache.clear();
+    }
+    if (document.isSensitive || becomingSensitive) _hide();
+    setState(() => _mutating = true);
+    try {
+      await widget.client.patchDocument(document.id, sensitivity: choice);
+      if (!mounted || generation != _generation || !_sameAccount) return;
+      widget.onChanged?.call();
+      await _load();
+    } on ApiException catch (error) {
+      if (!mounted || generation != _generation || !_sameAccount) return;
+      if (error.expiresSession) widget.session.expire(error);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            friendlyApiMessage(
+              error,
+              fallback: 'The sensitivity could not be changed.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted && _sameAccount) setState(() => _mutating = false);
+    }
+  }
+
   void _readText() {
     final document = _document;
     if (document == null ||
@@ -855,8 +946,6 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
         const SectionLabel('Details'),
         const SizedBox(height: 8),
         _metadataCard(document),
-        const SizedBox(height: 20),
-        _provenanceFooter(document),
       ],
     );
   }
@@ -872,6 +961,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
       MapEntry('Sensitivity', _classification(document.sensitivity)),
       if (document.languages.trim().isNotEmpty)
         MapEntry('Languages', document.languages.trim()),
+      MapEntry('Added', _formatDate(document.addedAt)),
+      MapEntry(
+        'Source',
+        document.sources.isEmpty ? 'None' : _sourceName(document.sources.first),
+      ),
     ];
     return SuchiCard(
       key: const ValueKey('document-metadata'),
@@ -884,39 +978,19 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
               label: rows[index].key,
               value: rows[index].value,
               showDivider: index != rows.length - 1,
+              onTap:
+                  rows[index].key == 'Sensitivity' &&
+                      !_mutating &&
+                      !_loading &&
+                      !_fileLoading &&
+                      !_offlineMutating &&
+                      _offlineFallback == null &&
+                      widget.session.state == SessionState.signedIn &&
+                      _sameAccount
+                  ? _changeSensitivity
+                  : null,
             ),
         ],
-      ),
-    );
-  }
-
-  Widget _provenanceFooter(DocumentDetail document) {
-    final source = document.sources.isEmpty
-        ? 'None'
-        : _sourceName(document.sources.first);
-    final visible =
-        'Added ${_formatDate(document.addedAt)} · '
-        'Source $source · Blob ${_shortBlob(document.originalBlob)}';
-    return Semantics(
-      key: const ValueKey('document-provenance'),
-      label:
-          'Provenance. Added ${_formatDate(document.addedAt)}. '
-          'Source $source. Original blob ${_shortBlob(document.originalBlob)}.',
-      child: ExcludeSemantics(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SectionLabel('Provenance'),
-            const SizedBox(height: 7),
-            Text(
-              visible,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: SuchiColors.of(context).muted,
-                height: 1.45,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1024,53 +1098,54 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
                     constraints: const BoxConstraints(minHeight: 300),
                     child: Center(child: well),
                   ),
-                  if (!concealed)
+                  if (document.isSensitive && _revealed)
                     Positioned(
                       top: 12,
                       right: 12,
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        alignment: WrapAlignment.end,
-                        children: [
-                          if (document.isSensitive && _revealed)
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                minimumSize: const Size(48, 48),
-                                backgroundColor: colors.surface.withValues(
-                                  alpha: 0.94,
-                                ),
-                              ),
-                              onPressed: _hide,
-                              icon: const Icon(
-                                Icons.visibility_off_outlined,
-                                size: 18,
-                              ),
-                              label: const Text('Hide'),
-                            ),
-                          Tooltip(
-                            message: _fileLoading
-                                ? 'Cancel document handoff'
-                                : 'Open document',
-                            child: FilledButton.icon(
-                              style: FilledButton.styleFrom(
-                                minimumSize: const Size(48, 48),
-                              ),
-                              onPressed: _fileLoading
-                                  ? widget.files.cancelPending
-                                  : activate,
-                              icon: _fileLoading
-                                  ? const SizedBox.square(
-                                      dimension: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.open_in_new, size: 18),
-                              label: Text(_fileLoading ? 'Cancel' : 'Open'),
-                            ),
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size(48, 48),
+                          backgroundColor: colors.surface.withValues(
+                            alpha: 0.94,
                           ),
-                        ],
+                        ),
+                        onPressed: _hide,
+                        icon: const Icon(
+                          Icons.visibility_off_outlined,
+                          size: 18,
+                        ),
+                        label: const Text('Hide'),
+                      ),
+                    ),
+                  if (!concealed)
+                    Positioned(
+                      bottom: 12,
+                      right: 12,
+                      child: Tooltip(
+                        message: _fileLoading
+                            ? 'Cancel document handoff'
+                            : 'Open document',
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(48, 48),
+                            backgroundColor: colors.accent.withValues(
+                              alpha: 0.96,
+                            ),
+                            foregroundColor: colors.onAccent,
+                          ),
+                          onPressed: _fileLoading
+                              ? widget.files.cancelPending
+                              : activate,
+                          icon: _fileLoading
+                              ? const SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.open_in_new, size: 18),
+                          label: Text(_fileLoading ? 'Cancel' : 'Open'),
+                        ),
                       ),
                     ),
                 ],
@@ -1313,7 +1388,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
           const SizedBox(height: 8),
           TextButton(
             style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
-            onPressed: () => _loadPreview(reveal: _revealed),
+            onPressed: _mutating ? null : () => _loadPreview(reveal: _revealed),
             child: const Text('Retry'),
           ),
         ],
@@ -1363,11 +1438,6 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     if (label.isEmpty) return kind.isEmpty ? 'None' : kind;
     if (kind.isEmpty || label.toLowerCase() == kind.toLowerCase()) return label;
     return '$label / $kind';
-  }
-
-  static String _shortBlob(String digest) {
-    if (digest.length <= 16) return digest;
-    return '${digest.substring(0, 8)}…${digest.substring(digest.length - 8)}';
   }
 
   static String _friendlyType(String mimeType) {
@@ -1442,11 +1512,13 @@ class _MetaRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.showDivider,
+    this.onTap,
   });
 
   final String label;
   final String value;
   final bool showDivider;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1456,56 +1528,76 @@ class _MetaRow extends StatelessWidget {
     return Semantics(
       container: true,
       label: '$label: $value',
+      button: onTap != null,
+      onTap: onTap,
       child: ExcludeSemantics(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-            final stacked = constraints.maxWidth < 290 || scale > 1.3;
-            return Container(
-              constraints: const BoxConstraints(minHeight: 48),
-              padding: const EdgeInsets.symmetric(vertical: 11),
-              decoration: BoxDecoration(
-                border: showDivider
-                    ? Border(
-                        bottom: BorderSide(color: SuchiColors.of(context).line),
+        child: InkWell(
+          onTap: onTap,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+              final stacked = constraints.maxWidth < 290 || scale > 1.3;
+              return Container(
+                constraints: const BoxConstraints(minHeight: 48),
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                decoration: BoxDecoration(
+                  border: showDivider
+                      ? Border(
+                          bottom: BorderSide(
+                            color: SuchiColors.of(context).line,
+                          ),
+                        )
+                      : null,
+                ),
+                child: stacked
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(label, style: labelStyle),
+                          const SizedBox(height: 5),
+                          Row(
+                            children: [
+                              Expanded(child: Text(value, style: valueStyle)),
+                              if (onTap != null)
+                                Icon(
+                                  Icons.edit_outlined,
+                                  size: 18,
+                                  color: SuchiColors.of(context).muted,
+                                ),
+                            ],
+                          ),
+                        ],
                       )
-                    : null,
-              ),
-              child: stacked
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(label, style: labelStyle),
-                        const SizedBox(height: 5),
-                        Text(value, style: valueStyle),
-                      ],
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 92,
-                          child: Text(label, style: labelStyle),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(child: Text(value, style: valueStyle)),
-                      ],
-                    ),
-            );
-          },
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 92,
+                            child: Text(label, style: labelStyle),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text(value, style: valueStyle)),
+                          if (onTap != null) ...[
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.edit_outlined,
+                              size: 18,
+                              color: SuchiColors.of(context).muted,
+                            ),
+                          ],
+                        ],
+                      ),
+              );
+            },
+          ),
         ),
       ),
     );
   }
 }
 
-String _classification(String sensitivity) => switch (sensitivity) {
-  'public' => 'Public',
-  'internal' => 'Internal',
-  'confidential' => 'Confidential',
-  'restricted' => 'Restricted',
-  _ => 'Not set',
-};
+String _classification(String sensitivity) =>
+    _documentSensitivityOptions[sensitivity] ?? 'Not set';
 
 class _DetailSkeleton extends StatelessWidget {
   const _DetailSkeleton();

@@ -61,11 +61,13 @@
   View opens the queue without capture; new completions refresh archive lists.
 - Open accepted Scan uploads and split child documents through the existing
   document viewer, with account-bound pickers and independent recovery actions.
-- Preview-first document detail with an openable page card, top-bar sharing,
-  responsive reader/filing actions, always-visible metadata and bounded
-  provenance. File type, exact size and offline controls stay with the preview;
-  stale refreshes remain explicit. Sensitive Hide and account changes immediately
-  remove revealed previews, including during transitions.
+- Preview-first document detail with a softly translucent **Open** button at
+  the preview's lower right, top-bar sharing and responsive reader/filing
+  actions. The always-visible **Details** card includes added date and source,
+  without exposing the blob ID; tapping its Sensitivity row changes
+  classification directly. Sensitive choices immediately conceal the preview.
+  File type, size and offline controls stay with the preview; stale refreshes
+  remain explicit.
 - Render email bodies inline through a sandboxed, credential-free WebView.
   JavaScript, navigation, forms, frames and remote resources stay blocked;
   sensitive email still requires Reveal and full-file handoff uses `.eml`.
@@ -79,10 +81,12 @@
 - Keep selected full documents available offline in protected,
   backup-excluded, account-scoped storage with atomic updates, restart
   reconciliation, 64 MiB limits and no persistent previews or extracted text.
-  Documents and More expose offline copies; verified saved sessions can enter a
-  local-only Documents/More shell after network failure and explicitly retry the
-  anonymous handshake. Sensitive retention/handoff requires confirmation, and
-  sign-out removes offline copies before credentials.
+  Swipe left on an online Documents row for Make/Update offline copy; a fresh
+  detail fetch checks classification before retention. Documents and More expose
+  offline copies; verified saved sessions can enter a local-only Documents/More
+  shell after network failure and explicitly retry the anonymous handshake.
+  Sensitive retention/handoff requires confirmation, and sign-out removes
+  offline copies before credentials.
 - Document capture keeps each platform's full native scanner pipeline for edge
   detection, perspective straightening, rotation, lighting cleanup, page edits
   and review before the shared upload flow.
@@ -93,8 +97,10 @@
 - Pair by scanning a single-use QR code or pasting its link from the web app.
   Confirm the server address before exchange; manual password/token pairing and
   text entry remain available when camera or clipboard access is unavailable.
-- Edit document titles, sensitivity and language overrides from detail. Only
-  changed fields are sent; clearing languages resumes automatic detection.
+- Edit document titles, language overrides and existing tag assignments;
+  search the server tag catalog to add or remove tags without creating new ones.
+  Sensitivity changes live in Details. Clearing languages resumes automatic
+  detection.
 - Sort archive documents by newest, oldest, title or recent updates while
   retaining the selected filing category.
 - More → Trash keeps recently deleted documents available for recovery, with

@@ -278,23 +278,25 @@ void main() {
       expect(find.bySemanticsLabel('Languages: de,en'), findsOneWidget);
 
       await tester.scrollUntilVisible(
-        find.text('PROVENANCE', skipOffstage: false),
+        find.text('Source', skipOffstage: false),
         250,
         scrollable: find.byType(Scrollable).first,
       );
+      final metadata = find.byKey(const ValueKey('document-metadata'));
       expect(
-        find.textContaining('Source Personal Outlook / mailbox'),
+        find.descendant(of: metadata, matching: find.text('Added')),
         findsOneWidget,
       );
-      expect(find.textContaining('Blob aaaaaaaa…aaaaaaaa'), findsOneWidget);
       expect(
-        find.bySemanticsLabel(
-          RegExp(
-            r'^Provenance\. Added .+\. Source Personal Outlook / mailbox\. '
-            r'Original blob a{8}…a{8}\.$',
-          ),
+        find.descendant(
+          of: metadata,
+          matching: find.text('Personal Outlook / mailbox'),
         ),
         findsOneWidget,
+      );
+      expect(
+        find.descendant(of: metadata, matching: find.text('Blob')),
+        findsNothing,
       );
       expect(find.textContaining('reader@example.com'), findsNothing);
       expect(
@@ -352,6 +354,14 @@ void main() {
     final open = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Open'),
     );
+    final previewBounds = tester.getRect(
+      find.byKey(const ValueKey('document-preview')),
+    );
+    final openBounds = tester.getRect(
+      find.widgetWithText(FilledButton, 'Open'),
+    );
+    expect(openBounds.center.dy, greaterThan(previewBounds.center.dy));
+    expect(openBounds.center.dx, greaterThan(previewBounds.center.dx));
     expect(open.onPressed, isNotNull);
     await invokeAndWait(open.onPressed!, 1);
     expect(
@@ -375,6 +385,114 @@ void main() {
       requests.where((request) => request.url.path.endsWith('/download')),
       hasLength(1),
     );
+  });
+
+  testWidgets('Details sensitivity retries refusal, gates and clears preview', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final detail =
+        jsonDecode(_fixture('document-detail.json')) as Map<String, dynamic>;
+    detail['sensitivity'] = 'public';
+    final requests = <http.Request>[];
+    var rejectOnce = true;
+    var changes = 0;
+    await _openDetail(
+      tester,
+      detail: detail,
+      requests: requests,
+      onChanged: () => changes++,
+      respond: (request) async {
+        if (request.url.path.endsWith('/thumb')) {
+          return http.Response.bytes(
+            _png,
+            200,
+            headers: {'content-type': 'image/png'},
+          );
+        }
+        if (request.method == 'PATCH' && rejectOnce) {
+          rejectOnce = false;
+          return http.Response(
+            '{"error":{"message":"Cannot classify this document."}}',
+            422,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return null;
+      },
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(Image), findsOneWidget);
+
+    Future<void> chooseRestricted(String current) async {
+      final row = find.bySemanticsLabel('Sensitivity: $current');
+      await tester.ensureVisible(row);
+      await tester.pumpAndSettle();
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Restricted'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    await chooseRestricted('Public');
+    expect(find.text('The sensitivity could not be changed.'), findsOneWidget);
+    expect(find.bySemanticsLabel('Sensitivity: Public'), findsOneWidget);
+    expect(changes, 0);
+    await tester.pumpAndSettle();
+
+    await chooseRestricted('Public');
+    final patches = requests
+        .where((request) => request.method == 'PATCH')
+        .toList();
+    expect(patches, hasLength(2));
+    for (final patch in patches) {
+      expect(jsonDecode(patch.body), {'sensitivity': 'restricted'});
+    }
+    expect(find.bySemanticsLabel('Sensitivity: Restricted'), findsOneWidget);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 1200));
+    await tester.pumpAndSettle();
+    expect(find.text('Restricted preview hidden'), findsOneWidget);
+    expect(find.byType(Image, skipOffstage: false), findsNothing);
+    expect(changes, 1);
+
+    final restricted = find.bySemanticsLabel('Sensitivity: Restricted');
+    await tester.ensureVisible(restricted);
+    await tester.pumpAndSettle();
+    await tester.tap(restricted);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Not set'));
+    await tester.pumpAndSettle();
+    expect(
+      jsonDecode(
+        requests.lastWhere((request) => request.method == 'PATCH').body,
+      ),
+      {'sensitivity': ''},
+    );
+    expect(find.bySemanticsLabel('Sensitivity: Not set'), findsOneWidget);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 1200));
+    await tester.pumpAndSettle();
+    expect(find.byType(Image), findsOneWidget);
+    expect(changes, 2);
+    semantics.dispose();
+  });
+
+  testWidgets('account transition dismisses the sensitivity choice', (
+    tester,
+  ) async {
+    final requests = <http.Request>[];
+    final session = await _openDetail(tester, requests: requests);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Sensitivity'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sensitivity'));
+    await tester.pumpAndSettle();
+    expect(find.text('Restricted'), findsOneWidget);
+
+    await session.signOut();
+    await tester.pumpAndSettle();
+    expect(find.text('Restricted'), findsNothing);
+    expect(requests.where((request) => request.method == 'PATCH'), isEmpty);
   });
 
   testWidgets('public and internal sensitivity remains explicit', (
@@ -457,6 +575,8 @@ void main() {
     expect(find.text('Corrected electricity bill'), findsOneWidget);
     expect(find.text('Showing last loaded information.'), findsNothing);
     expect(find.textContaining('reload-91'), findsNothing);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 1000));
+    await tester.pumpAndSettle();
     expect(find.text('Restricted preview hidden'), findsOneWidget);
   });
 
@@ -635,8 +755,11 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.scrollUntilVisible(find.text('Sensitivity'), 200);
     expect(find.text('Not set'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('PROVENANCE'), 200);
-    expect(find.textContaining('Blob aaaaaaaa…aaaaaaaa'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Personal Outlook / mailbox'),
+      200,
+    );
+    expect(find.text('Personal Outlook / mailbox'), findsOneWidget);
     expect(tester.takeException(), isNull);
     semantics.dispose();
   });
@@ -706,6 +829,7 @@ Future<SessionController> _openDetail(
   Map<String, dynamic>? detail,
   List<http.Request>? requests,
   Future<http.Response?> Function(http.Request)? respond,
+  VoidCallback? onChanged,
   bool disableAnimations = false,
   double textScale = 1,
 }) async {
@@ -768,6 +892,7 @@ Future<SessionController> _openDetail(
         session: session,
         cache: ThumbnailMemoryCache(),
         categories: categories,
+        onChanged: onChanged,
       ),
     ),
   );

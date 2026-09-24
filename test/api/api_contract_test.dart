@@ -209,6 +209,179 @@ void main() {
     });
   });
 
+  group('tag catalog and document assignment', () {
+    test('loads bounded typed tag pages from the fixed origin', () async {
+      final requests = <Uri>[];
+      final client = SuchiClient(
+        origin: _origin,
+        token: _token,
+        httpClient: MockClient((request) async {
+          requests.add(request.url);
+          return http.Response(
+            jsonEncode({
+              'count': 501,
+              'results': [
+                {
+                  'id': 2,
+                  'name': 'Travel',
+                  'slug': 'travel',
+                  'color': '#a6cee3',
+                  'parent_id': null,
+                  'child_count': 0,
+                },
+              ],
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      final page = await client.listTags(page: 2);
+      expect(page.results.single.slug, 'travel');
+      expect(page.results.single.childCount, 0);
+      expect(requests.single.origin, _origin.origin);
+      expect(requests.single.path, '/api/tags/');
+      expect(requests.single.queryParameters, {
+        'page': '2',
+        'page_size': '500',
+      });
+      await expectLater(client.listTags(pageSize: 501), throwsRangeError);
+    });
+    test('rejects a cross-origin next link without fetching it', () async {
+      var calls = 0;
+      final client = SuchiClient(
+        origin: _origin,
+        token: _token,
+        httpClient: MockClient((_) async {
+          calls++;
+          return http.Response(
+            jsonEncode({
+              'count': 501,
+              'next': 'https://attacker.example/api/tags/?page=2&page_size=500',
+              'results': [
+                for (var id = 1; id <= 500; id++)
+                  {
+                    'id': id,
+                    'name': 'Tag $id',
+                    'slug': 'tag-$id',
+                    'color': '#a6cee3',
+                    'child_count': 0,
+                  },
+              ],
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      await expectLater(
+        client.listTags(),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.kind,
+            'kind',
+            ApiFailureKind.malformedResponse,
+          ),
+        ),
+      );
+      expect(calls, 1);
+    });
+
+    test('rejects invalid tag identity and oversized pages', () async {
+      for (final body in [
+        {
+          'count': 1,
+          'results': [
+            {
+              'id': 1,
+              'name': 'Tag',
+              'slug': '',
+              'color': '#a6cee3',
+              'child_count': 0,
+            },
+          ],
+        },
+        {
+          'count': 2,
+          'results': [
+            for (var id = 1; id <= 2; id++)
+              {
+                'id': id,
+                'name': 'Tag $id',
+                'slug': 'tag-$id',
+                'color': '#a6cee3',
+                'child_count': 0,
+              },
+          ],
+        },
+      ]) {
+        final client = SuchiClient(
+          origin: _origin,
+          token: _token,
+          httpClient: MockClient(
+            (_) async => http.Response(
+              jsonEncode(body),
+              200,
+              headers: {'content-type': 'application/json'},
+            ),
+          ),
+        );
+        await expectLater(
+          client.listTags(pageSize: 1),
+          throwsA(
+            isA<ApiException>().having(
+              (error) => error.kind,
+              'kind',
+              ApiFailureKind.malformedResponse,
+            ),
+          ),
+        );
+      }
+    });
+
+    test(
+      'does not accept 200 when the per-document result is refused',
+      () async {
+        late Map<String, dynamic> sent;
+        final client = SuchiClient(
+          origin: _origin,
+          token: _token,
+          httpClient: MockClient((request) async {
+            expect(request.url.path, '/api/documents/bulk_edit');
+            sent = jsonDecode(request.body) as Map<String, dynamic>;
+            return http.Response(
+              jsonEncode({
+                'method': 'remove_tag',
+                'total': 1,
+                'applied': 0,
+                'results': [
+                  {'id': 91, 'ok': false, 'code': 'forbidden'},
+                ],
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        );
+        await expectLater(
+          client.changeDocumentTag(91, tagId: 17, add: false),
+          throwsA(
+            isA<ApiException>().having(
+              (error) => error.code,
+              'code',
+              'forbidden',
+            ),
+          ),
+        );
+        expect(sent, {
+          'documents': [91],
+          'method': 'remove_tag',
+          'parameters': {'tag_id': 17},
+        });
+      },
+    );
+  });
+
   group('Saved View filters', () {
     test('preserves every supported flat and snapshot filter', () {
       final flat = SavedViewFilter.fromJsonString(

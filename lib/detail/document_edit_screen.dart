@@ -29,59 +29,193 @@ class _DocumentEditScreenState extends State<DocumentEditScreen> {
   late final _languages = TextEditingController(
     text: widget.document.languages,
   );
+  final _tagSearch = TextEditingController();
   late final _client = widget.client;
-  late String _sensitivity = widget.document.sensitivity;
+  late String _savedTitle = widget.document.title;
+  late List<String> _savedLanguages = _languageCodes(widget.document.languages);
+  late Set<String> _serverTags = widget.document.tags.toSet();
+  late final Set<String> _selectedTags = widget.document.tags.toSet();
+  List<TagView> _tags = const [];
+  bool _loadingTags = true;
   bool _saving = false;
+  bool _needsReconcile = false;
+  String? _catalogError;
   String? _error;
 
   bool get _sameAccount =>
       widget.session.state == SessionState.signedIn &&
       identical(widget.session.client, _client);
 
+  bool get _tagsChanged => !setEquals(_selectedTags, _serverTags);
+
   bool get _changed =>
-      _title.text.trim() != widget.document.title ||
-      _sensitivity != widget.document.sensitivity ||
-      !listEquals(
-        _languageCodes(_languages.text),
-        _languageCodes(widget.document.languages),
-      );
+      _title.text.trim() != _savedTitle ||
+      _tagsChanged ||
+      !listEquals(_languageCodes(_languages.text), _savedLanguages);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTags();
+  }
 
   @override
   void dispose() {
     _title.dispose();
     _languages.dispose();
+    _tagSearch.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadTags() async {
+    setState(() {
+      _loadingTags = true;
+      _catalogError = null;
+    });
+    try {
+      final tags = <TagView>[];
+      final ids = <int>{};
+      final slugs = <String>{};
+      var page = 1;
+      int? count;
+      while (true) {
+        final result = await _client.listTags(page: page);
+        if (!mounted || !_sameAccount) return;
+        count ??= result.count;
+        if (count != result.count ||
+            result.results.any(
+              (tag) => !ids.add(tag.id) || !slugs.add(tag.slug),
+            )) {
+          throw const ApiException(
+            kind: ApiFailureKind.malformedResponse,
+            message: 'Suchi returned an inconsistent tag catalog.',
+          );
+        }
+        tags.addAll(result.results);
+        if (tags.length == count) break;
+        if (tags.length > count || result.results.isEmpty) {
+          throw const ApiException(
+            kind: ApiFailureKind.malformedResponse,
+            message: 'Suchi returned an incomplete tag catalog.',
+          );
+        }
+        page++;
+      }
+      tags.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      if (!mounted || !_sameAccount) return;
+      setState(() {
+        _tags = tags;
+        _loadingTags = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted || !_sameAccount) return;
+      if (error.expiresSession) widget.session.expire(error);
+      setState(() {
+        _loadingTags = false;
+        _catalogError = friendlyApiMessage(error, fallback: error.message);
+      });
+    }
+  }
+
+  Future<void> _reconcile() async {
+    final current = await _client.document(widget.document.id);
+    if (!mounted || !_sameAccount) return;
+    setState(() {
+      _savedTitle = current.title;
+      _savedLanguages = _languageCodes(current.languages);
+      _serverTags = current.tags.toSet();
+      _needsReconcile = false;
+    });
   }
 
   Future<void> _save() async {
     if (_saving || !_sameAccount || !_changed) return;
     if (!_form.currentState!.validate()) return;
+    if (_tagsChanged && (_loadingTags || _catalogError != null)) return;
     final title = _title.text.trim();
     final languages = _languageCodes(_languages.text);
     setState(() {
       _saving = true;
       _error = null;
     });
+    var writeStarted = false;
     try {
-      await _client.patchDocument(
-        widget.document.id,
-        title: title != widget.document.title ? title : null,
-        sensitivity: _sensitivity != widget.document.sensitivity
-            ? _sensitivity
-            : null,
-        languages:
-            !listEquals(languages, _languageCodes(widget.document.languages))
-            ? languages
-            : null,
-      );
+      if (_needsReconcile) await _reconcile();
+      if (!mounted || !_sameAccount) return;
+      final changedTitle = title != _savedTitle;
+      final changedLanguages = !listEquals(languages, _savedLanguages);
+      if (changedTitle || changedLanguages) {
+        writeStarted = true;
+        await _client.patchDocument(
+          widget.document.id,
+          title: changedTitle ? title : null,
+          languages: changedLanguages ? languages : null,
+        );
+        if (!mounted || !_sameAccount) return;
+        _savedTitle = title;
+        _savedLanguages = languages;
+      }
+      final bySlug = {for (final tag in _tags) tag.slug: tag};
+      for (final slug in _serverTags.difference(_selectedTags).toList()) {
+        if (!mounted || !_sameAccount) return;
+        final tag = bySlug[slug];
+        if (tag == null) {
+          throw const ApiException(
+            kind: ApiFailureKind.rejected,
+            message: 'A selected tag is no longer in the catalog. Reload tags.',
+          );
+        }
+        writeStarted = true;
+        await _client.changeDocumentTag(
+          widget.document.id,
+          tagId: tag.id,
+          add: false,
+        );
+        if (!mounted || !_sameAccount) return;
+        _serverTags.remove(slug);
+      }
+      for (final slug in _selectedTags.difference(_serverTags).toList()) {
+        if (!mounted || !_sameAccount) return;
+        final tag = bySlug[slug];
+        if (tag == null) {
+          throw const ApiException(
+            kind: ApiFailureKind.rejected,
+            message: 'A selected tag is no longer in the catalog. Reload tags.',
+          );
+        }
+        writeStarted = true;
+        await _client.changeDocumentTag(
+          widget.document.id,
+          tagId: tag.id,
+          add: true,
+        );
+        if (!mounted || !_sameAccount) return;
+        _serverTags.add(slug);
+      }
       if (!mounted || !_sameAccount) return;
       Navigator.pop(context, true);
     } on ApiException catch (error) {
       if (!mounted || !_sameAccount) return;
-      if (error.expiresSession) widget.session.expire(error);
-      setState(() {
-        _error = friendlyApiMessage(error, fallback: error.message);
-      });
+      if (error.expiresSession) {
+        widget.session.expire(error);
+        return;
+      }
+      var message = friendlyApiMessage(error, fallback: error.message);
+      if (writeStarted) {
+        _needsReconcile = true;
+        try {
+          await _reconcile();
+        } on ApiException catch (refreshError) {
+          if (!mounted || !_sameAccount) return;
+          if (refreshError.expiresSession) {
+            widget.session.expire(refreshError);
+            return;
+          }
+          message += ' Could not refresh current tags. Retry to reconcile before saving.';
+        }
+      }
+      if (!mounted || !_sameAccount) return;
+      setState(() => _error = message);
     } finally {
       if (mounted && _sameAccount) setState(() => _saving = false);
     }
@@ -104,6 +238,18 @@ class _DocumentEditScreenState extends State<DocumentEditScreen> {
               ),
             );
           }
+          final bySlug = {for (final tag in _tags) tag.slug: tag};
+          final search = _tagSearch.text.trim().toLowerCase();
+          final matches = search.isEmpty
+              ? <TagView>[]
+              : _tags
+                    .where(
+                      (tag) =>
+                          !_selectedTags.contains(tag.slug) &&
+                          (tag.name.toLowerCase().contains(search) ||
+                              tag.slug.toLowerCase().contains(search)),
+                    )
+                    .toList();
           return Form(
             key: _form,
             onChanged: () => setState(() {}),
@@ -122,27 +268,66 @@ class _DocumentEditScreenState extends State<DocumentEditScreen> {
                       : null,
                 ),
                 const SizedBox(height: 20),
-                DropdownButtonFormField<String>(
-                  initialValue: _sensitivity,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Sensitivity'),
-                  items: [
-                    for (final entry in const {
-                      '': 'Not set',
-                      'public': 'Public',
-                      'internal': 'Internal',
-                      'confidential': 'Confidential',
-                      'restricted': 'Restricted',
-                    }.entries)
-                      DropdownMenuItem(
-                        value: entry.key,
-                        child: Text(entry.value),
-                      ),
-                  ],
-                  onChanged: _saving
-                      ? null
-                      : (value) => setState(() => _sensitivity = value ?? ''),
-                ),
+                Text('Tags', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                if (_selectedTags.isEmpty) const Text('No tags assigned.'),
+                if (_selectedTags.isNotEmpty)
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final slug in _selectedTags)
+                        InputChip(
+                          label: Text(bySlug[slug]?.name ?? slug),
+                          deleteIcon: const Icon(Icons.close),
+                          deleteButtonTooltipMessage:
+                              'Remove ${bySlug[slug]?.name ?? slug}',
+                          onDeleted:
+                              _saving ||
+                                  _loadingTags ||
+                                  _catalogError != null ||
+                                  !bySlug.containsKey(slug)
+                              ? null
+                              : () =>
+                                    setState(() => _selectedTags.remove(slug)),
+                        ),
+                    ],
+                  ),
+                if (_loadingTags)
+                  const Text('Loading available tags…')
+                else if (_catalogError != null) ...[
+                  Text(_catalogError!),
+                  TextButton(
+                    onPressed: _loadTags,
+                    child: const Text('Retry tags'),
+                  ),
+                ] else ...[
+                  TextField(
+                    controller: _tagSearch,
+                    enabled: !_saving,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Find existing tags',
+                      hintText: 'Search by name or slug',
+                    ),
+                  ),
+                  if (search.isEmpty)
+                    const Text('Type to find existing tags.')
+                  else if (matches.isEmpty)
+                    const Text('No matching tags.'),
+                  for (final tag in matches.take(20))
+                    ListTile(
+                      dense: true,
+                      title: Text(tag.name),
+                      subtitle: tag.slug == tag.name ? null : Text(tag.slug),
+                      onTap: _saving
+                          ? null
+                          : () => setState(() => _selectedTags.add(tag.slug)),
+                    ),
+                  if (matches.length > 20)
+                    Text(
+                      'Showing 20 of ${matches.length} matches. Refine your search.',
+                    ),
+                ],
                 const SizedBox(height: 20),
                 TextFormField(
                   controller: _languages,
@@ -181,7 +366,13 @@ class _DocumentEditScreenState extends State<DocumentEditScreen> {
                 ],
                 const SizedBox(height: 24),
                 FilledButton(
-                  onPressed: _saving || !_changed ? null : _save,
+                  onPressed:
+                      _saving ||
+                          !_changed ||
+                          (_tagsChanged &&
+                              (_loadingTags || _catalogError != null))
+                      ? null
+                      : _save,
                   child: Text(_saving ? 'Saving…' : 'Save changes'),
                 ),
               ],

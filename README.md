@@ -74,12 +74,14 @@ are limited to 64 MiB; use the web app for larger files. Temporary copies are
 removed when signing out or on the next cold launch, and older copies are
 pruned during later exports.
 
-Choose **Make available offline** in document detail to retain the verified full
-file and its metadata in protected, backup-excluded app storage. Changed server
-files show **Update offline copy**; **Remove offline copy** deletes only the
-device copy. Each file remains subject to the 64 MiB limit. Sensitive files ask
-before retention and again before handoff to another app. Previews, email HTML
-and extracted text are never written into the offline store.
+Choose **Make available offline** in document detail, or swipe left on an online
+Documents row to reveal it. The app checks current server metadata before
+retaining the verified full file in protected, backup-excluded app storage. A
+saved row offers **Update offline copy**; detail also offers **Remove offline
+copy**, which deletes only the device copy. Each file remains subject to the
+64 MiB limit. Sensitive files ask before retention and again before handoff to
+another app. Previews, email HTML and extracted text are never written into
+the offline store.
 
 **Documents → Offline** and **More → Offline documents** list copies for only
 the current server account and filing system. When a previously verified
@@ -90,15 +92,18 @@ Connectivity returning does not silently leave Offline. Signing out removes the
 account's offline copies before deleting its credential; if protected cleanup
 fails, sign-out fails and the session remains active.
 
-Document detail opens on a large preview: tap the page or **Open** to hand off
-the full file, or use **Share**, **Edit** and **Trash** in the top bar. File type,
-size and the make/update/remove-offline control stay with the preview. Below it,
-**Read text** and **File under…** remain the two primary actions. An always-visible
-card shows filing, sender, tags, sensitivity and available languages; the footer
-identifies when and how the document was added without exposing the full blob
-identifier. Sensitive previews still require **Reveal preview**; **Hide** removes
-them immediately. If a refresh fails, the last loaded information stays labelled
+Document detail opens on a large preview: tap the page or the softly translucent
+**Open** button at its lower right to hand off the full file. **Share**, **Edit**
+and **Trash** remain in the top bar; file type, size and offline controls stay
+with the preview. Below it, **Read text** and **File under…** are the two primary
+actions. The always-visible **Details** card includes filing, sender, tags,
+sensitivity, languages, added date and source. Tap its **Sensitivity** row
+to change classification directly; choosing a sensitive level conceals the
+preview immediately. Offline details remain read-only.
+Sensitive previews still require **Reveal preview**; **Hide** removes them
+immediately. If a refresh fails, the last loaded information stays labelled
 with an error and Retry rather than appearing current.
+
 Email documents render the server-produced body inline without giving the
 WebView a server URL or credentials. JavaScript, links, forms, frames and remote
 resources are blocked. Email HTML stays in memory only and is cleared by Hide,
@@ -114,8 +119,10 @@ use the original document or web app if a response exceeds that limit.
 Open **More → Trash** to restore recently deleted documents. The server checks
 the 30-day recovery window; restoration refreshes the archive and Inbox.
 
-Use **Edit** in document detail to update its title, sensitivity or language
-override. The Documents sort control keeps the current filing category.
+Use **Edit** in document detail to update its title or language override,
+and search existing server tags to add or remove them. The editor does not
+create tags; server administrators manage tag creation separately. The
+Documents sort control keeps the current filing category.
 Viewing a document and returning keeps your Documents or Inbox scroll position
 and loaded pages, including the Documents category and sort order. Successful
 edits, filing changes, Trash and restoration refresh the archive and Inbox.

@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 
 import '../api/api_error.dart';
 import '../api/api_models.dart';
 import '../api/suchi_client.dart';
+import '../auth/account_identity.dart';
 import '../auth/session_controller.dart';
 import '../offline/offline_document_store.dart';
 import '../scan/network_monitor.dart';
@@ -53,6 +56,13 @@ class DocumentsScreen extends StatefulWidget {
 
 class _DocumentsScreenState extends State<DocumentsScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  AccountIdentity? _copyIdentity;
+  SuchiClient? _copyClient;
+  OfflineDocumentStore? _copyStore;
+  int? _copyDocumentId;
+  bool _copySaving = false;
+  String _copyProgressLabel = 'Saving offline copy…';
+  int _copyToken = 0;
   final _scroll = ScrollController();
   List<DocumentSummary> _documents = const [];
   Map<int, OfflineDocument> _offlineById = const {};
@@ -80,6 +90,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     _ordering = _activeView?.filter?.ordering ?? '-created_at';
     widget.categories?.load();
     widget.offlineDocuments?.addListener(_offlineDocumentsChanged);
+    widget.session.addListener(_sessionChanged);
     _listenToNetwork();
     if (_offlineSelected) {
       _loadOffline();
@@ -90,6 +101,10 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
   @override
   void didUpdateWidget(covariant DocumentsScreen oldWidget) {
+    if (oldWidget.offlineDocuments != widget.offlineDocuments ||
+        oldWidget.client != widget.client) {
+      _cancelCopy();
+    }
     super.didUpdateWidget(oldWidget);
     if (oldWidget.offlineDocuments != widget.offlineDocuments) {
       oldWidget.offlineDocuments?.removeListener(_offlineDocumentsChanged);
@@ -122,10 +137,157 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   @override
   void dispose() {
     _generation++;
+    widget.session.removeListener(_sessionChanged);
+    _cancelCopy();
     _networkSubscription?.cancel();
     widget.offlineDocuments?.removeListener(_offlineDocumentsChanged);
     _scroll.dispose();
     super.dispose();
+  }
+
+  bool _copyIsCurrent(AccountIdentity identity, SuchiClient client) =>
+      mounted &&
+      widget.session.state == SessionState.signedIn &&
+      widget.session.identity == identity &&
+      identical(widget.session.client, client) &&
+      identical(widget.client, client) &&
+      !_offlineSelected;
+
+  void _cancelCopy() {
+    _copyToken++;
+    if (_copySaving) _copyStore?.cancelPending();
+    _clearCopy();
+  }
+
+  void _clearCopy() {
+    _copyIdentity = null;
+    _copyClient = null;
+    _copyStore = null;
+    _copyDocumentId = null;
+    _copySaving = false;
+  }
+
+  void _sessionChanged() {
+    final identity = _copyIdentity;
+    final client = _copyClient;
+    if (identity == null ||
+        client == null ||
+        _copyIsCurrent(identity, client)) {
+      return;
+    }
+    _cancelCopy();
+    if (mounted) setState(() {});
+  }
+
+  void _showCopyError(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _makeAvailableOffline(DocumentSummary summary) async {
+    final identity = widget.session.identity;
+    final client = widget.client;
+    final store = widget.offlineDocuments;
+    if (identity == null ||
+        client == null ||
+        store == null ||
+        _copyDocumentId != null ||
+        !_copyIsCurrent(identity, client)) {
+      return;
+    }
+    final ticket = ++_copyToken;
+    bool current() =>
+        ticket == _copyToken &&
+        _copyIsCurrent(identity, client) &&
+        identical(widget.offlineDocuments, store);
+    setState(() {
+      _copyIdentity = identity;
+      _copyClient = client;
+      _copyStore = store;
+      _copyDocumentId = summary.id;
+      _copyProgressLabel = 'Loading document…';
+    });
+    try {
+      // List summaries are not authoritative: classification and file size can
+      // change independently of a list page.
+      final document = await client.document(summary.id);
+      if (!mounted || !current()) {
+        return;
+      }
+      if (document.isSensitive) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Keep sensitive document offline?'),
+            content: const Text(
+              'A protected full copy will remain on this device until you remove it or sign out.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Keep offline'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !current()) {
+          return;
+        }
+      }
+      final updating = store.find(identity, document.id) != null;
+      setState(() {
+        _copyProgressLabel = updating
+            ? 'Updating offline copy…'
+            : 'Saving offline copy…';
+        _copySaving = true;
+      });
+      await store.save(
+        identity: identity,
+        document: document,
+        client: client,
+        reveal: document.isSensitive,
+      );
+      if (!mounted || !current()) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            updating
+                ? 'Offline copy updated.'
+                : 'Document is available offline.',
+          ),
+        ),
+      );
+    } on ApiException catch (error) {
+      if (!current()) return;
+      if (error.expiresSession) {
+        widget.session.expire(error);
+      } else if (error.kind != ApiFailureKind.cancelled) {
+        _showCopyError(
+          friendlyApiMessage(
+            error,
+            fallback: 'The offline copy could not be saved.',
+          ),
+        );
+      }
+    } on OfflineDocumentException catch (error) {
+      if (current() && error.code != 'offline_cancelled') {
+        _showCopyError(error.message);
+      }
+    } on FileSystemException {
+      if (current()) {
+        _showCopyError(
+          'The offline copy could not be saved. Check available device storage and try again.',
+        );
+      }
+    } finally {
+      if (mounted && ticket == _copyToken) {
+        setState(_clearCopy);
+      }
+    }
   }
 
   void _listenToNetwork() {
@@ -164,7 +326,12 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 
   void _offlineDocumentsChanged() {
-    if (mounted && _offlineSelected) _loadOffline();
+    if (!mounted) return;
+    if (_offlineSelected) {
+      _loadOffline();
+    } else {
+      setState(() {});
+    }
   }
 
   void _onScroll() {
@@ -331,6 +498,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   void _selectOffline({bool closeDrawer = true}) {
     if (closeDrawer) Navigator.maybePop(context);
     if (_offlineSelected) return;
+    _cancelCopy();
     setState(() {
       _offlineSelected = true;
       _activeView = null;
@@ -603,16 +771,47 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                   DocumentListMode.detailed => 10,
                 },
               ),
-              child: SuchiCard(
-                child: IndexRow(
-                  document: document,
-                  mode: widget.listMode,
-                  client: _offlineSelected ? null : widget.client,
-                  cache: widget.cache,
-                  onTap: () => _openSummary(document),
-                  onUnauthorized: widget.session.expire,
-                ),
-              ),
+              child:
+                  _offlineSelected ||
+                      widget.client == null ||
+                      widget.offlineDocuments == null ||
+                      widget.session.state != SessionState.signedIn
+                  ? SuchiCard(
+                      child: IndexRow(
+                        document: document,
+                        mode: widget.listMode,
+                        client: _offlineSelected ? null : widget.client,
+                        cache: widget.cache,
+                        onTap: () => _openSummary(document),
+                        onUnauthorized: widget.session.expire,
+                      ),
+                    )
+                  : _OfflineSwipeRow(
+                      enabled: _copyDocumentId == null,
+                      actionLabel:
+                          widget.offlineDocuments!.find(
+                                widget.session.identity,
+                                document.id,
+                              ) !=
+                              null
+                          ? 'Update offline copy'
+                          : 'Make available offline',
+                      progressLabel: _copyDocumentId == document.id
+                          ? _copyProgressLabel
+                          : null,
+                      onAction: () => _makeAvailableOffline(document),
+                      onCancel: () => setState(_cancelCopy),
+                      child: SuchiCard(
+                        child: IndexRow(
+                          document: document,
+                          mode: widget.listMode,
+                          client: widget.client,
+                          cache: widget.cache,
+                          onTap: () => _openSummary(document),
+                          onUnauthorized: widget.session.expire,
+                        ),
+                      ),
+                    ),
             );
           }
           if (_loadingMore) {
@@ -647,5 +846,158 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         },
       ),
     );
+  }
+}
+
+/// Reveals a non-destructive action without taking the row out of the list.
+class _OfflineSwipeRow extends StatefulWidget {
+  const _OfflineSwipeRow({
+    required this.enabled,
+    required this.actionLabel,
+    required this.progressLabel,
+    required this.onAction,
+    required this.onCancel,
+    required this.child,
+  });
+
+  final bool enabled;
+  final String actionLabel;
+  final String? progressLabel;
+  final VoidCallback onAction;
+  final VoidCallback onCancel;
+  final Widget child;
+
+  @override
+  State<_OfflineSwipeRow> createState() => _OfflineSwipeRowState();
+}
+
+class _OfflineSwipeRowState extends State<_OfflineSwipeRow> {
+  static const _actionWidth = 184.0;
+  double _exposed = 0;
+  bool _dragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = SuchiColors.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = _actionWidth.clamp(0.0, constraints.maxWidth).toDouble();
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(17),
+          child: Stack(
+            children: [
+              Semantics(
+                customSemanticsActions:
+                    widget.enabled && widget.progressLabel == null
+                    ? {
+                        CustomSemanticsAction(label: widget.actionLabel): () =>
+                            _startAction(width),
+                      }
+                    : const {},
+                child: GestureDetector(
+                  behavior: HitTestBehavior.deferToChild,
+                  onHorizontalDragStart: (_) =>
+                      setState(() => _dragging = true),
+                  onHorizontalDragUpdate: (details) => setState(() {
+                    _exposed = (_exposed - details.delta.dx)
+                        .clamp(0.0, width)
+                        .toDouble();
+                  }),
+                  onHorizontalDragEnd: (details) => setState(() {
+                    _dragging = false;
+                    _exposed =
+                        _exposed > width / 3 ||
+                            (details.primaryVelocity ?? 0) < -300
+                        ? width
+                        : 0;
+                  }),
+                  onHorizontalDragCancel: () => setState(() {
+                    _dragging = false;
+                    _exposed = _exposed > width / 2 ? width : 0;
+                  }),
+                  child: widget.child,
+                ),
+              ),
+              Positioned(
+                top: 0,
+                bottom: 0,
+                right: 0,
+                width: width,
+                child: AnimatedSlide(
+                  offset: Offset(width == 0 ? 1 : 1 - _exposed / width, 0),
+                  duration: _dragging
+                      ? Duration.zero
+                      : SuchiMotion.standard(context),
+                  curve: Curves.easeOutCubic,
+                  child: IgnorePointer(
+                    ignoring: _exposed == 0,
+                    child: ExcludeSemantics(
+                      excluding: _exposed == 0,
+                      child: ColoredBox(
+                        color: colors.accent.withValues(alpha: 0.12),
+                        child: widget.progressLabel != null
+                            ? Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox.square(
+                                    dimension: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      semanticsLabel: widget.progressLabel!,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      widget.progressLabel!,
+                                      maxLines: 2,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Cancel offline copy',
+                                    onPressed: widget.onCancel,
+                                    icon: const Icon(Icons.close, size: 18),
+                                  ),
+                                ],
+                              )
+                            : TextButton.icon(
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: widget.enabled
+                                    ? () => _startAction(width)
+                                    : null,
+                                icon: const Icon(
+                                  Icons.download_for_offline_outlined,
+                                ),
+                                label: Text(
+                                  widget.actionLabel,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _startAction(double width) {
+    setState(() => _exposed = width);
+    widget.onAction();
   }
 }

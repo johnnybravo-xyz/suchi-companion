@@ -55,11 +55,16 @@ the archive refresh revision. Retention and restore permission remain server
 decisions. The screen clears its rows on an account transition and ignores
 late reads or restore results from the previous identity.
 
-The detail screen opens `document_edit_screen.dart` for title, sensitivity and
-language changes. A successful edit reloads authoritative detail and conceals
-the preview again. The form submits only changed fields and keeps drafts on
-server refusal. Documents sorting resets pagination and invalidates older page
-responses while retaining the selected filing category.
+The detail screen opens `document_edit_screen.dart` for title, language and
+existing-tag changes; Details owns sensitivity changes and conceals sensitive
+previews immediately. The editor loads the server tag catalog by bounded pages
+and submits staged tag IDs through `/api/documents/bulk_edit`, checking the
+per-document result even on HTTP 200. Tag creation is not an editor operation.
+Successful edits reload authoritative detail; after a partial failure the editor
+reconciles server state before retrying, without replaying completed writes.
+Reads and writes stop after an account transition. Documents sorting resets
+pagination and invalidates older page responses while retaining the selected
+filing category.
 
 ## Account and network boundary
 
@@ -232,10 +237,13 @@ staging/malformed/unknown entries and retains only the newest valid duplicate.
 Thumbnails, email HTML and extracted text are never persisted there.
 
 Documents can select Offline while signed in and sorts manifest-backed rows
-without HTTP. A network/timeout detail failure may fall back only to the matching
-account manifest and becomes read-only; authorization and malformed failures do
-not. Detail compares `original_blob` for Update, and offers explicit Make,
-Update and Remove actions. Sensitive retention and local file handoff require
+without HTTP. Swiping left on an online Documents row reveals Make/Update
+offline copy; it fetches current detail before saving, asks consent for a newly
+sensitive document and rejects late work after an account transition. A
+network/timeout detail failure may fall back only to the matching account
+manifest and becomes read-only; authorization and malformed failures do not.
+Detail compares `original_blob` for Update, and offers explicit Make, Update
+and Remove actions. Sensitive retention and local file handoff require
 confirmation. More reports offline count/bytes and offers local Open/Remove.
 
 Document detail owns a preview-first workspace. The preview card couples the
@@ -243,9 +251,10 @@ openable page with friendly type, exact byte size and account-scoped offline
 control; Share, Edit and Trash remain route actions. Responsive reader/filing
 actions lead into an always-visible metadata card. Its sender is the first
 `sender` correspondent, falling back to the first correspondent, and missing
-fields render explicitly rather than being inferred. Provenance uses the actual
-added time, first source label/kind and a bounded prefix/suffix of the validated
-`original_blob`. Ordinary preview states may fade; sensitive concealment replaces
+fields render explicitly rather than being inferred. Provenance displays the
+actual added time and first source label/kind; the validated `original_blob`
+remains internal to offline freshness checks and manifests, not the Details
+card. Ordinary preview states may fade; sensitive concealment replaces
 the whole animation subtree and evicts revealed bytes before the next frame. A
 failed metadata refresh retains clearly labelled stale information with Retry.
 

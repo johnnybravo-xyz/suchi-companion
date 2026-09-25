@@ -113,9 +113,19 @@ exercise handshake, pairing, upload and search with disposable accounts, then
 `make check`. Focused Dart checks include `test/auth`, `test/share`, `test/scan`,
 `test/shell` and `test/search`; native adapters need `RunnerTests` on iOS and
 connected Android instrumentation tests. Capture a fresh debug and a signed
-release-like build separately. Only debug permits private-LAN/localhost HTTP;
-release must refuse it before any saved token is used. Check merged packaged
-manifests rather than inferring permissions or ATS from source files.
+release-like build separately. A locally installed iOS Release-configuration app
+can still use an Apple Development profile; it is not an App Store distribution
+signature. A disposable Android release-mode emulator key is not a backed-up
+Play upload key or evidence of store readiness. Only debug permits
+private-LAN/localhost HTTP; release must refuse it before any saved token is
+used. Check merged packaged manifests rather than inferring permissions or ATS
+from source files.
+
+Verify the app-switcher snapshot on a physical iPhone and on Android both below
+and above API 31. Android 7–11 keeps `FLAG_SECURE` while the activity is open:
+Recents gets a blank system card, and screenshots/screen recording are unavailable
+there. Android 12+ and iOS use blurred live content, not a persisted last-screen
+image. A signed build alone does not prove the switcher transition.
 
 The owner must supply and verify these gates **before** claiming store readiness:
 

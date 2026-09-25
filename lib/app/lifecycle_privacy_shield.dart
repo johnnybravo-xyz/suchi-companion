@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
@@ -59,11 +60,16 @@ class _LifecyclePrivacyShieldState extends State<LifecyclePrivacyShield>
     children: [
       widget.child,
       if (_concealed)
-        const Positioned.fill(
+        Positioned.fill(
           child: ExcludeSemantics(
-            child: ColoredBox(
-              key: ValueKey('lifecycle-privacy-shield'),
-              color: Color(0xFF0F1519),
+            child: ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 32, sigmaY: 32),
+                child: const ColoredBox(
+                  key: ValueKey('lifecycle-privacy-shield'),
+                  color: Color(0x59FAFAF8),
+                ),
+              ),
             ),
           ),
         ),

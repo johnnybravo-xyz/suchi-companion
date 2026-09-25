@@ -124,6 +124,14 @@
 
 ### Fixed
 
+- Show a strongly blurred, tinted live screen instead of a plain app-switcher
+  card on iOS and Android 12+. Android 7–11 uses a blank Recents card and
+  disables screenshots because it can snapshot before pause callbacks.
+  Returning to the app restores its readable screen.
+- Keep ML Kit's manifest-discovered component registrar constructors in
+  Android release shrinking so the optimized app launches and scanning
+  dependencies initialize.
+
 - Detect PDF/HEIC signatures without decoding binary PNG/JPEG header bytes as
   ASCII, so supported picker images can enter the protected queue.
 - QR/link pairing fills in the device name and lets it be edited before

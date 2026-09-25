@@ -29,6 +29,15 @@ void main() {
       find.byKey(const ValueKey('lifecycle-privacy-shield')),
       findsOneWidget,
     );
+    expect(find.byType(BackdropFilter), findsOneWidget);
+    expect(
+      tester
+          .widget<ColoredBox>(
+            find.byKey(const ValueKey('lifecycle-privacy-shield')),
+          )
+          .color,
+      const Color(0x59FAFAF8),
+    );
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     expect(concealed, 1);

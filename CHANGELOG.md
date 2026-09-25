@@ -39,6 +39,10 @@
 
 ### Added
 
+- Show byte progress while saving a document offline, both in document detail
+  and in the persistent Documents activity bar after a swipe save. The indicator
+  stays in a finishing state until the protected copy is verified; Cancel
+  abandons the transfer without replacing an existing saved copy.
 - Import PDF or image files directly from **Scan → Files** and images from
   **Scan → Photos** through the system pickers. Native staging, durable
   per-account claims, receipts, partial rejection and explicit retry reuse the

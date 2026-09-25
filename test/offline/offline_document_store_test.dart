@@ -89,6 +89,59 @@ void main() {
   });
 
   test(
+    'saving progress follows staged bytes, not the committed copy',
+    () async {
+      final chunks = StreamController<List<int>>();
+      final halfWritten = Completer<void>();
+      var finalizingBeforeCommit = false;
+      final store = await _openStore(
+        root,
+        files,
+        protection,
+        uuids: [_uuid(1)],
+      );
+      addTearDown(store.close);
+      store.addListener(() {
+        if (store.savingProgress == 0.5 && !halfWritten.isCompleted) {
+          halfWritten.complete();
+        }
+        if (store.savingFinishing && store.find(_identity, 91) == null) {
+          finalizingBeforeCommit = true;
+        }
+      });
+      final save = store.save(
+        identity: _identity,
+        document: _document(size: 6),
+        client: SuchiClient(
+          origin: _identity.origin,
+          token: 'a' * 64,
+          httpClient: MockClient.streaming(
+            (_, _) async => http.StreamedResponse(
+              chunks.stream,
+              200,
+              contentLength: 6,
+              headers: {'content-type': 'application/pdf'},
+            ),
+          ),
+        ),
+      );
+
+      chunks.add([1, 2, 3]);
+      await halfWritten.future;
+      expect(store.savingIdentity, _identity);
+      expect(store.savingProgress, 0.5);
+      expect(store.find(_identity, 91), isNull);
+      chunks.add([4, 5, 6]);
+      await chunks.close();
+      final saved = await save;
+      expect(finalizingBeforeCommit, isTrue);
+      expect(await saved.payload.readAsBytes(), [1, 2, 3, 4, 5, 6]);
+      expect(store.savingIdentity, isNull);
+      expect(store.savingProgress, isNull);
+    },
+  );
+
+  test(
     'saved payload reaches the native viewer directly and survives refusal',
     () async {
       TestWidgetsFlutterBinding.ensureInitialized();
@@ -331,6 +384,8 @@ void main() {
     );
     await requested.future;
     final clear = store.clearAccount(_identity);
+    expect(store.savingIdentity, isNull);
+    expect(store.savingProgress, isNull);
     response.complete(_download(bytes));
 
     await saveCancelled;

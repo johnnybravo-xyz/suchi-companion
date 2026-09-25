@@ -554,6 +554,7 @@ final class SuchiClient {
     bool reveal = false,
     bool preview = false,
     Future<void>? abortTrigger,
+    void Function(int bytesReceived)? onProgress,
   }) async {
     const byteLimit = 64 * 1024 * 1024;
     if (id <= 0 || !_validToken(token ?? '')) {
@@ -657,6 +658,7 @@ final class SuchiClient {
           );
         }
         await output.writeFrom(chunk);
+        onProgress?.call(received);
       }
       if (abort.isCompleted) throw http.RequestAbortedException();
       if (received == 0 ||

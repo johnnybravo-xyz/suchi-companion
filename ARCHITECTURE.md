@@ -256,6 +256,15 @@ leaves the previous verified copy intact. Startup follows no links, deletes
 staging/malformed/unknown entries and retains only the newest valid duplicate.
 Thumbnails, email HTML and extracted text are never persisted there.
 
+`SuchiClient.downloadDocument` reports bytes written to its protected
+temporary file. The store owns account-bound save progress, throttles change
+notifications to whole percentages and clears it on cancellation or an identity
+transition. Document detail renders progress beside its Cancel control; the
+shell's existing upload activity area renders a persistent bar for Documents
+swipe saves. Receipt of the final byte enters an indeterminate finishing state
+until validation and the atomic commit publish the copy. Stale-account callbacks
+cannot restore a cleared indicator or publish a copy.
+
 Documents owns the only saved-copy library entry point: the visible
 **Saved offline** filter shows the current account's count. It sorts
 manifest-backed rows without HTTP and opens the local payload even when a

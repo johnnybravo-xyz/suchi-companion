@@ -1292,23 +1292,46 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     final store = widget.offlineDocuments;
     if (store == null) return null;
     if (_offlineMutating) {
-      return Wrap(
-        spacing: 8,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      final saving =
+          store.savingIdentity == widget.session.identity &&
+          store.activeDocumentId == widget.documentId;
+      final progress = saving ? store.savingProgress : null;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox.square(
-            dimension: 18,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              semanticsLabel: _offlineProgressLabel,
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (!saving)
+                SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    semanticsLabel: _offlineProgressLabel,
+                  ),
+                ),
+              Text(
+                store.savingFinishing && saving
+                    ? 'Finishing offline copy…'
+                    : progress == null
+                    ? _offlineProgressLabel
+                    : '$_offlineProgressLabel ${(progress * 100).floor()}% downloaded',
+              ),
+              TextButton(
+                onPressed: store.cancelPending,
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+          if (saving) ...[
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: progress,
+              semanticsLabel: 'Offline copy progress',
             ),
-          ),
-          Text(_offlineProgressLabel),
-          TextButton(
-            onPressed: store.cancelPending,
-            child: const Text('Cancel'),
-          ),
+          ],
         ],
       );
     }

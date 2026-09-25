@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -25,10 +26,11 @@ void main() {
   late DocumentFiles files;
   late OfflineDocumentStore store;
   late SessionController session;
-  late List<http.Request> requests;
+  late List<http.BaseRequest> requests;
   late bool failDocumentMetadata;
   late bool sensitive;
   late String originalBlob;
+  late StreamController<List<int>>? downloadChunks;
   late List<MethodCall> handoffs;
 
   setUp(() async {
@@ -51,44 +53,49 @@ void main() {
     failDocumentMetadata = false;
     sensitive = false;
     originalBlob = 'b' * 64;
+    downloadChunks = null;
     session = SessionController(
       vault: _MemoryVault(),
       clientFactory: (origin, token) => SuchiClient(
         origin: origin,
         token: token,
-        httpClient: MockClient((request) async {
+        httpClient: MockClient.streaming((request, _) async {
           requests.add(request);
-          if (request.url.path == '/api/handshake') {
-            return _fixture('handshake.json');
+          if (request.url.path == '/api/documents/91/download') {
+            return http.StreamedResponse(
+              downloadChunks?.stream ?? Stream.value(_payload),
+              200,
+              contentLength: _payload.length,
+              headers: {'content-type': 'application/pdf'},
+            );
           }
-          if (request.url.path == '/api/whoami') {
-            return _fixture('whoami.json');
+          if (failDocumentMetadata &&
+              (request.url.path == '/api/jd/categories/' ||
+                  request.url.path == '/api/documents/91')) {
+            throw const SocketException('offline');
           }
-          if (request.url.path == '/api/jd/categories/') {
-            if (failDocumentMetadata) throw const SocketException('offline');
-            return _fixture('jd-categories.json');
-          }
-          if (request.url.path == '/api/documents/91') {
-            if (failDocumentMetadata) throw const SocketException('offline');
-            return http.Response(
+          final response = switch (request.url.path) {
+            '/api/handshake' => _fixture('handshake.json'),
+            '/api/whoami' => _fixture('whoami.json'),
+            '/api/jd/categories/' => _fixture('jd-categories.json'),
+            '/api/documents/91' => http.Response(
               jsonEncode(
                 _documentJson(sensitive: sensitive, blob: originalBlob),
               ),
               200,
               headers: {'content-type': 'application/json'},
-            );
-          }
-          if (request.url.path == '/api/documents/91/download') {
-            return http.Response.bytes(
-              _payload,
-              200,
-              headers: {'content-type': 'application/pdf'},
-            );
-          }
-          return http.Response(
-            '{"code":"not_found","message":"not found"}',
-            404,
-            headers: {'content-type': 'application/json'},
+            ),
+            _ => http.Response(
+              '{"code":"not_found","message":"not found"}',
+              404,
+              headers: {'content-type': 'application/json'},
+            ),
+          };
+          return http.StreamedResponse(
+            Stream.value(response.bodyBytes),
+            response.statusCode,
+            contentLength: response.bodyBytes.length,
+            headers: response.headers,
           );
         }),
       ),
@@ -109,6 +116,9 @@ void main() {
   });
 
   tearDown(() async {
+    if (downloadChunks != null && !downloadChunks!.isClosed) {
+      await downloadChunks!.close();
+    }
     await testerBindingCleanup();
     session.dispose();
     await store.close();
@@ -231,6 +241,72 @@ void main() {
     await tester.pump();
     expect(store.find(session.identity, 91), isNull);
     expect(find.text('Save offline'), findsOneWidget);
+  });
+
+  testWidgets('detail shows written-byte progress until the copy is verified', (
+    tester,
+  ) async {
+    final listening = Completer<void>();
+    final halfWritten = Completer<void>();
+    final allWritten = Completer<void>();
+    downloadChunks = StreamController<List<int>>.broadcast(
+      onListen: listening.complete,
+    );
+    store.addListener(() {
+      if (store.savingProgress == 0.5 && !halfWritten.isCompleted) {
+        halfWritten.complete();
+      }
+      if (store.savingFinishing && !allWritten.isCompleted) {
+        allWritten.complete();
+      }
+    });
+    Future<void> advanceUntil(bool Function() ready) async {
+      for (var attempt = 0; attempt < 80 && !ready(); attempt++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(
+        ready(),
+        isTrue,
+        reason:
+            'requests=${requests.map((request) => request.url.path).toList()} '
+            'saving=${store.savingIdentity} error=${store.errorMessage}',
+      );
+    }
+
+    await _pumpDetail(tester, session, files, store);
+    final save = find.widgetWithText(OutlinedButton, 'Save offline');
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pump();
+    await advanceUntil(() => listening.isCompleted);
+
+    Finder progress() => find.byWidgetPredicate(
+      (widget) =>
+          widget is LinearProgressIndicator &&
+          widget.semanticsLabel == 'Offline copy progress',
+    );
+    expect(tester.widget<LinearProgressIndicator>(progress()).value, 0);
+    expect(store.find(session.identity, 91), isNull);
+
+    downloadChunks!.add(_payload.sublist(0, 6));
+    await advanceUntil(() => halfWritten.isCompleted);
+    expect(tester.widget<LinearProgressIndicator>(progress()).value, 0.5);
+    expect(find.textContaining('50% downloaded'), findsOneWidget);
+    expect(store.find(session.identity, 91), isNull);
+
+    downloadChunks!.add(_payload.sublist(6));
+    await advanceUntil(() => allWritten.isCompleted);
+    expect(find.text('Finishing offline copy…'), findsOneWidget);
+    expect(tester.widget<LinearProgressIndicator>(progress()).value, isNull);
+    expect(store.find(session.identity, 91), isNull);
+
+    await downloadChunks!.close();
+    await _waitForCopy(tester, store, session, blob: 'b' * 64);
+    expect(progress(), findsNothing);
+    expect(find.text('Available offline'), findsOneWidget);
   });
 
   testWidgets('narrow 200% detail stacks controls and keeps caption clear', (

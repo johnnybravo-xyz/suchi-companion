@@ -89,6 +89,12 @@ files ask before retention and again before handoff to
 another app. Previews, email HTML and extracted text are never written into
 the offline store.
 
+While a file downloads, document detail shows its byte progress and Documents
+keeps a persistent progress bar, including after a swipe action closes. The
+display switches to **Finishing offline copy** until the protected copy is
+verified; only then does it appear as saved. **Cancel** abandons an in-flight
+copy without replacing a previously saved version.
+
 In **Documents**, the visible **Saved offline** filter shows the current
 account's saved-copy count. Select it to list copies without a network request;
 tap a row to open its protected full file. The category drawer does not

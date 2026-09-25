@@ -51,6 +51,41 @@ void main() {
     expect(await destination.readAsString(), '%PDF-test');
   });
 
+  test('reports bytes only after writing each streamed chunk', () async {
+    final chunks = StreamController<List<int>>();
+    final firstWritten = Completer<void>();
+    final progress = <int>[];
+    final api = client(
+      _StreamClient(
+        () => http.StreamedResponse(
+          chunks.stream,
+          200,
+          contentLength: 6,
+          headers: {'content-type': 'application/pdf'},
+        ),
+      ),
+    );
+
+    final download = api.downloadDocument(
+      91,
+      destination: destination,
+      onProgress: (bytes) {
+        progress.add(bytes);
+        if (bytes == 3) firstWritten.complete();
+      },
+    );
+    chunks.add([1, 2, 3]);
+    await firstWritten.future;
+    expect(await destination.length(), 3);
+    expect(progress, [3]);
+
+    chunks.add([4, 5, 6]);
+    await chunks.close();
+    expect(await download, 'application/pdf');
+    expect(progress, [3, 6]);
+    expect(await destination.readAsBytes(), [1, 2, 3, 4, 5, 6]);
+  });
+
   test('preview requires an explicit reveal query', () async {
     final api = client(
       MockClient((request) async {

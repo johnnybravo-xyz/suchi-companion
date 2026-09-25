@@ -392,6 +392,7 @@ class _SuchiShellState extends State<SuchiShell> {
       widget.services.shareImport,
       widget.services.uploads,
       widget.services.settings,
+      widget.services.offlineDocuments,
     ]),
     builder: (context, _) {
       final identity = _currentIdentity;
@@ -403,11 +404,12 @@ class _SuchiShellState extends State<SuchiShell> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _UploadActivityBar(
+          _ActivityBar(
             // Replace the animation subtree immediately on account change.
             key: ValueKey(identity),
             rows: rows,
             identity: identity,
+            offlineDocuments: widget.services.offlineDocuments,
             importer: widget.services.shareImport,
             uploadsEnabled: widget.services.uploads.isActive,
             unavailable: _queueUnavailable.value,
@@ -427,8 +429,8 @@ class _SuchiShellState extends State<SuchiShell> {
   );
 }
 
-class _UploadActivity {
-  const _UploadActivity({
+class _Activity {
+  const _Activity({
     required this.phase,
     required this.title,
     required this.detail,
@@ -447,11 +449,12 @@ class _UploadActivity {
   final double? progress;
 }
 
-class _UploadActivityBar extends StatelessWidget {
-  const _UploadActivityBar({
+class _ActivityBar extends StatelessWidget {
+  const _ActivityBar({
     required this.rows,
     required this.identity,
     required this.importer,
+    required this.offlineDocuments,
     required this.uploadsEnabled,
     required this.unavailable,
     required this.onView,
@@ -461,11 +464,12 @@ class _UploadActivityBar extends StatelessWidget {
   final List<ScanUpload> rows;
   final AccountIdentity? identity;
   final ShareImportController importer;
+  final OfflineDocumentStore offlineDocuments;
   final bool uploadsEnabled;
   final bool unavailable;
   final VoidCallback onView;
 
-  _UploadActivity? _activity() {
+  _Activity? _activity() {
     ScanUpload? uploading;
     var queued = 0;
     var processing = 0;
@@ -503,7 +507,7 @@ class _UploadActivityBar extends StatelessWidget {
         failed + (importIssues > 0 ? importIssues : (importAttention ? 1 : 0));
     String documents(int count) =>
         '$count ${count == 1 ? 'document' : 'documents'}';
-    _UploadActivity describe(
+    _Activity describe(
       String phase,
       String title,
       String detail,
@@ -521,7 +525,7 @@ class _UploadActivityBar extends StatelessWidget {
         if (includeAttention && attentionCount > 0)
           '$attentionCount ${attentionCount == 1 ? 'item needs' : 'items need'} attention',
       ];
-      return _UploadActivity(
+      return _Activity(
         phase: phase,
         title: title,
         detail: [detail, ...extras].join(' · '),
@@ -529,6 +533,26 @@ class _UploadActivityBar extends StatelessWidget {
         working: working,
         attention: attention,
         progress: progress,
+      );
+    }
+
+    if (identity != null && offlineDocuments.savingIdentity == identity) {
+      if (offlineDocuments.savingFinishing) {
+        return describe(
+          'finishingOffline',
+          'Finishing offline copy',
+          'Verifying the protected file',
+          Icons.download_for_offline_outlined,
+          working: true,
+        );
+      }
+      return describe(
+        'savingOffline',
+        'Saving offline copy',
+        'Keep Suchi Companion open',
+        Icons.download_for_offline_outlined,
+        working: true,
+        progress: offlineDocuments.savingProgress,
       );
     }
 
@@ -673,12 +697,19 @@ class _UploadActivityBar extends StatelessWidget {
               : colors.warning)
         : colors.accent;
     final stacked = MediaQuery.textScalerOf(context).scale(14) > 21;
+    final offlineSaving =
+        activity?.phase == 'savingOffline' ||
+        activity?.phase == 'finishingOffline';
+    final detail = activity?.progress == null
+        ? activity?.detail
+        : '${(activity!.progress! * 100).floor()}% '
+              '${offlineSaving ? 'downloaded' : 'sent'} · ${activity.detail}';
     final view = activity == null
         ? null
         : TextButton(
-            onPressed: onView,
+            onPressed: offlineSaving ? offlineDocuments.cancelPending : onView,
             style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
-            child: const Text('View'),
+            child: Text(offlineSaving ? 'Cancel' : 'View'),
           );
     final child = AnimatedSwitcher(
       duration: duration,
@@ -741,7 +772,7 @@ class _UploadActivityBar extends StatelessWidget {
                               child: Semantics(
                                 container: true,
                                 liveRegion: true,
-                                label: '${activity.title}. ${activity.detail}',
+                                label: '${activity.title}. $detail',
                                 child: ExcludeSemantics(
                                   child: Column(
                                     crossAxisAlignment:
@@ -759,10 +790,7 @@ class _UploadActivityBar extends StatelessWidget {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        activity.phase == 'uploading' &&
-                                                activity.progress != null
-                                            ? '${(activity.progress! * 100).floor()}% sent · ${activity.detail}'
-                                            : activity.detail,
+                                        detail!,
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodySmall

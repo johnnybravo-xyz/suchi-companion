@@ -91,6 +91,9 @@ final class OfflineDocumentStore extends ChangeNotifier {
   int _generation = 0;
   int? _activeDocumentId;
   String? _errorMessage;
+  AccountIdentity? _savingIdentity;
+  int _savingByteSize = 0;
+  int _savingBytes = 0;
   bool _closed = false;
 
   static Future<OfflineDocumentStore> open({
@@ -156,6 +159,13 @@ final class OfflineDocumentStore extends ChangeNotifier {
   int? get activeDocumentId => _activeDocumentId;
   bool get busy => _idle != null;
   String? get errorMessage => _errorMessage;
+  AccountIdentity? get savingIdentity => _savingIdentity;
+  double? get savingProgress =>
+      _savingIdentity == null || _savingBytes >= _savingByteSize
+      ? null
+      : _savingBytes / _savingByteSize;
+  bool get savingFinishing =>
+      _savingIdentity != null && _savingBytes >= _savingByteSize;
 
   void clearError() {
     if (_errorMessage == null) return;
@@ -191,6 +201,9 @@ final class OfflineDocumentStore extends ChangeNotifier {
     _idle = idle;
     _activeDocumentId = document.id;
     _errorMessage = null;
+    _savingIdentity = identity;
+    _savingByteSize = document.originalSize;
+    _savingBytes = 0;
     notifyListeners();
     try {
       return await _save(
@@ -214,6 +227,9 @@ final class OfflineDocumentStore extends ChangeNotifier {
       _abort = null;
       _idle = null;
       _activeDocumentId = null;
+      _savingIdentity = null;
+      _savingByteSize = 0;
+      _savingBytes = 0;
       if (!idle.isCompleted) idle.complete();
       notifyListeners();
     }
@@ -246,6 +262,8 @@ final class OfflineDocumentStore extends ChangeNotifier {
         preview: false,
         reveal: reveal,
         abortTrigger: abort,
+        onProgress: (bytes) =>
+            _recordSavingProgress(identity, generation, bytes),
       );
       _checkGeneration(generation);
       final normalizedMime = _normalizedMime(document.mimeType);
@@ -311,6 +329,7 @@ final class OfflineDocumentStore extends ChangeNotifier {
           'The offline copy could not be verified after saving.',
         );
       }
+      _checkGeneration(generation);
       final previous = find(identity, document.id);
       _entries = List.unmodifiable([
         entry,
@@ -435,9 +454,33 @@ final class OfflineDocumentStore extends ChangeNotifier {
     );
   }
 
+  void _recordSavingProgress(
+    AccountIdentity identity,
+    int generation,
+    int bytes,
+  ) {
+    if (_closed || generation != _generation || _savingIdentity != identity) {
+      return;
+    }
+    final received = bytes.clamp(0, _savingByteSize);
+    if (received <= _savingBytes) return;
+    final previousPercent = _savingBytes * 100 ~/ _savingByteSize;
+    _savingBytes = received;
+    if (received == _savingByteSize ||
+        received * 100 ~/ _savingByteSize > previousPercent) {
+      notifyListeners();
+    }
+  }
+
   void cancelPending() {
     _generation++;
     final abort = _abort;
+    if (_savingIdentity != null) {
+      _savingIdentity = null;
+      _savingByteSize = 0;
+      _savingBytes = 0;
+      notifyListeners();
+    }
     if (abort != null && !abort.isCompleted) abort.complete();
   }
 

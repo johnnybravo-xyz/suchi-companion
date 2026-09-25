@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:suchi_mobile/api/api_models.dart';
+import 'package:suchi_mobile/api/suchi_client.dart';
 import 'package:suchi_mobile/auth/account_identity.dart';
 import 'package:suchi_mobile/main.dart';
 import 'package:suchi_mobile/scan/network_monitor.dart';
@@ -85,6 +87,105 @@ void main() {
       identity: unassigned ? null : identity ?? harness.identity,
     ),
   );
+
+  testWidgets('offline activity shows bytes saved and Cancel abandons the copy', (
+    tester,
+  ) async {
+    await mount(tester, reducedMotion: true);
+    final listening = Completer<void>();
+    final requestedPaths = <String>[];
+    final chunks = StreamController<List<int>>.broadcast(
+      onListen: listening.complete,
+    );
+    final downloadClient = SuchiClient(
+      origin: harness.services.session.origin!,
+      token: harness.services.session.client!.token,
+      httpClient: MockClient.streaming((request, _) async {
+        requestedPaths.add(request.url.path);
+        return http.StreamedResponse(
+          chunks.stream,
+          200,
+          contentLength: 16841,
+          headers: {'content-type': 'application/pdf'},
+        );
+      }),
+    );
+    addTearDown(() async {
+      if (!chunks.isClosed) await chunks.close();
+      downloadClient.close();
+    });
+    final document = DocumentDetail.fromJson(
+      jsonDecode(fixtureResponse('document-detail.json').body),
+    );
+    Object? saveFailure;
+    final save = harness.services.offlineDocuments
+        .save(
+          identity: harness.identity!,
+          document: document,
+          client: downloadClient,
+        )
+        .then<bool>(
+          (_) => true,
+          onError: (Object error) {
+            saveFailure = error;
+            return false;
+          },
+        );
+    await _until(
+      tester,
+      () => listening.isCompleted || !harness.services.offlineDocuments.busy,
+    );
+    expect(
+      listening.isCompleted,
+      isTrue,
+      reason:
+          'requests=$requestedPaths busy=${harness.services.offlineDocuments.busy} '
+          'saving=${harness.services.offlineDocuments.savingIdentity} '
+          'error=${harness.services.offlineDocuments.errorMessage} failure=$saveFailure',
+    );
+    expect(requestedPaths, ['/api/documents/91/download']);
+    await _until(
+      tester,
+      () => find.text('Saving offline copy').evaluate().isNotEmpty,
+    );
+    expect(find.text('Cancel'), findsOneWidget);
+    expect(
+      harness.services.offlineDocuments.find(harness.identity, 91),
+      isNull,
+    );
+
+    chunks.add(List<int>.filled(8421, 32));
+    await _until(
+      tester,
+      () => find.textContaining('50% downloaded').evaluate().isNotEmpty,
+    );
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+          .value,
+      closeTo(8421 / 16841, 0.0001),
+    );
+    expect(
+      harness.services.offlineDocuments.find(harness.identity, 91),
+      isNull,
+    );
+
+    await tester.tap(find.text('Cancel'));
+    await _until(
+      tester,
+      () => harness.services.offlineDocuments.savingIdentity == null,
+    );
+    await chunks.close();
+    await _until(tester, () => !harness.services.offlineDocuments.busy);
+    expect(await tester.runAsync(() => save), isFalse);
+    expect(find.text('Saving offline copy'), findsNothing);
+    expect(
+      harness.services.offlineDocuments.find(harness.identity, 91),
+      isNull,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _frames(tester);
+  });
 
   testWidgets(
     'shared intake remains visible through real payload transfer, acceptance and processing; View never captures',

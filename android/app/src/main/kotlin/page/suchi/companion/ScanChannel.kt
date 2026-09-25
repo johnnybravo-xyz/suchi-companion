@@ -1,4 +1,4 @@
-package app.suchi.page
+package page.suchi.companion
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -72,7 +72,7 @@ internal object ScanResultPayload {
 
 class ScanChannel(private val activity: FlutterActivity) {
     private companion object {
-        const val CHANNEL_NAME = "app.suchi.page/scan"
+        const val CHANNEL_NAME = "page.suchi.companion/scan"
         const val CAPTURE_REQUEST = 4711
         const val PHOTO_REQUEST = 4712
         const val STORE_NAME = "suchi-scanner-captures"

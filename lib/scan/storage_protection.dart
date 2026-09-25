@@ -6,7 +6,7 @@ abstract interface class StorageProtection {
 
 final class NativeStorageProtection implements StorageProtection {
   const NativeStorageProtection({MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel('app.suchi.page/storage');
+    : _channel = channel ?? const MethodChannel('page.suchi.companion/storage');
 
   final MethodChannel _channel;
 

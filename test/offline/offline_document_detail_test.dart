@@ -100,7 +100,7 @@ void main() {
     handoffs = [];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-          const MethodChannel('app.suchi.page/documents'),
+          const MethodChannel('page.suchi.companion/documents'),
           (call) async {
             handoffs.add(call);
             return null;
@@ -472,7 +472,7 @@ Map<String, Object?> _documentJson({bool sensitive = false, String? blob}) => {
 Future<void> testerBindingCleanup() async {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(
-        const MethodChannel('app.suchi.page/documents'),
+        const MethodChannel('page.suchi.companion/documents'),
         null,
       );
 }

@@ -119,11 +119,15 @@ manifests rather than inferring permissions or ATS from source files.
 
 The owner must supply and verify these gates **before** claiming store readiness:
 
-- Register the existing Runner and ShareExtension bundle IDs and shared App
-  Group with the paid Apple team, provision both targets, and exercise a
-  physically signed iOS 15+ build. Test document scanner, Files/iCloud,
-  Photos, cold/warm share extension, large batches, account switching and
-  locked-device/background recovery. An unsigned simulator cannot prove them.
+- Verify the paid Apple team can register the new
+  `page.suchi.companion` Runner and `page.suchi.companion.ShareExtension`
+  bundle IDs and attach `group.page.suchi.companion` to both. Provision both
+  targets and exercise a physically signed iOS 15+ build. A Personal Team
+  cannot provision Suchi Personal's unchanged CloudKit capability; resolve
+  paid-team access rather than changing Personal's identity or entitlements.
+  Test document scanner, Files/iCloud, Photos, cold/warm share extension,
+  large batches, account switching and locked-device/background recovery.
+  An unsigned simulator cannot prove them.
 - Build a newly signed Android App Bundle with the intended upload key, inspect
   target API 36, merged permissions, 64-bit libraries, 16 KiB ELF/ZIP alignment
   and bundle-delivered APKs on a 16 KiB emulator. Existing generated release

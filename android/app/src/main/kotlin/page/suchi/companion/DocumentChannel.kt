@@ -1,4 +1,4 @@
-package app.suchi.page
+package page.suchi.companion
 
 import android.content.ActivityNotFoundException
 import android.content.ClipData
@@ -63,7 +63,7 @@ class DocumentChannel(private val activity: MainActivity) {
     fun register(engine: FlutterEngine) {
         channel = MethodChannel(
             engine.dartExecutor.binaryMessenger,
-            "app.suchi.page/documents",
+            "page.suchi.companion/documents",
         ).also { it.setMethodCallHandler(::handle) }
     }
 

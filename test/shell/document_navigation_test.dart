@@ -108,7 +108,7 @@ void main() {
     );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-          const MethodChannel('app.suchi.page/documents'),
+          const MethodChannel('page.suchi.companion/documents'),
           (_) async => null,
         );
     services = AppServices(
@@ -154,7 +154,7 @@ void main() {
         );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-          const MethodChannel('app.suchi.page/documents'),
+          const MethodChannel('page.suchi.companion/documents'),
           null,
         );
   });

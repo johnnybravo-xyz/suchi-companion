@@ -312,7 +312,7 @@ void main() {
   );
 
   testWidgets('preview and AppBar hand off the full document', (tester) async {
-    const channel = MethodChannel('app.suchi.page/documents');
+    const channel = MethodChannel('page.suchi.companion/documents');
     final calls = <MethodCall>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {

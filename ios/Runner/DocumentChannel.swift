@@ -54,7 +54,7 @@ final class DocumentChannel: NSObject, QLPreviewControllerDataSource {
 
   func register(binaryMessenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(
-      name: "app.suchi.page/documents", binaryMessenger: binaryMessenger
+      name: "page.suchi.companion/documents", binaryMessenger: binaryMessenger
     )
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self else {

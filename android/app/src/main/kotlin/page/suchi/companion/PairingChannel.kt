@@ -1,4 +1,4 @@
-package app.suchi.page
+package page.suchi.companion
 
 import android.os.Build
 import android.provider.Settings
@@ -15,7 +15,7 @@ class PairingChannel(private val activity: MainActivity) {
 
     fun register(engine: FlutterEngine) {
         channel = MethodChannel(
-            engine.dartExecutor.binaryMessenger, "app.suchi.page/pairing",
+            engine.dartExecutor.binaryMessenger, "page.suchi.companion/pairing",
         ).also {
             it.setMethodCallHandler { call, result ->
                 when {

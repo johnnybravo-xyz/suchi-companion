@@ -1,4 +1,4 @@
-package app.suchi.page
+package page.suchi.companion
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -23,9 +23,9 @@ import java.util.concurrent.Executors
 
 class ShareChannel(private val activity: FlutterActivity) {
     private companion object {
-        const val CHANNEL_NAME = "app.suchi.page/share"
+        const val CHANNEL_NAME = "page.suchi.companion/share"
         const val STORE_NAME = "suchi-share-imports"
-        const val BATCH_ID_EXTRA = "app.suchi.page.share.BATCH_ID"
+        const val BATCH_ID_EXTRA = "page.suchi.companion.share.BATCH_ID"
         const val PICKER_REQUEST = 4721
         const val PICKER_PREFERENCES = "suchi-share-picker"
         const val PENDING_PICKER_BATCH = "pending_batch_id"

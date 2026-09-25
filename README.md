@@ -4,9 +4,11 @@ Suchi Companion is the pre-release Flutter client for a user-owned Suchi documen
 native document capture and sharing, an offline-safe upload queue, Inbox filing,
 document browsing, search, and privacy-gated previews.
 
-The Android/iOS app and share surfaces use **Suchi Companion**. The repository
-and Dart package remain `suchi-mobile` and `suchi_mobile`; bundle IDs, app groups,
-pairing links and private storage identities are unchanged.
+The Android/iOS app and share surfaces use **Suchi Companion** under the new
+`page.suchi.companion` app ID; iOS Runner and Share Extension share only
+`group.page.suchi.companion`. This unpublished development-only identity starts
+with empty local data, not an update or migration from the old app. The repository
+and Dart package remain `suchi-mobile` and `suchi_mobile`; `suchi://pair` stays.
 
 The first tap on the raised centre camera button opens Scanner directly.
 Later taps use your last-picked mode. Touch and hold the button for a light

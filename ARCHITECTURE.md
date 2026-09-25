@@ -6,6 +6,12 @@ storage protection and platform sharing. The app has no document relay,
 analytics or remote crash-reporting service. The companion is still pre-release
 and pins one exact compatible server revision.
 
+The unpublished Companion now uses `page.suchi.companion` on Android and iOS;
+its iOS Runner and Share Extension share `group.page.suchi.companion`.
+This is a fresh install without migration from the old development identity.
+All five Flutter/native channels use `page.suchi.companion/` with the
+`pairing`, `documents`, `scan`, `share` and `storage` suffixes.
+
 ## Ownership
 
 | Concern | Entry point |
@@ -100,7 +106,7 @@ and release pairing, manual entry and stored-credential restoration require
 HTTPS before any token-bearing request. The first unauthenticated handshake
 precedes credential exchange; redirect responses are refused.
 
-The `app.suchi.page/pairing` method channel's `scan` operation returns a QR
+The `page.suchi.companion/pairing` method channel's `scan` operation returns a QR
 string or null on cancellation. Android uses the Google Play services code
 scanner; iOS uses AVFoundation. Neither adapter opens URLs or handles account
 credentials. The channel also exposes `deviceName` without opening the scanner:
@@ -189,7 +195,7 @@ Share import is single-flight and starts after the first app frame. OS share
 batches use the account captured at lookup. In-app Files/Photos pickers first
 allocate a UUIDv4 in Dart and persist its original account identity in the
 queue database's existing `AppSettings` table; only then can the native picker
-open. `app.suchi.page/share` handles `pick` with `{source: files|photos,
+open. `page.suchi.companion/share` handles `pick` with `{source: files|photos,
 batch_id: UUIDv4}`, returning the same ID after protected staging or null on
 cancel. Native adapters enforce 20 items and 64 MiB per item, with no broad
 photo/storage permission. On resume/restart, claimed batches stage only for
@@ -300,7 +306,7 @@ copies belongs to the system clipboard and can outlive the reader.
 
 `lib/detail/document_files.dart` streams one document at a time into a protected
 `suchi-document-exports` directory under application support. The
-`app.suchi.page/documents` native channel opens or shares only a regular,
+`page.suchi.companion/documents` native channel opens or shares only a regular,
 non-linked payload at the exact expected depth under either temporary exports
 or `suchi-offline-documents`. For saved copies it also requires a committed
 `offline-<UUIDv4>/document-<id>.<extension>` path, never a staging directory

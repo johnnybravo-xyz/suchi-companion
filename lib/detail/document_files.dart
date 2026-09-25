@@ -11,7 +11,8 @@ import '../scan/storage_protection.dart';
 
 final class DocumentFiles {
   DocumentFiles({required this.root, MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel('app.suchi.page/documents');
+    : _channel =
+          channel ?? const MethodChannel('page.suchi.companion/documents');
 
   final Directory root;
   final MethodChannel _channel;

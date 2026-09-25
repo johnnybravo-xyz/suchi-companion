@@ -9,7 +9,7 @@ final class PairingChannel {
 
   func register(binaryMessenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(
-      name: "app.suchi.page/pairing", binaryMessenger: binaryMessenger
+      name: "page.suchi.companion/pairing", binaryMessenger: binaryMessenger
     )
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self else {
@@ -93,7 +93,7 @@ final class PairingChannel {
 
 private final class PairingScanViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
   private let capture = AVCaptureSession()
-  private let cameraQueue = DispatchQueue(label: "app.suchi.page.pairing-camera", qos: .userInitiated)
+  private let cameraQueue = DispatchQueue(label: "page.suchi.companion.pairing-camera", qos: .userInitiated)
   private var preview: AVCaptureVideoPreviewLayer?
   private var completion: ((String?, FlutterError?) -> Void)?
 

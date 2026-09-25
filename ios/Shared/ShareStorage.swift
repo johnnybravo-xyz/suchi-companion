@@ -4,8 +4,8 @@ import Foundation
 import UniformTypeIdentifiers
 
 enum SuchiShareConstants {
-  static let appGroup = "group.app.suchi.page.share"
-  static let channelName = "app.suchi.page/share"
+  static let appGroup = "group.page.suchi.companion"
+  static let channelName = "page.suchi.companion/share"
   static let storeName = "suchi-share-imports"
   static let manifestVersion = 1
   static let maximumItems = 20

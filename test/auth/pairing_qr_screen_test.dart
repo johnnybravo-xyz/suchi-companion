@@ -19,7 +19,7 @@ const _code =
     'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const _link =
     'suchi://pair?v=1&server=https%3A%2F%2Fsuchi.example.com&code=$_code';
-const _channel = MethodChannel('app.suchi.page/pairing');
+const _channel = MethodChannel('page.suchi.companion/pairing');
 
 void main() {
   testWidgets(

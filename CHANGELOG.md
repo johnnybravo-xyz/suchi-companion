@@ -18,8 +18,11 @@
 
 - Rename the mobile app to **Suchi Companion** across Android/iOS app labels,
   Flutter branding and accessibility, permission descriptions and the iOS share
-  extension. Suchi remains the server/web product name. Package and bundle IDs,
-  app groups, pairing links and private storage identities are unchanged.
+  extension. Suchi remains the server/web product name. Replace the unpublished
+  development-only app ID with `page.suchi.companion` on Android and iOS;
+  the iOS extension and Runner use `group.page.suchi.companion`. This is a
+  fresh install without migration or aliases. The Dart package `suchi_mobile`,
+  pairing links and logical private-storage keys remain unchanged.
 - Require the current server identity and pairing contracts. Account, queue,
   capture, share, search and Saved View boundaries now include the token's
   filing-system ID. Changing filing systems requires pairing again.

@@ -61,13 +61,13 @@ enum ScanResultPayload {
 }
 
 final class ScanChannel: NSObject {
-  private static let channelName = "app.suchi.page/scan"
+  private static let channelName = "page.suchi.companion/scan"
   private static let storeName = "suchi-scanner-captures"
   private static let manifestVersion = 1
 
   private let fileManager = FileManager.default
   private let workQueue = DispatchQueue(
-    label: "app.suchi.page.scan-work",
+    label: "page.suchi.companion.scan-work",
     qos: .userInitiated
   )
   private var channel: FlutterMethodChannel?

@@ -1,4 +1,4 @@
-package app.suchi.page
+package page.suchi.companion
 
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -7,7 +7,7 @@ import java.io.File
 
 class StorageChannel(private val activity: MainActivity) {
     private companion object {
-        const val CHANNEL_NAME = "app.suchi.page/storage"
+        const val CHANNEL_NAME = "page.suchi.companion/storage"
     }
 
     private var channel: MethodChannel? = null

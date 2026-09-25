@@ -2,7 +2,7 @@ import Flutter
 import Foundation
 
 final class StorageChannel {
-  private static let channelName = "app.suchi.page/storage"
+  private static let channelName = "page.suchi.companion/storage"
 
   private let fileManager = FileManager.default
   private var channel: FlutterMethodChannel?

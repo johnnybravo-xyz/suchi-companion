@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
-const shareChannelName = 'app.suchi.page/share';
+const shareChannelName = 'page.suchi.companion/share';
 const maxSharedItems = 20;
 
 final RegExp _batchIdPattern = RegExp(

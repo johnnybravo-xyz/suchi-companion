@@ -106,7 +106,7 @@ final class MobileAppHarness {
       (call) async => call.method == 'pending' ? <Object>[] : null,
     );
     messenger.setMockMethodCallHandler(
-      const MethodChannel('app.suchi.page/documents'),
+      const MethodChannel('page.suchi.companion/documents'),
       (_) async => null,
     );
     final bridge = ShareBridge();
@@ -160,7 +160,7 @@ final class MobileAppHarness {
     for (final channel in [
       scannerChannelName,
       shareChannelName,
-      'app.suchi.page/documents',
+      'page.suchi.companion/documents',
     ]) {
       messenger.setMockMethodCallHandler(MethodChannel(channel), null);
     }

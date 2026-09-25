@@ -98,7 +98,7 @@ class _PairScreenState extends State<PairScreen> {
         ? 'iPhone'
         : 'Android device';
     try {
-      final value = await const MethodChannel('app.suchi.page/pairing')
+      final value = await const MethodChannel('page.suchi.companion/pairing')
           .invokeMethod<String>('deviceName')
           .timeout(const Duration(seconds: 2));
       final name = (value ?? '')
@@ -131,7 +131,7 @@ class _PairScreenState extends State<PairScreen> {
     try {
       final String? input;
       if (scan) {
-        input = await const MethodChannel('app.suchi.page/pairing')
+        input = await const MethodChannel('page.suchi.companion/pairing')
             .invokeMethod<String>('scan');
       } else {
         var initialText = '';

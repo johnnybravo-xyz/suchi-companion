@@ -1,4 +1,4 @@
-package app.suchi.page
+package page.suchi.companion
 
 import android.app.Activity
 import android.content.ClipData
@@ -87,7 +87,7 @@ class NativeAdapterInstrumentedTest {
 
     @Test
     fun photoCaptureUsesFullSizeOutputAndOnlyTemporaryUriGrants() {
-        val uri = Uri.parse("content://app.suchi.page.photo-capture/photo/pending.jpg")
+        val uri = Uri.parse("content://page.suchi.companion.photo-capture/photo/pending.jpg")
         val intent = PhotoCapture.intent(uri)
         assertEquals(MediaStore.ACTION_IMAGE_CAPTURE, intent.action)
         assertEquals(uri, intent.getParcelableExtra<Uri>(MediaStore.EXTRA_OUTPUT))
@@ -105,7 +105,7 @@ class NativeAdapterInstrumentedTest {
 
     @Test
     fun documentHandoffGrantsOnlyReadAccessToOneFile() {
-        val uri = Uri.parse("content://app.suchi.page.document-exports/documents/document-test/document-91.pdf")
+        val uri = Uri.parse("content://page.suchi.companion.document-exports/documents/document-test/document-91.pdf")
         for (share in listOf(true, false)) {
             val intent = DocumentExport.intent(uri, "application/pdf", share)
             assertEquals(if (share) Intent.ACTION_SEND else Intent.ACTION_VIEW, intent.action)
@@ -409,8 +409,8 @@ class NativeAdapterInstrumentedTest {
             assertTrue(pickerPreferences.edit().putString("pending_batch_id", retainedId).commit())
             val restored = ShareChannel(activity)
             try {
-                val first = Uri.parse("content://app.suchi.page.test.share/first")
-                val empty = Uri.parse("content://app.suchi.page.test.share/empty")
+                val first = Uri.parse("content://page.suchi.companion.test.share/first")
+                val empty = Uri.parse("content://page.suchi.companion.test.share/empty")
                 val clip = ClipData.newUri(targetContext.contentResolver, "first", first)
                 clip.addItem(ClipData.Item(empty))
                 instrumentation.runOnMainSync {
@@ -450,7 +450,7 @@ class NativeAdapterInstrumentedTest {
         val batchId = UUID.randomUUID().toString()
         try {
             assertTrue(pickerPreferences.edit().putString("pending_batch_id", batchId).commit())
-            val uri = Uri.parse("content://app.suchi.page.test.share/first")
+            val uri = Uri.parse("content://page.suchi.companion.test.share/first")
             val clip = ClipData.newUri(targetContext.contentResolver, "first", uri)
             repeat(20) { clip.addItem(ClipData.Item(uri)) }
             val intake = ShareChannel(activity)
@@ -472,7 +472,7 @@ class NativeAdapterInstrumentedTest {
         batchId: String? = null,
         segments: List<String> = listOf("first", "second"),
     ): Intent {
-        val uris = segments.map { Uri.parse("content://app.suchi.page.test.share/$it") }
+        val uris = segments.map { Uri.parse("content://page.suchi.companion.test.share/$it") }
         val clip = ClipData.newUri(instrumentation.context.contentResolver, "first", uris.first())
         uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
         return Intent(Intent.ACTION_SEND_MULTIPLE).apply {
@@ -481,7 +481,7 @@ class NativeAdapterInstrumentedTest {
             putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
             clipData = clip
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            if (batchId != null) putExtra("app.suchi.page.share.BATCH_ID", batchId)
+            if (batchId != null) putExtra("page.suchi.companion.share.BATCH_ID", batchId)
         }
     }
 
@@ -524,7 +524,7 @@ class NativeAdapterInstrumentedTest {
         }
         instrumentation.runOnMainSync {
             assertNull(activity.intent.action)
-            assertFalse(activity.intent.hasExtra("app.suchi.page.share.BATCH_ID"))
+            assertFalse(activity.intent.hasExtra("page.suchi.companion.share.BATCH_ID"))
         }
     }
 

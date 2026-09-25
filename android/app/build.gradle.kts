@@ -30,7 +30,7 @@ if (keystorePropertiesFile.isFile) {
 }
 
 android {
-    namespace = "app.suchi.page"
+    namespace = "page.suchi.companion"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
 
@@ -40,10 +40,10 @@ android {
     }
 
     defaultConfig {
-        applicationId = "app.suchi.page"
+        applicationId = "page.suchi.companion"
         minSdk = 24
         targetSdk = 36
-        testApplicationId = "app.suchi.page.test"
+        testApplicationId = "page.suchi.companion.test"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = flutter.versionCode
         versionName = flutter.versionName

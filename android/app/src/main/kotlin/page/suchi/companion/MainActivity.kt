@@ -1,4 +1,4 @@
-package app.suchi.page
+package page.suchi.companion
 
 import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity

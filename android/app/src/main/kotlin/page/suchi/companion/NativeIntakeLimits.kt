@@ -1,4 +1,4 @@
-package app.suchi.page
+package page.suchi.companion
 
 import java.io.IOException
 

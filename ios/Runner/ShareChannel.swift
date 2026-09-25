@@ -19,7 +19,7 @@ private final class SharePickSession {
 
 final class ShareChannel: NSObject {
   private let fileManager = FileManager.default
-  private let workQueue = DispatchQueue(label: "app.suchi.page.share-work", qos: .userInitiated)
+  private let workQueue = DispatchQueue(label: "page.suchi.companion.share-work", qos: .userInitiated)
   private let appGroupRootOverride: URL?
   private let hostRootOverride: URL?
   private var channel: FlutterMethodChannel?

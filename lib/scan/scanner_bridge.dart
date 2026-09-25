@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-const scannerChannelName = 'app.suchi.page/scan';
+const scannerChannelName = 'page.suchi.companion/scan';
 
 enum CaptureMode { scanner, photo }
 

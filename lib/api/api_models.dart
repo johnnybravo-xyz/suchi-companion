@@ -10,24 +10,20 @@ final class ApiFormatException implements Exception {
 }
 
 final class Handshake {
-  const Handshake({
-    required this.product,
-    required this.apiVersion,
-    required this.minAppVersion,
-  });
+  const Handshake({required this.product, required this.mobileContracts});
 
   factory Handshake.fromJson(Object? value) {
     final json = _object(value, 'handshake');
     return Handshake(
       product: _string(json, 'product'),
-      apiVersion: _integer(json, 'api_version'),
-      minAppVersion: _string(json, 'min_app_version'),
+      mobileContracts: json.containsKey('mobile_contracts')
+          ? _stringList(json, 'mobile_contracts')
+          : null,
     );
   }
 
   final String product;
-  final int apiVersion;
-  final String minAppVersion;
+  final List<String>? mobileContracts;
 }
 
 final class UserSelf {

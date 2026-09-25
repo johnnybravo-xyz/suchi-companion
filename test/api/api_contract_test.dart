@@ -45,6 +45,7 @@ void main() {
       final error = parseApiError(_fixture('error.json'), 409);
 
       expect(handshake.product, 'suchi');
+      expect(handshake.mobileContracts, ['suchi-companion-v1']);
       expect(user.hasMobileScopes, isTrue);
       expect(user.systemId, 1);
       expect(user.systemName, 'Archive');
@@ -467,6 +468,17 @@ void main() {
   });
 
   group('SuchiClient transport boundary', () {
+    SuchiClient clientForHandshake(Object? value) => SuchiClient(
+      origin: _origin,
+      httpClient: MockClient(
+        (_) async => http.Response(
+          jsonEncode(value),
+          200,
+          headers: {'content-type': 'application/json'},
+        ),
+      ),
+    );
+
     test('handshake never sends credentials', () async {
       late http.Request observed;
       final httpClient = MockClient((request) async {
@@ -601,13 +613,117 @@ void main() {
       expect(observed.followRedirects, isFalse);
     });
 
+    test(
+      'accepts undeclared compatibility despite higher release fields',
+      () async {
+        final handshake = await clientForHandshake({
+          'product': 'suchi',
+          'api_version': 99,
+          'min_app_version': '99.0.0',
+        }).handshake();
+
+        expect(handshake.mobileContracts, isNull);
+      },
+    );
+
+    test('accepts the supported profile alongside a newer one', () async {
+      final handshake = await clientForHandshake({
+        'product': 'suchi',
+        'mobile_contracts': ['suchi-companion-v2', 'suchi-companion-v1'],
+      }).handshake();
+
+      expect(handshake.mobileContracts, [
+        'suchi-companion-v2',
+        'suchi-companion-v1',
+      ]);
+    });
+
+    test(
+      'refuses an explicit declaration without the supported profile',
+      () async {
+        for (final contracts in [
+          <String>[],
+          ['suchi-companion-v2'],
+        ]) {
+          await expectLater(
+            clientForHandshake({
+              'product': 'suchi',
+              'mobile_contracts': contracts,
+            }).handshake(),
+            throwsA(
+              isA<ApiException>().having(
+                (error) => error.kind,
+                'kind',
+                ApiFailureKind.incompatibleServer,
+              ),
+            ),
+          );
+        }
+      },
+    );
+
+    test(
+      'rejects malformed contract declarations, not as incompatibility',
+      () async {
+        for (final contracts in [
+          null,
+          1,
+          ['suchi-companion-v1', 1],
+        ]) {
+          await expectLater(
+            clientForHandshake({
+              'product': 'suchi',
+              'mobile_contracts': contracts,
+            }).handshake(),
+            throwsA(
+              isA<ApiException>().having(
+                (error) => error.kind,
+                'kind',
+                ApiFailureKind.malformedResponse,
+              ),
+            ),
+          );
+        }
+      },
+    );
+
+    test('refuses a handshake redirect before sending credentials', () async {
+      var requests = 0;
+      final client = SuchiClient(
+        origin: _origin,
+        token: _token,
+        httpClient: MockClient((request) async {
+          requests++;
+          expect(request.headers, isNot(contains('Authorization')));
+          expect(request.followRedirects, isFalse);
+          return http.Response(
+            '',
+            302,
+            headers: {'location': 'https://other.example.com/api/handshake'},
+          );
+        }),
+      );
+
+      await expectLater(
+        client.handshake(),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.kind,
+            'kind',
+            ApiFailureKind.redirect,
+          ),
+        ),
+      );
+      expect(requests, 1);
+    });
+
     test('rejects an incompatible server before accepting it', () async {
       final client = SuchiClient(
         origin: _origin,
         httpClient: MockClient(
           (request) async => http.Response(
-            '{"product":"other","api_version":1,'
-            '"min_app_version":"0.1.0"}',
+            '{"product":"other",'
+            '"mobile_contracts":["suchi-companion-v1"]}',
             200,
             headers: {'content-type': 'application/json'},
           ),

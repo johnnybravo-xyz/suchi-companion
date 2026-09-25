@@ -67,7 +67,7 @@ void main() {
         return _json({
           'product': 'suchi',
           'api_version': 1,
-          'min_app_version': '0.1.0',
+          'mobile_contracts': ['suchi-companion-v1'],
         });
       }
       if (request.url.path == '/api/mobile/pairing/exchange') {

@@ -71,45 +71,81 @@ void main() {
   });
 
   test(
-    'manual pairing reveals credentials only after one successful probe',
+    'explicitly unsupported mobile contract refuses before token use',
     () async {
       final requests = <http.Request>[];
       final vault = _MemoryVault();
-      final transport = MockClient((request) async {
-        requests.add(request);
-        return http.Response(
-          request.url.path == '/api/handshake'
-              ? _fixture('handshake.json')
-              : _fixture('whoami.json'),
-          200,
-          headers: {'content-type': 'application/json'},
-        );
-      });
       final controller = SessionController(
         vault: vault,
-        clientFactory: (origin, token) =>
-            SuchiClient(origin: origin, token: token, httpClient: transport),
+        clientFactory: (origin, token) => SuchiClient(
+          origin: origin,
+          token: token,
+          httpClient: MockClient((request) async {
+            requests.add(request);
+            if (request.url.path != '/api/handshake') {
+              throw StateError('Sent credentials to an incompatible server');
+            }
+            return http.Response(
+              '{"product":"suchi","api_version":1,"mobile_contracts":[]}',
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
       );
-
-      expect(await controller.verifyServerAddress(_origin.toString()), isTrue);
-      expect(controller.preparedOrigin, _origin);
-      expect(requests, hasLength(1));
-      expect(requests.single.url.path, '/api/handshake');
-      expect(requests.single.headers.containsKey('Authorization'), isFalse);
+      addTearDown(controller.dispose);
 
       await controller.pairWithToken(
         serverAddress: _origin.toString(),
         token: _token,
       );
 
-      expect(controller.state, SessionState.signedIn);
-      expect(requests.map((request) => request.url.path), [
-        '/api/handshake',
-        '/api/whoami',
-      ]);
-      expect(requests.last.headers['Authorization'], 'Token $_token');
+      expect(controller.state, SessionState.signedOut);
+      expect(controller.client, isNull);
+      expect(vault.saved, isNull);
+      expect(requests, hasLength(1));
+      expect(requests.single.headers.containsKey('Authorization'), isFalse);
     },
   );
+
+  test('manual pairing with an undeclared higher-version server sends credentials only after probing', () async {
+    final requests = <http.Request>[];
+    final vault = _MemoryVault();
+    final transport = MockClient((request) async {
+      requests.add(request);
+      return http.Response(
+        request.url.path == '/api/handshake'
+            ? '{"product":"suchi","api_version":99,'
+                  '"min_app_version":"99.0.0"}'
+            : _fixture('whoami.json'),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+    final controller = SessionController(
+      vault: vault,
+      clientFactory: (origin, token) =>
+          SuchiClient(origin: origin, token: token, httpClient: transport),
+    );
+
+    expect(await controller.verifyServerAddress(_origin.toString()), isTrue);
+    expect(controller.preparedOrigin, _origin);
+    expect(requests, hasLength(1));
+    expect(requests.single.url.path, '/api/handshake');
+    expect(requests.single.headers.containsKey('Authorization'), isFalse);
+
+    await controller.pairWithToken(
+      serverAddress: _origin.toString(),
+      token: _token,
+    );
+
+    expect(controller.state, SessionState.signedIn);
+    expect(requests.map((request) => request.url.path), [
+      '/api/handshake',
+      '/api/whoami',
+    ]);
+    expect(requests.last.headers['Authorization'], 'Token $_token');
+  });
 
   test('password pairing uses the sessionless token exchange', () async {
     final requests = <http.Request>[];

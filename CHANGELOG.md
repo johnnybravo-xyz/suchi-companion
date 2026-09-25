@@ -10,6 +10,10 @@
 - Require HTTPS for all non-debug server origins, including restored tokens.
   Debug-only localhost/private-LAN HTTP remains available for development;
   redirects never receive credentials, and refused origins leave queued files.
+- Negotiate the server-declared `suchi-companion-v1` wire contract instead of
+  comparing server and app release numbers. A server without an explicit
+  declaration can proceed to scoped token verification; an explicit incompatible
+  contract list is refused before credentials are sent.
 - Restore the standard iOS left-edge back gesture while preserving the current
   document list, filter, sort and scroll position.
 - Saving document title, language, filing, sensitivity or tag changes clears

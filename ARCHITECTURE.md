@@ -75,9 +75,13 @@ filing category.
 ## Account and network boundary
 
 Pairing checks `/api/handshake` without credentials, then verifies a scoped
-token with `/api/whoami`. The client accepts only supported origins and refuses
-redirects. Password exchange obtains a mobile token; the app stores the token
-in platform secure storage, never a password or a browser credential.
+token with `/api/whoami`. The client requires the Suchi product and accepts an
+explicit `mobile_contracts` list only when it contains `suchi-companion-v1`.
+An absent declaration proceeds to the existing token scope/system checks;
+an explicit incompatible list does not send credentials. Server and app release
+numbers do not gate compatibility. The client accepts only supported origins
+and refuses redirects. Password exchange obtains a mobile token; the app stores
+the token in platform secure storage, never a password or a browser credential.
 
 After a successful `/api/whoami`, secure storage also records the bounded,
 validated `UserSelf` snapshot needed to identify offline data. Restoration may

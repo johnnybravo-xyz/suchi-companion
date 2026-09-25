@@ -8,7 +8,6 @@ import 'package:http_parser/http_parser.dart';
 
 import 'api_error.dart';
 import 'api_models.dart';
-import 'version.dart';
 
 sealed class ThumbnailResult {
   const ThumbnailResult();
@@ -38,6 +37,7 @@ final class SuchiClient {
       _ownsClient = httpClient == null;
 
   static const _jsonBodyLimit = 8 * 1024 * 1024;
+  static const _mobileContract = 'suchi-companion-v1';
   static const _imageBodyLimit = 16 * 1024 * 1024;
   static const _authTimeout = Duration(seconds: 10);
   static const _readTimeout = Duration(seconds: 20);
@@ -55,9 +55,9 @@ final class SuchiClient {
       timeout: _authTimeout,
     );
     final handshake = _parseSuccess(response, Handshake.fromJson);
+    final contracts = handshake.mobileContracts;
     if (handshake.product != 'suchi' ||
-        handshake.apiVersion != supportedApiVersion ||
-        compareSemanticVersions(handshake.minAppVersion, appVersion) > 0) {
+        (contracts != null && !contracts.contains(_mobileContract))) {
       throw ApiException(
         kind: ApiFailureKind.incompatibleServer,
         message: 'This Suchi server is not compatible with this app.',

@@ -51,6 +51,7 @@ flutter_launcher_icons:
   image_path: assets/brand/suchi-tile.png
   adaptive_icon_background: '#FAFAF8'
   adaptive_icon_foreground: assets/brand/suchi-tile.png
+  adaptive_icon_foreground_inset: 20
   background_color_ios: '#FAFAF8'
   remove_alpha_ios: true
   min_sdk_android: 24

@@ -20,6 +20,8 @@ class SearchScreen extends StatefulWidget {
     required this.onOpenDocument,
     required this.onOpenSavedView,
     this.savedViews,
+    this.focusRequest,
+    this.active = true,
     super.key,
   });
 
@@ -30,12 +32,19 @@ class SearchScreen extends StatefulWidget {
   final ValueChanged<SavedView> onOpenSavedView;
   final SavedViewController? savedViews;
 
+  /// Whether the IndexedStack currently displays Search.
+  final bool active;
+
+  /// A Documents shortcut request; ordinary tab selection leaves this null.
+  final int? focusRequest;
+
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
 class _SearchScreenState extends State<SearchScreen> {
   final _query = TextEditingController();
+  final _focusNode = FocusNode();
   final _scroll = ScrollController();
   Timer? _debounce;
   List<SearchHit> _results = const [];
@@ -70,6 +79,20 @@ class _SearchScreenState extends State<SearchScreen> {
       oldWidget.savedViews?.removeListener(_savedViewsChanged);
       widget.savedViews?.addListener(_savedViewsChanged);
     }
+    if (!widget.active) {
+      _focusNode.unfocus();
+    } else if (widget.focusRequest != null &&
+        widget.focusRequest != oldWidget.focusRequest) {
+      final request = widget.focusRequest;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            widget.active &&
+            widget.focusRequest == request &&
+            widget.session.user != null) {
+          _focusNode.requestFocus();
+        }
+      });
+    }
   }
 
   @override
@@ -77,6 +100,7 @@ class _SearchScreenState extends State<SearchScreen> {
     _generation++;
     _debounce?.cancel();
     _query.dispose();
+    _focusNode.dispose();
     _scroll.dispose();
     widget.session.removeListener(_sessionChanged);
     widget.savedViews?.removeListener(_savedViewsChanged);
@@ -90,6 +114,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (identity == _identity) return;
     _identity = identity;
     _identityGeneration++;
+    _focusNode.unfocus();
     _query.clear();
     _queryChanged();
   }
@@ -248,6 +273,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     TextField(
                       key: const ValueKey('archive-search'),
                       controller: _query,
+                      focusNode: _focusNode,
                       keyboardType: TextInputType.text,
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(

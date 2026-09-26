@@ -678,6 +678,39 @@ void main() {
     },
   );
 
+  testNavigation('Documents search opens a focused, retained Search field', (
+    tester,
+  ) async {
+    await showShell(tester);
+    final field = find.byKey(
+      const ValueKey('archive-search'),
+      skipOffstage: false,
+    );
+    bool focused() => tester.widget<TextField>(field).focusNode!.hasFocus;
+
+    expect(focused(), isFalse);
+    await tester.tap(find.text('Search').last);
+    await tester.pumpAndSettle();
+    expect(focused(), isFalse);
+
+    await tester.tap(find.text('Documents').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Search documents'));
+    await tester.pumpAndSettle();
+    expect(focused(), isTrue);
+    expect(tester.testTextInput.isVisible, isTrue);
+
+    await tester.enterText(field, 'receipt');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Documents').last);
+    await tester.pumpAndSettle();
+    expect(focused(), isFalse);
+    await tester.tap(find.byTooltip('Search documents'));
+    await tester.pumpAndSettle();
+    expect(focused(), isTrue);
+    expect(tester.widget<TextField>(field).controller!.text, 'receipt');
+  });
+
   testNavigation('server Saved View opens its exact scope in Documents', (
     tester,
   ) async {

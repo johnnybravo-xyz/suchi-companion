@@ -41,6 +41,8 @@ class _SuchiShellState extends State<SuchiShell> {
   SuchiClient? _categoryClient;
   late final SavedViewController _savedViews;
   int _selected = 0;
+  int _searchFocusSerial = 0;
+  int? _searchFocusRequest;
   SavedView? _requestedSavedView;
   int _savedViewRevision = 0;
   bool _choosingCaptureMode = false;
@@ -151,8 +153,18 @@ class _SuchiShellState extends State<SuchiShell> {
   void _openQueue() => setState(() => _selected = 2);
 
   void _select(int index) {
-    setState(() => _selected = index);
+    setState(() {
+      _selected = index;
+      _searchFocusRequest = null;
+    });
     if (index == 2) _capture();
+  }
+
+  void _openSearchFromDocuments() {
+    setState(() {
+      _selected = 3;
+      _searchFocusRequest = ++_searchFocusSerial;
+    });
   }
 
   void _capture() {
@@ -348,7 +360,7 @@ class _SuchiShellState extends State<SuchiShell> {
         categories: categories,
         offlineDocuments: widget.services.offlineDocuments,
         network: widget.services.network,
-        onOpenSearch: () => _select(3),
+        onOpenSearch: _openSearchFromDocuments,
         onOpenDocument: _openDocument,
         onOpenOfflineDocument: _openOfflineDocument,
       ),
@@ -360,6 +372,8 @@ class _SuchiShellState extends State<SuchiShell> {
         onOpenDocument: _openDocument,
         onOpenSavedView: _openSavedView,
         savedViews: _savedViews,
+        active: _selected == 3,
+        focusRequest: _selected == 3 ? _searchFocusRequest : null,
       ),
       MoreScreen(
         session: widget.services.session,

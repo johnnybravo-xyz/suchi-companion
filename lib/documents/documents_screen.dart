@@ -597,6 +597,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         }
       }
     }
+    final offlineCount =
+        widget.offlineDocuments?.entriesFor(widget.session.identity).length ??
+        0;
+    final scopeName = _offlineSelected
+        ? 'Saved offline'
+        : _activeView?.name ?? selectedCategory?.label ?? 'All documents';
+    final showDocumentCount =
+        !_offlineSelected && !_loading && _error == null && _scopeError == null;
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: colors.paper,
@@ -617,54 +625,76 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               userLabel: widget.session.user!.label,
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
-              child: Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+              child: Row(
                 children: [
-                  Text(
-                    'Documents',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (widget.client != null)
-                        IconButton(
-                          tooltip: 'Search documents',
-                          constraints: const BoxConstraints(
-                            minWidth: 48,
-                            minHeight: 48,
+                  Expanded(
+                    child: Tooltip(
+                      message: categories == null
+                          ? 'Offline documents'
+                          : 'Open JD Index',
+                      child: InkWell(
+                        onTap: categories == null
+                            ? null
+                            : () => _scaffoldKey.currentState?.openEndDrawer(),
+                        borderRadius: BorderRadius.circular(8),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 48),
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  scopeName,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium,
+                                ),
+                              ),
+                              if (categories != null) ...[
+                                const SizedBox(width: 6),
+                                Icon(Icons.expand_more, color: colors.ink),
+                              ],
+                            ],
                           ),
-                          onPressed: widget.onOpenSearch,
-                          icon: const Icon(Icons.search),
                         ),
-                      PopupMenuButton<String>(
-                        tooltip: _activeView == null
-                            ? 'Sort documents'
-                            : 'Saved View controls sorting',
-                        enabled: _activeView == null,
-                        initialValue: _ordering,
-                        onSelected: _selectSort,
-                        icon: const Icon(Icons.sort),
-                        style: IconButton.styleFrom(
-                          minimumSize: const Size(48, 48),
-                        ),
-                        itemBuilder: (context) => [
-                          for (final entry in const {
-                            '-created_at': 'Newest first',
-                            'created_at': 'Oldest first',
-                            'title': 'Title A–Z',
-                            '-updated_at': 'Recently updated',
-                          }.entries)
-                            CheckedPopupMenuItem(
-                              value: entry.key,
-                              checked: _ordering == entry.key,
-                              child: Text(entry.value),
-                            ),
-                        ],
                       ),
+                    ),
+                  ),
+                  if (widget.client != null)
+                    IconButton(
+                      tooltip: 'Search documents',
+                      constraints: const BoxConstraints(
+                        minWidth: 48,
+                        minHeight: 48,
+                      ),
+                      onPressed: widget.onOpenSearch,
+                      icon: const Icon(Icons.search),
+                    ),
+                  PopupMenuButton<String>(
+                    tooltip: _activeView == null
+                        ? 'Sort documents'
+                        : 'Saved View controls sorting',
+                    enabled: _activeView == null,
+                    initialValue: _ordering,
+                    onSelected: _selectSort,
+                    icon: const Icon(Icons.sort),
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                    ),
+                    itemBuilder: (context) => [
+                      for (final entry in const {
+                        '-created_at': 'Newest first',
+                        'created_at': 'Oldest first',
+                        'title': 'Title A–Z',
+                        '-updated_at': 'Recently updated',
+                      }.entries)
+                        CheckedPopupMenuItem(
+                          value: entry.key,
+                          checked: _ordering == entry.key,
+                          child: Text(entry.value),
+                        ),
                     ],
                   ),
                 ],
@@ -673,74 +703,62 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Wrap(
-                spacing: 16,
-                runSpacing: 4,
+                spacing: 9,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Tooltip(
-                    message: categories == null
-                        ? 'Offline documents'
-                        : 'Open JD Index',
-                    child: InkWell(
-                      onTap: categories == null
-                          ? null
-                          : () => _scaffoldKey.currentState?.openEndDrawer(),
-                      borderRadius: BorderRadius.circular(8),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 48),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                _offlineSelected
-                                    ? 'Offline'
-                                    : _activeView?.name ??
-                                          selectedCategory?.label ??
-                                          'All documents',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color:
-                                          !_offlineSelected &&
-                                              _activeView == null &&
-                                              selectedCategory == null
-                                          ? colors.muted
-                                          : colors.accent,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                              ),
-                            ),
-                            if (categories != null) ...[
-                              const SizedBox(width: 4),
-                              Icon(Icons.expand_more, color: colors.muted),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (!_loading && _error == null && _scopeError == null)
+                  if (showDocumentCount)
                     Text(
                       '$_count ${_count == 1 ? 'document' : 'documents'}',
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: colors.muted),
                     ),
                   if (widget.offlineDocuments != null)
-                    FilterChip(
-                      avatar: const Icon(Icons.offline_pin_outlined, size: 18),
-                      label: Text(
-                        'Saved offline · ${widget.offlineDocuments!.entriesFor(widget.session.identity).length}',
-                      ),
-                      selected: _offlineSelected,
-                      onSelected: widget.client == null
-                          ? null
-                          : (selected) {
-                              if (selected) {
-                                _selectOffline(closeDrawer: false);
-                              } else {
-                                _selectCategory(null, closeDrawer: false);
-                              }
-                            },
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (showDocumentCount) ...[
+                          Text(
+                            '·',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colors.muted),
+                          ),
+                          const SizedBox(width: 9),
+                        ],
+                        Flexible(
+                          child: TextButton(
+                            onPressed: widget.client == null
+                                ? null
+                                : () {
+                                    if (_offlineSelected) {
+                                      _selectCategory(null, closeDrawer: false);
+                                    } else {
+                                      _selectOffline(closeDrawer: false);
+                                    }
+                                  },
+                            style: TextButton.styleFrom(
+                              foregroundColor: colors.accent,
+                              disabledForegroundColor: colors.accent,
+                              textStyle: Theme.of(context).textTheme.bodySmall,
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(0, 44),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.offline_pin_outlined,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text('$offlineCount saved offline'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                 ],
               ),
@@ -758,6 +776,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     selectedId: _categoryId,
     includeAll: true,
     onAllSelected: () => _selectCategory(null),
+    offlineSelected: _offlineSelected,
+    offlineCount:
+        widget.offlineDocuments?.entriesFor(widget.session.identity).length ??
+        0,
+    onOfflineSelected: widget.offlineDocuments == null
+        ? null
+        : () => _selectOffline(),
     onSelected: _selectCategory,
   );
 

@@ -101,7 +101,7 @@ void main() {
     expect(fixture.store.find(fixture.session.identity, 91), same(saved));
     expect(await tester.runAsync(saved.payload.exists), isTrue);
 
-    await tester.tap(find.text('Saved offline · 1'));
+    await tester.tap(find.widgetWithText(TextButton, '1 saved offline'));
     await tester.pumpAndSettle();
     await tester.drag(find.text('Authoritative receipt'), const Offset(220, 0));
     await tester.pumpAndSettle();

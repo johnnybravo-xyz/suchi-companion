@@ -95,13 +95,14 @@ display switches to **Finishing offline copy** until the protected copy is
 verified; only then does it appear as saved. **Cancel** abandons an in-flight
 copy without replacing a previously saved version.
 
-In **Documents**, the visible **Saved offline** filter shows the current
-account's saved-copy count. Select it to list copies without a network request;
-tap a row to open its protected full file. The category drawer does not
-duplicate this destination. Swipe left here to remove a saved copy even while
-offline; swipe right to save/update is available only on online rows. Swipe
-actions fold away after selection, while underlying work can still be retried
-or cancelled.
+In **Documents**, the current scope is the heading. Open it to choose all
+documents, a category, or **Saved offline**. The inline saved-copy count below
+the heading opens this account's offline library without a network request;
+tap it again to return to All documents when online browsing is available.
+Tap a row to open its protected full file.
+Swipe left there to remove a saved copy even while offline; swipe right to
+save/update is available only on online rows. Swipe actions fold away after
+selection, while underlying work can still be retried or cancelled.
 
 When a previously verified credential cannot reach its server, Suchi Companion
 keeps local Documents, Scan and More available. Scans enter the same protected,

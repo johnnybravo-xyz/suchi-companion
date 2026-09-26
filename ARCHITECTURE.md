@@ -265,13 +265,14 @@ swipe saves. Receipt of the final byte enters an indeterminate finishing state
 until validation and the atomic commit publish the copy. Stale-account callbacks
 cannot restore a cleared indicator or publish a copy.
 
-Documents owns the only saved-copy library entry point: the visible
-**Saved offline** filter shows the current account's count. It sorts
-manifest-backed rows without HTTP and opens the local payload even when a
-client is available.
-The category drawer has no second offline destination. Swiping right on an
-online row exposes Make/Update; swiping left on a saved row (including the
-local-only library) exposes confirmed removal without contacting the server.
+Documents owns the only saved-copy library entry point. **Saved offline** is a
+scope in the same picker as all documents and categories. Its inline,
+account-scoped count toggles between saved copies and All documents when a
+client is available. The offline library sorts manifest-backed rows without HTTP
+and opens the local payload even when a client is available.
+Swiping right on an online row exposes Make/Update; swiping left on a saved
+row (including the local-only library) exposes confirmed removal without
+contacting the server.
 Actions collapse when tapped. Saving fetches current detail, asks
 consent if classification is newly sensitive, and rejects results after an
 identity change. Network/timeout detail failures may fall back only to the

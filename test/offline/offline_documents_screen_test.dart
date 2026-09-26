@@ -120,7 +120,7 @@ void main() {
       onOpenOffline: (entry) => handedOff = entry,
     );
 
-    expect(find.text('Offline'), findsWidgets);
+    expect(find.text('Saved offline'), findsOneWidget);
     expect(find.text('Quarterly report'), findsOneWidget);
     expect(listRequests, 0);
 
@@ -130,13 +130,13 @@ void main() {
 
     network.setOnline(true);
     await tester.pumpAndSettle();
-    expect(find.text('Offline'), findsWidgets);
+    expect(find.text('Saved offline'), findsOneWidget);
     expect(find.text('Quarterly report'), findsOneWidget);
     expect(listRequests, 0);
   });
 
   testWidgets(
-    'a document-list network failure switches to Offline and stays there',
+    'a document-list network failure switches to Saved offline and stays there',
     (tester) async {
       network.online = true;
       await _pumpDocuments(
@@ -148,63 +148,89 @@ void main() {
       );
 
       expect(listRequests, 1);
-      expect(find.text('Offline'), findsWidgets);
+      expect(find.text('Saved offline'), findsOneWidget);
       expect(find.text('Quarterly report'), findsOneWidget);
 
       network.setOnline(true);
       await tester.pumpAndSettle();
       expect(listRequests, 1);
-      expect(find.text('Offline'), findsWidgets);
+      expect(find.text('Saved offline'), findsOneWidget);
     },
   );
 
-  testWidgets('visible offline filter opens saved copy without a fetch', (
-    tester,
-  ) async {
-    listFails = false;
-    network.online = true;
-    final categories = JdCategoryStore(
-      client: client,
-      onUnauthorized: session.expire,
-    );
-    addTearDown(categories.dispose);
-    int? openedDocument;
-    OfflineDocument? handedOff;
-    await _pumpDocuments(
-      tester,
-      session: session,
-      client: client,
-      store: store,
-      network: network,
-      categories: categories,
-      onOpenDocument: (id) => openedDocument = id,
-      onOpenOffline: (entry) => handedOff = entry,
-    );
+  testWidgets(
+    'offline picker and count toggle round-trip without a copy fetch',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      listFails = false;
+      network.online = true;
+      final categories = JdCategoryStore(
+        client: client,
+        onUnauthorized: session.expire,
+      );
+      addTearDown(categories.dispose);
+      int? openedDocument;
+      OfflineDocument? handedOff;
+      await _pumpDocuments(
+        tester,
+        session: session,
+        client: client,
+        store: store,
+        network: network,
+        categories: categories,
+        onOpenDocument: (id) => openedDocument = id,
+        onOpenOffline: (entry) => handedOff = entry,
+      );
 
-    expect(find.text('All documents'), findsOneWidget);
-    expect(
-      find.widgetWithText(FilterChip, 'Saved offline · 1'),
-      findsOneWidget,
-    );
-    expect(listRequests, 1);
-    await tester.tap(find.byTooltip('Open JD Index'));
-    await tester.pumpAndSettle();
-    expect(find.widgetWithText(ListTile, 'Offline'), findsNothing);
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
-    final beforeOffline = apiRequests.length;
-    await tester.tap(find.widgetWithText(FilterChip, 'Saved offline · 1'));
-    await tester.pumpAndSettle();
+      expect(find.text('All documents'), findsOneWidget);
+      expect(find.text('2 documents'), findsOneWidget);
+      expect(
+        find.widgetWithText(TextButton, '1 saved offline'),
+        findsOneWidget,
+      );
+      expect(listRequests, 1);
+      await tester.tap(find.byTooltip('Open JD Index'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(ListTile, 'Saved offline'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ListTile, 'Saved offline'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Quarterly report'), findsOneWidget);
-    expect(apiRequests, hasLength(beforeOffline));
-    await tester.tap(find.text('Quarterly report'));
-    expect(openedDocument, isNull);
-    expect(handedOff, same(store.find(session.identity, 91)));
-    expect(apiRequests, hasLength(beforeOffline));
-  });
+      expect(find.text('Saved offline'), findsOneWidget);
+      expect(find.text('Quarterly report'), findsOneWidget);
+      expect(listRequests, 1);
+      await tester.tap(find.byTooltip('Open JD Index'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, 'All documents'));
+      await tester.pumpAndSettle();
+      expect(listRequests, 2);
 
-  testWidgets('narrow large-text offline filter still opens the local copy', (
+      final beforeOffline = apiRequests.length;
+      await tester.tap(find.widgetWithText(TextButton, '1 saved offline'));
+      await tester.pumpAndSettle();
+      expect(find.text('Quarterly report'), findsOneWidget);
+      expect(apiRequests, hasLength(beforeOffline));
+      await tester.tap(find.widgetWithText(TextButton, '1 saved offline'));
+      await tester.pumpAndSettle();
+      expect(find.text('All documents'), findsOneWidget);
+      expect(find.text('2 documents'), findsOneWidget);
+      expect(find.text('March electricity bill'), findsOneWidget);
+      expect(listRequests, 3);
+
+      final beforeReturn = apiRequests.length;
+      await tester.tap(find.widgetWithText(TextButton, '1 saved offline'));
+      await tester.pumpAndSettle();
+      expect(find.text('Saved offline'), findsOneWidget);
+      expect(find.text('Quarterly report'), findsOneWidget);
+      expect(apiRequests, hasLength(beforeReturn));
+      await tester.tap(find.text('Quarterly report'));
+      expect(openedDocument, isNull);
+      expect(handedOff, same(store.find(session.identity, 91)));
+      expect(apiRequests, hasLength(beforeReturn));
+    },
+  );
+
+  testWidgets('narrow large-text offline count opens the local copy', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(320, 700));
@@ -222,10 +248,15 @@ void main() {
 
     expect(tester.takeException(), isNull);
     final beforeOffline = apiRequests.length;
-    await tester.tap(find.widgetWithText(FilterChip, 'Saved offline · 1'));
+    await tester.tap(find.widgetWithText(TextButton, '1 saved offline'));
     await tester.pumpAndSettle();
     expect(find.text('Quarterly report'), findsOneWidget);
     expect(apiRequests, hasLength(beforeOffline));
+    await tester.tap(find.widgetWithText(TextButton, '1 saved offline'));
+    await tester.pumpAndSettle();
+    expect(find.text('All documents'), findsOneWidget);
+    expect(find.text('2 documents'), findsOneWidget);
+    expect(listRequests, 2);
     expect(tester.takeException(), isNull);
   });
 
@@ -243,6 +274,14 @@ void main() {
     );
 
     expect(find.text('Quarterly report'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextButton>(
+            find.widgetWithText(TextButton, '1 saved offline'),
+          )
+          .onPressed,
+      isNull,
+    );
     expect(apiRequests, isEmpty);
     await tester.tap(find.text('Quarterly report'));
     expect(handedOff?.document.id, 91);

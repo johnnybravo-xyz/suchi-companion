@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Promote the current Documents scope to its heading, with search and sort
+  alongside, document/offline counts below, and **Saved offline** in the scope
+  picker. The inline count toggles saved copies and All documents. Documents'
+  search action now focuses Search's input; ordinary tab selection does not.
 - Match Android's launch mark to the iPhone's compact visual scale and keep the
   complete rounded silhouette inside Android 12 splash and circular launcher
   icon safe areas.
@@ -103,8 +107,8 @@
   Swipe right on an online Documents row to save or update a copy; swipe
   left on a saved row, including the offline library, to confirm local removal.
   Actions close when tapped and can be reopened to inspect or cancel work.
-  Documents' visible **Saved offline** filter shows the count and opens copies locally,
-  including while connected. More no longer duplicates that library.
+  Documents' **Saved offline** scope and tappable inline count open copies
+  locally, including while connected. More does not duplicate that library.
   A verified saved account can use Documents, Scan and More after network
   failure. Scans enter the same protected, account-bound queue; uploads stay
   paused until authenticated retry succeeds, not merely until connectivity

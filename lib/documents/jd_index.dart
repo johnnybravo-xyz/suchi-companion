@@ -39,6 +39,9 @@ class JdIndex extends StatefulWidget {
     this.selectedId,
     this.includeAll = false,
     this.onAllSelected,
+    this.offlineSelected = false,
+    this.offlineCount = 0,
+    this.onOfflineSelected,
   });
 
   final JdCategoryStore store;
@@ -47,6 +50,9 @@ class JdIndex extends StatefulWidget {
   final int? selectedId;
   final bool includeAll;
   final VoidCallback? onAllSelected;
+  final bool offlineSelected;
+  final int offlineCount;
+  final VoidCallback? onOfflineSelected;
 
   @override
   State<JdIndex> createState() => _JdIndexState();
@@ -120,6 +126,32 @@ class _JdIndexState extends State<JdIndex> {
             ),
           ),
           const SizedBox(height: 12),
+          if (widget.includeAll || widget.onOfflineSelected != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Column(
+                children: [
+                  if (widget.includeAll)
+                    ListTile(
+                      minTileHeight: 52,
+                      selected:
+                          widget.selectedId == null && !widget.offlineSelected,
+                      leading: const Icon(Icons.all_inbox_outlined),
+                      title: const Text('All documents'),
+                      onTap: widget.onAllSelected,
+                    ),
+                  if (widget.onOfflineSelected != null)
+                    ListTile(
+                      minTileHeight: 52,
+                      selected: widget.offlineSelected,
+                      leading: const Icon(Icons.offline_pin_outlined),
+                      title: const Text('Saved offline'),
+                      trailing: Text('${widget.offlineCount}'),
+                      onTap: widget.onOfflineSelected,
+                    ),
+                ],
+              ),
+            ),
           Expanded(child: _content(context, categories)),
         ],
       );
@@ -159,14 +191,6 @@ class _JdIndexState extends State<JdIndex> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 2, 18, 28),
       children: [
-        if (widget.includeAll)
-          ListTile(
-            minTileHeight: 52,
-            selected: widget.selectedId == null,
-            leading: const Icon(Icons.all_inbox_outlined),
-            title: const Text('All documents'),
-            onTap: widget.onAllSelected,
-          ),
         for (final entry in grouped.entries) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 18, 4, 7),

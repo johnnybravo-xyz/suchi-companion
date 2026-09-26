@@ -55,9 +55,10 @@
   per-account claims, receipts, partial rejection and explicit retry reuse the
   existing protected queue; account changes cannot adopt an open picker batch.
   Controls stay usable at large text without covering upload recovery.
-- Add a visible **More → Privacy policy** link to the public HTTPS website.
-  That draft needs deployment and a monitored owner privacy contact before
-  any store submission; it is not a claim of store approval.
+- Link **More → Explore Suchi** to the fixed public `https://suchi.page`
+  website, distinct from the paired web app. **Privacy & storage** still
+  explains local behavior; a public policy and monitored privacy contact
+  remain separate requirements before store submission.
 - Tap the raised centre camera button to use the last mode; long-press for a
   nearby Scanner/Photo picker that remembers the choice and starts capture.
   The tiny label below the icon is removed; haptic hold feedback, a spoken

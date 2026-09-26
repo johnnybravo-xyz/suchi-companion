@@ -27,7 +27,7 @@ class MoreScreen extends StatefulWidget {
 }
 
 class _MoreScreenState extends State<MoreScreen> {
-  static final _privacyPolicy = Uri.parse('https://suchi.page/privacy/');
+  static final _website = Uri.parse('https://suchi.page');
 
   bool _savingTheme = false;
   bool _savingOcr = false;
@@ -59,21 +59,16 @@ class _MoreScreenState extends State<MoreScreen> {
     }
   }
 
-  Future<void> _openPrivacyPolicy(BuildContext context) async {
+  Future<void> _openWebsite(BuildContext context) async {
     bool opened;
     try {
-      opened = await launchUrl(
-        _privacyPolicy,
-        mode: LaunchMode.externalApplication,
-      );
+      opened = await launchUrl(_website, mode: LaunchMode.externalApplication);
     } catch (_) {
       opened = false;
     }
     if (!opened && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('The privacy policy could not be opened.'),
-        ),
+        const SnackBar(content: Text('The Suchi website could not be opened.')),
       );
     }
   }
@@ -671,12 +666,10 @@ class _MoreScreenState extends State<MoreScreen> {
                     Divider(height: 1, thickness: 1, color: colors.line),
                     ListTile(
                       leading: const Icon(Icons.open_in_browser_outlined),
-                      title: const Text('Privacy policy'),
-                      subtitle: offline
-                          ? const Text('Available when connected')
-                          : null,
+                      title: const Text('Explore Suchi'),
+                      subtitle: const Text('suchi.page'),
                       trailing: const Icon(Icons.open_in_new),
-                      onTap: offline ? null : () => _openPrivacyPolicy(context),
+                      onTap: () => _openWebsite(context),
                     ),
                   ],
                 ),

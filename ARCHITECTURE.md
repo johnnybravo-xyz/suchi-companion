@@ -337,11 +337,12 @@ or cancellation removes partials. Sign-out and cold startup clear export
 copies, and later exports prune copies older than 24 hours. Another app may
 retain a shared copy outside Suchi Companion's control.
 
-More's privacy-policy action opens the fixed public HTTPS
-`https://suchi.page/privacy/` address, never the paired origin or credentials.
-That page is an owner-controlled release dependency, not a server operator's
-policy; until it is deployed with a monitored contact, store privacy approval
-is blocked.
+More's **Explore Suchi** action opens the fixed public HTTPS
+`https://suchi.page` address, never the paired origin or credentials; it
+remains available when the paired server is offline. **Privacy & storage**
+describes device-local behavior. A public privacy policy with a monitored
+contact remains an owner-controlled store-release dependency, not a server
+operator's policy; the in-app explanation does not replace it.
 
 ## Verification
 

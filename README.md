@@ -176,12 +176,12 @@ platform. The app accepts the pinned server's flat and snapshot filter shapes;
 unsupported future filters stay visible but never issue a partial document
 request.
 
-**More → Privacy policy** opens the public `https://suchi.page/privacy/` route
-in the browser, separate from the paired server. **Privacy & storage** explains
-device-local behavior in the app. The public route currently needs deployment
-and an owner-designated monitored privacy contact before it can serve as a
-completed store policy. No support link is presented as monitored until the
-owner supplies a real channel.
+**More → Explore Suchi** opens the public `https://suchi.page` site in the
+browser, separate from the paired server and without credentials.
+**Privacy & storage** explains device-local behavior in the app. A public
+privacy policy and an owner-designated monitored privacy contact remain
+separate requirements before store submission; the in-app explanation does
+not replace them.
 
 The exact compatible server revision and API version are recorded in
 [`tool/toolchain.json`](tool/toolchain.json). The mirrored response fixtures in

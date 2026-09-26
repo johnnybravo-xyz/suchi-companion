@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
 import 'package:suchi_mobile/api/api_models.dart';
@@ -44,13 +45,33 @@ void main() {
     await database.close();
   });
 
-  testWidgets('offline More offers retry without a second document library', (
+  testWidgets('offline More offers retry and opens the public website', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    const launcher = MethodChannel('plugins.flutter.io/url_launcher');
+    final launched = <String>[];
+    var opens = true;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(launcher, (call) async {
+          if (call.method != 'launch') return null;
+          final arguments = call.arguments as Map<Object?, Object?>;
+          launched.add(arguments['url'] as String);
+          expect(arguments['headers'], isEmpty);
+          expect(arguments['useWebView'], false);
+          return opens;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(launcher, null),
+    );
     await tester.pumpWidget(
       MaterialApp(
         theme: SuchiTheme.light,
-        home: MoreScreen(session: session, settings: settings),
+        home: Scaffold(
+          body: MoreScreen(session: session, settings: settings),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -62,12 +83,19 @@ void main() {
       tester.widget<ListTile>(find.widgetWithText(ListTile, 'Trash')).onTap,
       isNull,
     );
-    expect(
-      tester
-          .widget<ListTile>(find.widgetWithText(ListTile, 'Privacy policy'))
-          .onTap,
-      isNull,
-    );
+    expect(find.widgetWithText(ListTile, 'Privacy & storage'), findsOneWidget);
+    expect(find.text('Privacy policy'), findsNothing);
+    await tester.scrollUntilVisible(find.text('Explore Suchi'), 300);
+    await tester.tap(find.text('Explore Suchi'));
+    await tester.pumpAndSettle();
+    expect(launched, ['https://suchi.page']);
+
+    opens = false;
+    await tester.tap(find.text('Explore Suchi'));
+    await tester.pumpAndSettle();
+    expect(find.text('The Suchi website could not be opened.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(find.text('Sign out'), 300);
     await tester.tap(find.text('Sign out'));

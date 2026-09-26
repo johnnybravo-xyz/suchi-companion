@@ -1168,6 +1168,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
                         enabled:
                             !_mutating && !_fileLoading && !_offlineMutating,
                         icon: const Icon(Icons.more_vert),
+                        clipBehavior: Clip.antiAlias,
                         style: IconButton.styleFrom(
                           minimumSize: const Size(48, 48),
                         ),

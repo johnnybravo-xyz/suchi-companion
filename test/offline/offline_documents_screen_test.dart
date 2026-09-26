@@ -210,7 +210,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Quarterly report'), findsOneWidget);
       expect(apiRequests, hasLength(beforeOffline));
-      await tester.tap(find.widgetWithText(TextButton, '1 saved offline'));
+      await tester.tap(find.widgetWithText(TextButton, 'All documents'));
       await tester.pumpAndSettle();
       expect(find.text('All documents'), findsOneWidget);
       expect(find.text('2 documents'), findsOneWidget);
@@ -252,7 +252,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Quarterly report'), findsOneWidget);
     expect(apiRequests, hasLength(beforeOffline));
-    await tester.tap(find.widgetWithText(TextButton, '1 saved offline'));
+    await tester.tap(find.widgetWithText(TextButton, 'All documents'));
     await tester.pumpAndSettle();
     expect(find.text('All documents'), findsOneWidget);
     expect(find.text('2 documents'), findsOneWidget);

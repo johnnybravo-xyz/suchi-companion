@@ -4,10 +4,17 @@
 
 ### Changed
 
+- Open Documents after a successful empty initial Inbox load, without
+  overriding a failed load, a deliberate tab choice or a changed account.
+- Round and clip Documents sorting and offline-copy option popups to match
+  Scan's long-press mode picker on Android and iOS.
+
 - Promote the current Documents scope to its heading, with search and sort
   alongside, document/offline counts below, and **Saved offline** in the scope
-  picker. The inline count toggles saved copies and All documents. Documents'
-  search action now focuses Search's input; ordinary tab selection does not.
+  picker. The inline saved-copy count stays right-aligned and becomes
+  **← All documents** when returning from saved copies is available.
+  Documents' search action now focuses Search's input; ordinary tab selection
+  does not.
 - Match Android's launch mark to the iPhone's compact visual scale and keep the
   complete rounded silhouette inside Android 12 splash and circular launcher
   icon safe areas.

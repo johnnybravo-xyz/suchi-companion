@@ -303,6 +303,14 @@ abstract final class SuchiTheme {
         backgroundColor: colors.paper,
         surfaceTintColor: Colors.transparent,
       ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: colors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(18)),
+        ),
+        menuPadding: const EdgeInsets.symmetric(vertical: 8),
+      ),
       dividerTheme: DividerThemeData(
         color: colors.line,
         thickness: 1,

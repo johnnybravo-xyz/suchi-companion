@@ -605,6 +605,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         : _activeView?.name ?? selectedCategory?.label ?? 'All documents';
     final showDocumentCount =
         !_offlineSelected && !_loading && _error == null && _scopeError == null;
+    final canReturnToAll = _offlineSelected && widget.client != null;
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: colors.paper,
@@ -677,6 +678,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                         ? 'Sort documents'
                         : 'Saved View controls sorting',
                     enabled: _activeView == null,
+                    clipBehavior: Clip.antiAlias,
                     initialValue: _ordering,
                     onSelected: _selectSort,
                     icon: const Icon(Icons.sort),
@@ -702,63 +704,73 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Wrap(
-                spacing: 9,
-                crossAxisAlignment: WrapCrossAlignment.center,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (showDocumentCount)
-                    Text(
-                      '$_count ${_count == 1 ? 'document' : 'documents'}',
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: colors.muted),
-                    ),
-                  if (widget.offlineDocuments != null)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (showDocumentCount) ...[
-                          Text(
-                            '·',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colors.muted),
-                          ),
-                          const SizedBox(width: 9),
-                        ],
-                        Flexible(
-                          child: TextButton(
-                            onPressed: widget.client == null
-                                ? null
-                                : () {
-                                    if (_offlineSelected) {
-                                      _selectCategory(null, closeDrawer: false);
-                                    } else {
-                                      _selectOffline(closeDrawer: false);
-                                    }
-                                  },
-                            style: TextButton.styleFrom(
-                              foregroundColor: colors.accent,
-                              disabledForegroundColor: colors.accent,
-                              textStyle: Theme.of(context).textTheme.bodySmall,
-                              padding: EdgeInsets.zero,
-                              minimumSize: const Size(0, 44),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  Expanded(
+                    child: showDocumentCount
+                        ? Padding(
+                            padding: EdgeInsets.only(
+                              top: widget.offlineDocuments == null ? 0 : 10,
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
+                            child: Text(
+                              '$_count ${_count == 1 ? 'document' : 'documents'}',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: colors.muted),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                  if (widget.offlineDocuments != null)
+                    Flexible(
+                      flex: 2,
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: TextButton(
+                          onPressed: widget.client == null
+                              ? null
+                              : () {
+                                  if (_offlineSelected) {
+                                    _selectCategory(null, closeDrawer: false);
+                                  } else {
+                                    _selectOffline(closeDrawer: false);
+                                  }
+                                },
+                          style: TextButton.styleFrom(
+                            foregroundColor: colors.accent,
+                            disabledForegroundColor: colors.accent,
+                            textStyle: Theme.of(context).textTheme.bodySmall,
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(0, 44),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (canReturnToAll)
+                                const Icon(
+                                  Icons.arrow_back,
+                                  size: 20,
+                                  semanticLabel: 'Back to',
+                                )
+                              else
                                 const Icon(
                                   Icons.offline_pin_outlined,
                                   size: 20,
                                 ),
-                                const SizedBox(width: 8),
-                                Flexible(
-                                  child: Text('$offlineCount saved offline'),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  canReturnToAll
+                                      ? 'All documents'
+                                      : '$offlineCount saved offline',
+                                  textAlign: TextAlign.end,
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
+                      ),
                     ),
                 ],
               ),

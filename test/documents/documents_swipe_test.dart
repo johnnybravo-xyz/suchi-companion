@@ -74,6 +74,53 @@ void main() {
     },
   );
 
+  for (final textScale in [1.0, 2.0]) {
+    testWidgets(
+      'saved-offline count stays right aligned across scopes at ${textScale}x text',
+      (tester) async {
+        _phoneViewport(tester);
+        await fixture.show(tester, textScaler: TextScaler.linear(textScale));
+        final toggle = find.widgetWithText(TextButton, '0 saved offline');
+        expect(find.text('1 document'), findsOneWidget);
+        final right = tester.getRect(toggle).right;
+        final top = tester.getRect(toggle).top;
+        expect(right, closeTo(370, 0.5));
+
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(find.text('Saved offline'), findsOneWidget);
+        expect(toggle, findsNothing);
+        final back = find.widgetWithText(TextButton, 'All documents');
+        expect(back, findsOneWidget);
+        expect(
+          find.descendant(of: back, matching: find.byIcon(Icons.arrow_back)),
+          findsOneWidget,
+        );
+        final semantics = tester.ensureSemantics();
+        await tester.pump();
+        final returnLabel = tester.getSemantics(back).label;
+        expect(returnLabel, contains('Back to'));
+        expect(returnLabel, contains('All documents'));
+        semantics.dispose();
+        expect(tester.getRect(back).right, closeTo(right, 0.5));
+        expect(tester.getRect(back).top, closeTo(top, 0.5));
+
+        await tester.tap(back);
+        await tester.pumpAndSettle();
+        expect(find.text('All documents'), findsOneWidget);
+        expect(find.text('1 document'), findsOneWidget);
+        expect(back, findsNothing);
+        expect(tester.getRect(toggle).top, closeTo(top, 0.5));
+        expect(tester.getRect(toggle).right, closeTo(right, 0.5));
+        expect(tester.takeException(), isNull);
+      },
+      variant: TargetPlatformVariant({
+        TargetPlatform.android,
+        TargetPlatform.iOS,
+      }),
+    );
+  }
+
   testWidgets('left swipe removes only the confirmed device copy', (
     tester,
   ) async {

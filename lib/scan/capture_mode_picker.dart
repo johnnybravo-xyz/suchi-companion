@@ -117,11 +117,9 @@ Future<CaptureMode?> chooseCaptureMode(
   final selected = await showMenu<CaptureMode>(
     context: context,
     semanticLabel: title,
-    color: colors.surface,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
     constraints: BoxConstraints.tightFor(width: width),
-    menuPadding: const EdgeInsets.symmetric(vertical: 8),
     popUpAnimationStyle: SuchiMotion.standardStyle(context),
+    clipBehavior: Clip.antiAlias,
     position: RelativeRect.fromLTRB(
       left.toDouble(),
       math.max(8.0, topLeft.dy - menuHeight - 8),

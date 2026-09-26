@@ -95,10 +95,17 @@ display switches to **Finishing offline copy** until the protected copy is
 verified; only then does it appear as saved. **Cancel** abandons an in-flight
 copy without replacing a previously saved version.
 
+If the first Inbox load on an online cold start succeeds with no documents,
+Suchi Companion opens Documents instead. A failed load stays in Inbox for
+**Retry**, and choosing a tab yourself prevents the automatic switch. Documents
+sorting and detail's offline-copy options use the same rounded popup style as
+Scan's long-press capture menu.
+
 In **Documents**, the current scope is the heading. Open it to choose all
-documents, a category, or **Saved offline**. The inline saved-copy count below
-the heading opens this account's offline library without a network request;
-tap it again to return to All documents when online browsing is available.
+documents, a category, or **Saved offline**. The saved-copy count stays at the
+right edge of the count row and opens this account's offline library without a
+network request. When connected, the same right-aligned control shows a back
+arrow and **All documents**; offline-only browsing keeps the count disabled.
 Tap a row to open its protected full file.
 Swipe left there to remove a saved copy even while offline; swipe right to
 save/update is available only on online rows. Swipe actions fold away after

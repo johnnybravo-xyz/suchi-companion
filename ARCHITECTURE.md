@@ -37,10 +37,19 @@ loaded pages, category and sort. Refresh callbacks ignore a changed session
 client or a disposed shell. There is no general client cache or second
 state-management framework.
 
+Inbox reports its first authenticated load outcome to the shell. The shell
+selects Documents only for a successful empty result while its initial tab,
+client and account identity are unchanged. First-load failures, manual
+navigation and identity transitions consume or disarm the one-shot decision;
+later retries never change tabs.
+
 `AppSettingsController` stores device-wide appearance, document view and capture
 preferences in the existing Drift settings table, independently of archive identity. The root
 observes the saved theme without replacing its navigator. `SuchiColors` is the
 shared light/dark ThemeExtension; motion helpers respect reduced-motion settings.
+The shared popup menu theme gives Documents sorting, detail's offline-copy
+options and Scan's long-press mode picker the same rounded surface and padding;
+each menu clips its contents to that shape.
 More owns its settings sheets and removes account-bearing sheets on identity
 transitions.
 Documents and Inbox keep stable screen keys and receive an explicit refresh

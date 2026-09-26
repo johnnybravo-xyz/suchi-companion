@@ -41,6 +41,7 @@ class _SuchiShellState extends State<SuchiShell> {
   SuchiClient? _categoryClient;
   late final SavedViewController _savedViews;
   int _selected = 0;
+  bool _startupInboxPending = true;
   int _searchFocusSerial = 0;
   int? _searchFocusRequest;
   SavedView? _requestedSavedView;
@@ -60,6 +61,7 @@ class _SuchiShellState extends State<SuchiShell> {
     _listMode = widget.services.settings.documentListMode;
     widget.services.settings.addListener(_settingsChanged);
     _updateClient();
+    if (_client == null) _startupInboxPending = false;
     _savedViews = SavedViewController(session: widget.services.session);
     _syncIdentity();
     widget.services.session.addListener(_sessionChanged);
@@ -116,6 +118,7 @@ class _SuchiShellState extends State<SuchiShell> {
     if (_observedIdentity == identity) return;
     final previous = _observedIdentity;
     _observedIdentity = identity;
+    if (previous != null) _startupInboxPending = false;
     _previousQueueStates = null;
     if (previous != null && mounted) {
       setState(() {
@@ -150,9 +153,13 @@ class _SuchiShellState extends State<SuchiShell> {
     if (completed) _refreshArchive();
   }
 
-  void _openQueue() => setState(() => _selected = 2);
+  void _openQueue() => setState(() {
+    _startupInboxPending = false;
+    _selected = 2;
+  });
 
   void _select(int index) {
+    _startupInboxPending = false;
     setState(() {
       _selected = index;
       _searchFocusRequest = null;
@@ -161,10 +168,27 @@ class _SuchiShellState extends State<SuchiShell> {
   }
 
   void _openSearchFromDocuments() {
+    _startupInboxPending = false;
     setState(() {
       _selected = 3;
       _searchFocusRequest = ++_searchFocusSerial;
     });
+  }
+
+  void _initialInboxLoaded(
+    SuchiClient client,
+    AccountIdentity? identity,
+    bool empty,
+  ) {
+    if (!mounted ||
+        !_startupInboxPending ||
+        _selected != 0 ||
+        _client != client ||
+        _currentIdentity != identity) {
+      return;
+    }
+    _startupInboxPending = false;
+    if (empty) setState(() => _selected = 1);
   }
 
   void _capture() {
@@ -337,6 +361,7 @@ class _SuchiShellState extends State<SuchiShell> {
         bottomNavigationBar: _queueDock(offlineOnly: true),
       );
     }
+    final startupIdentity = _currentIdentity;
     final screens = <Widget>[
       InboxScreen(
         key: const ValueKey('inbox'),
@@ -347,6 +372,8 @@ class _SuchiShellState extends State<SuchiShell> {
         cache: widget.services.thumbnails,
         categories: categories,
         onOpenDocument: _openDocument,
+        onInitialLoadComplete: (empty) =>
+            _initialInboxLoaded(client, startupIdentity, empty),
       ),
       DocumentsScreen(
         key: const ValueKey('documents'),

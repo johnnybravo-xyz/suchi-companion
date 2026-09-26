@@ -276,6 +276,64 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
   }
 
+  testNavigation('empty Inbox cold start opens Documents only once', (
+    tester,
+  ) async {
+    archive.documents.removeWhere((item) => item['jd_category_id'] == 49);
+    await showShell(tester);
+    expect(find.byType(DocumentsScreen), findsOneWidget);
+    expect(find.text('All documents'), findsOneWidget);
+
+    await tester.tap(find.text('Inbox').last);
+    await tester.pumpAndSettle();
+    expect(find.byType(InboxScreen), findsOneWidget);
+    expect(find.text('Inbox clear'), findsOneWidget);
+  });
+
+  testNavigation('failed initial Inbox load does not redirect after Retry', (
+    tester,
+  ) async {
+    archive.documents.removeWhere((item) => item['jd_category_id'] == 49);
+    archive.inboxFailures = 1;
+    await showShell(tester);
+    expect(find.byType(InboxScreen), findsOneWidget);
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    expect(find.byType(InboxScreen), findsOneWidget);
+    expect(find.text('Inbox clear'), findsOneWidget);
+  });
+
+  testNavigation('late empty Inbox cannot override the chosen tab', (
+    tester,
+  ) async {
+    archive.documents.removeWhere((item) => item['jd_category_id'] == 49);
+    final pending = Completer<http.Response>();
+    archive.pendingInbox = pending;
+    await showShell(tester);
+    await tester.tap(find.text('More').last);
+    await tester.pumpAndSettle();
+    pending.complete(_json({'count': 0, 'next': null, 'results': []}));
+    await tester.pumpAndSettle();
+    expect(find.text('Suchi Companion'), findsOneWidget);
+    await tester.tap(find.text('Inbox').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Inbox clear'), findsOneWidget);
+  });
+
+  testNavigation('late empty Inbox cannot navigate after sign-out', (
+    tester,
+  ) async {
+    archive.documents.removeWhere((item) => item['jd_category_id'] == 49);
+    final pending = Completer<http.Response>();
+    archive.pendingInbox = pending;
+    await showShell(tester);
+    await services.session.signOut();
+    await tester.pumpAndSettle();
+    pending.complete(_json({'count': 0, 'next': null, 'results': []}));
+    await tester.pumpAndSettle();
+    expect(find.text('Signed out'), findsOneWidget);
+  });
+
   for (final acceptance in [
     (state: 'filed', restored: false),
     (state: 'filed', restored: true),
@@ -1127,6 +1185,8 @@ final class _Archive {
   String? uploadDigest;
   int? uploadSize;
   Completer<http.Response>? pendingDetail;
+  Completer<http.Response>? pendingInbox;
+  int inboxFailures = 0;
   Completer<http.Response>? pendingRestore;
   List<Map<String, Object?>> splitResults = [];
   bool failSplit = false;
@@ -1199,6 +1259,18 @@ final class _Archive {
           return _json({'count': splitResults.length, 'results': splitResults});
         }
         final category = int.tryParse(query['jd_category_id'] ?? '');
+        if (category == 49) {
+          final pending = pendingInbox;
+          if (pending != null) return pending.future;
+          if (inboxFailures > 0) {
+            inboxFailures--;
+            return http.Response(
+              '{"code":"unavailable","message":"Inbox unavailable."}',
+              503,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+        }
         final page = int.parse(query['page']!);
         final pageSize = int.parse(query['page_size']!);
         final results = documents

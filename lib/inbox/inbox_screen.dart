@@ -20,6 +20,7 @@ class InboxScreen extends StatefulWidget {
     required this.onOpenDocument,
     required this.listMode,
     this.refreshRevision = 0,
+    this.onInitialLoadComplete,
     super.key,
   });
 
@@ -30,6 +31,9 @@ class InboxScreen extends StatefulWidget {
   final ValueChanged<int> onOpenDocument;
   final DocumentListMode listMode;
   final int refreshRevision;
+
+  /// True only when the first Inbox load succeeded with no documents.
+  final ValueChanged<bool>? onInitialLoadComplete;
 
   @override
   State<InboxScreen> createState() => _InboxScreenState();
@@ -47,6 +51,7 @@ class _InboxScreenState extends State<InboxScreen> {
   int _count = 0;
   int _page = 0;
   int _generation = 0;
+  bool _initialLoadCompleted = false;
 
   @override
   void initState() {
@@ -102,6 +107,7 @@ class _InboxScreenState extends State<InboxScreen> {
             : null;
         _error = widget.categories.error;
       });
+      _completeInitialLoad(false);
       return;
     }
     await _loadDocuments(
@@ -109,6 +115,15 @@ class _InboxScreenState extends State<InboxScreen> {
       categoryId: category.id,
       reset: true,
     );
+    if (mounted && generation == _generation) {
+      _completeInitialLoad(_error == null && _count == 0 && _documents.isEmpty);
+    }
+  }
+
+  void _completeInitialLoad(bool empty) {
+    if (_initialLoadCompleted) return;
+    _initialLoadCompleted = true;
+    widget.onInitialLoadComplete?.call(empty);
   }
 
   Future<void> _refresh() async {

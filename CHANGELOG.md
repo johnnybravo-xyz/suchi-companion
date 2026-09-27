@@ -14,6 +14,9 @@
 - Set the first-release floors to Android API 26 and iOS 16 while retaining
   Android target API 36. iOS distributes to iPhone only; Android remains
   resizable for large screens without claiming a tablet-specific interface.
+- Regenerate Android legacy, adaptive and monochrome launcher icons plus the
+  opaque iPhone and App Store catalog from committed canonical vectors. Remove
+  iPad-only icon slots and validate generated icon dimensions and alpha modes.
 
 - Promote the current Documents scope to its heading, with search and sort
   alongside, document/offline counts below, and **Saved offline** in the scope

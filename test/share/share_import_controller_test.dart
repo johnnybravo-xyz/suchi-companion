@@ -746,6 +746,34 @@ void main() {
     },
   );
 
+  test(
+    'startup removes an abandoned picker claim without native data',
+    () async {
+      await database.setSetting(
+        'share_picker_claim:$_batchId',
+        jsonEncode({
+          'origin': _origin.toString(),
+          'user_id': 7,
+          'system_id': 1,
+          'created_at_ms': 1,
+        }),
+      );
+      final intake = _FakeIntake([]);
+      final controller = ShareImportController(
+        intake: intake,
+        queue: queue,
+        currentIdentity: () =>
+            AccountIdentity(origin: _origin, userId: 7, systemId: 1),
+      );
+      addTearDown(controller.close);
+      addTearDown(intake.controller.close);
+
+      await controller.start();
+
+      expect(await queue.shareBatchClaim(_batchId), isNull);
+    },
+  );
+
   test('corrupt claim cannot stage or discard the pending batch', () async {
     final item = await _item(temporary, 0, 'protected.pdf', _pdf);
     await database.setSetting('share_picker_claim:$_batchId', '{"user_id":7}');

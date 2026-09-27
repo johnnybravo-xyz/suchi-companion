@@ -195,6 +195,11 @@ final class ScanDatabase extends _$ScanDatabase {
     appSettings,
   )..where((row) => row.key.equals(key))).getSingleOrNull())?.value;
 
+  Future<List<AppSetting>> settingsWithPrefix(String prefix) async =>
+      (await select(appSettings).get())
+          .where((setting) => setting.key.startsWith(prefix))
+          .toList(growable: false);
+
   Future<void> deleteSetting(String key) =>
       (delete(appSettings)..where((row) => row.key.equals(key))).go();
 }

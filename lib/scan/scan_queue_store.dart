@@ -117,6 +117,13 @@ final class ReconciliationReport {
   final int removedArtifacts;
 }
 
+final class _ShareBatchClaim {
+  const _ShareBatchClaim({required this.identity, required this.createdAtMs});
+
+  final AccountIdentity identity;
+  final int createdAtMs;
+}
+
 final class ScanQueueStore {
   ScanQueueStore._({
     required this.database,
@@ -137,6 +144,7 @@ final class ScanQueueStore {
   };
   static final _uuid = Uuid();
   static const _shareClaimPrefix = 'share_picker_claim:';
+  static const _shareClaimLifetime = Duration(hours: 24);
   static Future<void> _reconcileTail = Future<void>.value();
 
   final ScanDatabase database;
@@ -240,6 +248,7 @@ final class ScanQueueStore {
         'origin': identity.origin.toString(),
         'user_id': identity.userId,
         'system_id': identity.systemId,
+        'created_at_ms': DateTime.now().toUtc().millisecondsSinceEpoch,
       }),
     );
   }
@@ -249,22 +258,59 @@ final class ScanQueueStore {
     _validateShareClaimId(batchId);
     final encoded = await database.setting('$_shareClaimPrefix$batchId');
     if (encoded == null) return null;
+    return _decodeShareClaim(encoded).identity;
+  }
+
+  Future<int> reconcileShareBatchClaims(
+    Set<String> pendingBatchIds, {
+    DateTime? now,
+  }) async {
+    _ensureOpen();
+    final cutoff = (now ?? DateTime.now().toUtc())
+        .subtract(_shareClaimLifetime)
+        .millisecondsSinceEpoch;
+    var removed = 0;
+    for (final setting in await database.settingsWithPrefix(
+      _shareClaimPrefix,
+    )) {
+      final batchId = setting.key.substring(_shareClaimPrefix.length);
+      if (pendingBatchIds.contains(batchId)) continue;
+      try {
+        _validateShareClaimId(batchId);
+        final claim = _decodeShareClaim(setting.value);
+        if (claim.createdAtMs > cutoff) continue;
+      } on FormatException {
+        // A malformed claim stays fail-closed in case native data arrives.
+        continue;
+      }
+      await database.deleteSetting(setting.key);
+      removed++;
+    }
+    return removed;
+  }
+
+  static _ShareBatchClaim _decodeShareClaim(String encoded) {
     try {
       final claim = jsonDecode(encoded);
       if (claim is! Map<String, dynamic> ||
-          claim.length != 3 ||
+          claim.length != 4 ||
           claim['origin'] is! String ||
           claim['user_id'] is! int ||
           claim['system_id'] is! int ||
+          claim['created_at_ms'] is! int ||
           claim['user_id'] <= 0 ||
           claim['system_id'] <= 0 ||
+          claim['created_at_ms'] <= 0 ||
           !_validQueueOrigin(claim['origin'] as String)) {
         throw const FormatException();
       }
-      return AccountIdentity(
-        origin: Uri.parse(claim['origin'] as String),
-        userId: claim['user_id'] as int,
-        systemId: claim['system_id'] as int,
+      return _ShareBatchClaim(
+        identity: AccountIdentity(
+          origin: Uri.parse(claim['origin'] as String),
+          userId: claim['user_id'] as int,
+          systemId: claim['system_id'] as int,
+        ),
+        createdAtMs: claim['created_at_ms'] as int,
       );
     } on FormatException {
       throw const FormatException('Share batch claim is invalid.');

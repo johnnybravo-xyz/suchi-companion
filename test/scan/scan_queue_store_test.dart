@@ -566,6 +566,35 @@ void main() {
     expect(report.removedArtifacts, 1);
     expect(await orphan.exists(), isFalse);
   });
+  test('reconciles only abandoned picker claims after one day', () async {
+    final owner = AccountIdentity(origin: _origin, userId: 7, systemId: 1);
+    final now = DateTime.utc(2026, 3, 12, 12);
+    String claim(DateTime createdAt) => jsonEncode({
+      'origin': owner.origin.toString(),
+      'user_id': owner.userId,
+      'system_id': owner.systemId,
+      'created_at_ms': createdAt.millisecondsSinceEpoch,
+    });
+
+    await database.setSetting(
+      'share_picker_claim:$_firstId',
+      claim(now.subtract(const Duration(hours: 25))),
+    );
+    await database.setSetting(
+      'share_picker_claim:$_secondId',
+      claim(now.subtract(const Duration(hours: 23))),
+    );
+    await database.setSetting(
+      'share_picker_claim:$_thirdId',
+      claim(now.subtract(const Duration(days: 2))),
+    );
+
+    expect(await store.reconcileShareBatchClaims({_thirdId}, now: now), 1);
+    expect(await store.shareBatchClaim(_firstId), equals(null));
+    expect(await store.shareBatchClaim(_secondId), owner);
+    expect(await store.shareBatchClaim(_thirdId), owner);
+  });
+
   test(
     'claim is durable, account-bound, and corrupt owner fails closed',
     () async {
@@ -578,7 +607,16 @@ void main() {
         storageProtection: protection,
         storageCapacity: protection,
       );
+      final beforeClaim = DateTime.now().toUtc().millisecondsSinceEpoch;
       await firstStore.claimShareBatch(_firstId, owner);
+      final encodedClaim = jsonDecode(
+        (await first.setting('share_picker_claim:$_firstId'))!,
+      ) as Map<String, dynamic>;
+      expect(
+        encodedClaim.keys,
+        unorderedEquals(['origin', 'user_id', 'system_id', 'created_at_ms']),
+      );
+      expect(encodedClaim['created_at_ms'], greaterThanOrEqualTo(beforeClaim));
       await firstStore.close();
       await first.close();
 

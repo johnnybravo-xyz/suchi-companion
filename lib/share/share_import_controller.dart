@@ -51,6 +51,7 @@ final class ShareImportController extends ChangeNotifier {
   bool _pendingRun = false;
   bool _closing = false;
   bool _disposed = false;
+  bool _claimsReconciled = false;
   int _presentationGeneration = 0;
   ShareImportPhase _phase = ShareImportPhase.idle;
   ShareImportSummary? _lastSummary;
@@ -188,6 +189,16 @@ final class ShareImportController extends ChangeNotifier {
       // durable owner claim, even after a process restart.
       _setPhase(ShareImportPhase.checking, generation);
       final batches = await _intake.pending();
+      if (!_claimsReconciled) {
+        try {
+          await _queue.reconcileShareBatchClaims(
+            batches.map((batch) => batch.id).toSet(),
+          );
+          _claimsReconciled = true;
+        } catch (_) {
+          errorMessage = _importError;
+        }
+      }
       for (final batch in batches) {
         final AccountIdentity? owner;
         try {

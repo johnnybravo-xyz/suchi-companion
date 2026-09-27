@@ -215,10 +215,14 @@ queue database's existing `AppSettings` table; only then can the native picker
 open. `page.suchi.companion/share` handles `pick` with `{source: files|photos,
 batch_id: UUIDv4}`, returning the same ID after protected staging or null on
 cancel. Native adapters enforce 20 items and 64 MiB per item, with no broad
-photo/storage permission. On resume/restart, claimed batches stage only for
-their owner, remain hidden from other accounts, and remove their claim only
-after each receipt is durable and native files are discarded. Corrupt claims
-fail closed; unsupported items are reported, never silently counted as filed.
+photo/storage permission. Picker ownership records include their creation time.
+The first pending pass removes claims at least 24 hours old only when no native
+batch with that ID exists. Android timestamps its matching picker-launch marker
+and applies the same bound during channel construction. A retained native batch
+keeps its original owner regardless of age. Claimed batches stage only for that
+owner, remain hidden from other accounts, and remove their claim only after
+each receipt is durable and native files are discarded. Corrupt claims fail
+closed; unsupported items are reported, never silently counted as filed.
 Each pass exposes checking/staging phases and commits receipts before discard.
 Empty follow-up checks retain meaningful attention notices; dismissal clears
 presentation only. Service shutdown awaits import completion before closing

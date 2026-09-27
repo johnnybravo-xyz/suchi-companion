@@ -394,6 +394,28 @@ class NativeAdapterInstrumentedTest {
     }
 
     @Test
+    fun coldStartClearsAnAbandonedPickerClaim() {
+        instrumentation.context.startActivity(
+            Intent(targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+        val activity = waitForActivity()
+        try {
+            assertTrue(
+                markPicker(
+                    UUID.randomUUID().toString(),
+                    System.currentTimeMillis() - (24 * 60 * 60 * 1000L),
+                ),
+            )
+            val recovered = ShareChannel(activity)
+            recovered.close()
+            assertFalse(pickerPreferences.contains("pending_batch_id"))
+            assertFalse(pickerPreferences.contains("pending_created_at_ms"))
+        } finally {
+            instrumentation.runOnMainSync { activity.finishAndRemoveTask() }
+        }
+    }
+
+    @Test
     fun recreatedPickerStagesOnlyItsClaimedBatchAndCancellationLeavesNoBatch() {
         instrumentation.context.startActivity(
             Intent(targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
@@ -401,7 +423,7 @@ class NativeAdapterInstrumentedTest {
         val activity = waitForActivity()
         try {
             val canceledId = UUID.randomUUID().toString()
-            assertTrue(pickerPreferences.edit().putString("pending_batch_id", canceledId).commit())
+            assertTrue(markPicker(canceledId))
             val canceled = ShareChannel(activity)
             try {
                 instrumentation.runOnMainSync {
@@ -411,10 +433,11 @@ class NativeAdapterInstrumentedTest {
                 canceled.close()
             }
             assertFalse(pickerPreferences.contains("pending_batch_id"))
+            assertFalse(pickerPreferences.contains("pending_created_at_ms"))
             assertFalse(File(shareRoot, canceledId).exists())
 
             val retainedId = UUID.randomUUID().toString()
-            assertTrue(pickerPreferences.edit().putString("pending_batch_id", retainedId).commit())
+            assertTrue(markPicker(retainedId))
             val restored = ShareChannel(activity)
             try {
                 val first = Uri.parse("content://page.suchi.companion.test.share/first")
@@ -434,7 +457,8 @@ class NativeAdapterInstrumentedTest {
                     File(shareRoot, retainedId).resolve("manifest.json")
                         .takeIf(File::isFile)
                         ?.let { JSONObject(it.readText()).optBoolean("complete") } == true &&
-                        !pickerPreferences.contains("pending_batch_id")
+                        !pickerPreferences.contains("pending_batch_id") &&
+                        !pickerPreferences.contains("pending_created_at_ms")
                 }
                 val manifest = JSONObject(File(shareRoot, "$retainedId/manifest.json").readText())
                 assertEquals(retainedId, manifest.getString("batch_id"))
@@ -457,7 +481,7 @@ class NativeAdapterInstrumentedTest {
         val activity = waitForActivity()
         val batchId = UUID.randomUUID().toString()
         try {
-            assertTrue(pickerPreferences.edit().putString("pending_batch_id", batchId).commit())
+            assertTrue(markPicker(batchId))
             val uri = Uri.parse("content://page.suchi.companion.test.share/first")
             val clip = ClipData.newUri(targetContext.contentResolver, "first", uri)
             repeat(20) { clip.addItem(ClipData.Item(uri)) }
@@ -470,11 +494,22 @@ class NativeAdapterInstrumentedTest {
                 intake.close()
             }
             assertFalse(pickerPreferences.contains("pending_batch_id"))
+            assertFalse(pickerPreferences.contains("pending_created_at_ms"))
             assertFalse(File(shareRoot, batchId).exists())
         } finally {
             instrumentation.runOnMainSync { activity.finishAndRemoveTask() }
         }
     }
+
+    private fun markPicker(
+        batchId: String,
+        createdAtMs: Long = System.currentTimeMillis(),
+    ): Boolean =
+        pickerPreferences
+            .edit()
+            .putString("pending_batch_id", batchId)
+            .putLong("pending_created_at_ms", createdAtMs)
+            .commit()
 
     private fun shareIntent(
         batchId: String? = null,

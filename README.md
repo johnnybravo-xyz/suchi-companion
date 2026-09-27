@@ -41,6 +41,12 @@ its selected files to the new account. Unsupported items are reported, and
 failed queue files remain available for retry or explicit discard. The app
 does not request broad photo-library or storage access.
 
+Picker ownership survives activity or process recreation. On cold start, Suchi
+Companion removes a picker claim only when it is at least 24 hours old and no
+protected native batch exists; retained batches keep their original owner
+regardless of age. Android applies the same bound to its picker-launch marker,
+so an abandoned picker cannot block later imports indefinitely.
+
 The activity strip distinguishes checking a share, secure staging, real file-byte
 transfer and server processing. **View** opens the upload queue without starting
 the camera. Failures and files needing an account remain visible until resolved;

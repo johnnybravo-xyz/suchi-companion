@@ -29,6 +29,8 @@ class ShareChannel(private val activity: FlutterActivity) {
         const val PICKER_REQUEST = 4721
         const val PICKER_PREFERENCES = "suchi-share-picker"
         const val PENDING_PICKER_BATCH = "pending_batch_id"
+        const val PENDING_PICKER_CREATED_AT = "pending_created_at_ms"
+        const val PICKER_CLAIM_LIFETIME_MS = 24 * 60 * 60 * 1000L
         const val MANIFEST_VERSION = 1
         const val MAX_ITEMS = 20
         const val MAX_INPUTS = 10_000
@@ -72,6 +74,10 @@ class ShareChannel(private val activity: FlutterActivity) {
     private var pendingPickResult: MethodChannel.Result? = null
     private var pickerResultProcessing = false
     private var channel: MethodChannel? = null
+
+    init {
+        reconcilePickerMarker()
+    }
 
     fun register(engine: FlutterEngine) {
         channel = MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL_NAME).also {
@@ -168,7 +174,26 @@ class ShareChannel(private val activity: FlutterActivity) {
         activity.getSharedPreferences(PICKER_PREFERENCES, Activity.MODE_PRIVATE)
 
     private fun clearPickerMarker(): Boolean =
-        pickerPreferences().edit().remove(PENDING_PICKER_BATCH).commit()
+        pickerPreferences()
+            .edit()
+            .remove(PENDING_PICKER_BATCH)
+            .remove(PENDING_PICKER_CREATED_AT)
+            .commit()
+
+    private fun reconcilePickerMarker(nowMs: Long = System.currentTimeMillis()) {
+        val preferences = pickerPreferences()
+        val batchId = preferences.getString(PENDING_PICKER_BATCH, null)
+        if (batchId == null) {
+            if (preferences.contains(PENDING_PICKER_CREATED_AT)) {
+                preferences.edit().remove(PENDING_PICKER_CREATED_AT).commit()
+            }
+            return
+        }
+        val createdAt = preferences.getLong(PENDING_PICKER_CREATED_AT, 0)
+        if (createdAt <= 0 || nowMs - createdAt >= PICKER_CLAIM_LIFETIME_MS) {
+            clearPickerMarker()
+        }
+    }
 
     private fun pick(call: MethodCall, result: MethodChannel.Result) {
         val arguments = call.arguments as? Map<*, *>
@@ -178,6 +203,7 @@ class ShareChannel(private val activity: FlutterActivity) {
             result.error("bad_pick_request", "The file picker request is invalid.", null)
             return
         }
+        reconcilePickerMarker()
         if (pickerResultProcessing || pendingPickResult != null || pickerPreferences().contains(PENDING_PICKER_BATCH)) {
             result.error("share_pick_busy", "A file picker is already open.", null)
             return
@@ -187,7 +213,12 @@ class ShareChannel(private val activity: FlutterActivity) {
         } else {
             SharePicker.photosIntent(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
         }
-        if (!pickerPreferences().edit().putString(PENDING_PICKER_BATCH, batchId).commit()) {
+        if (!pickerPreferences()
+                .edit()
+                .putString(PENDING_PICKER_BATCH, batchId)
+                .putLong(PENDING_PICKER_CREATED_AT, System.currentTimeMillis())
+                .commit()
+        ) {
             result.error("share_storage_unavailable", "The file picker could not be started.", null)
             return
         }

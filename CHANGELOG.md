@@ -28,6 +28,9 @@
 - Add account and device-wide storage totals to **More → Privacy & storage**,
   including queue bytes and free space. Users can explicitly remove current
   account or all offline copies without bulk-deleting unresolved uploads.
+- Timestamp in-app picker ownership and reconcile it on cold start. Claims
+  without a protected native batch expire after 24 hours; retained batches
+  remain account-bound, and Android clears matching abandoned launch markers.
 
 - Promote the current Documents scope to its heading, with search and sort
   alongside, document/offline counts below, and **Saved offline** in the scope

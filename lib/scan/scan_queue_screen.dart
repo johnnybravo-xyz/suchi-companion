@@ -670,6 +670,7 @@ class _CaptureHero extends StatelessWidget {
             ? 'Keep the full photo without document cropping or cleanup. Saved as a one-page PDF.'
             : 'Find edges, straighten pages and improve lighting. Review your scan before saving.',
     };
+    const cameraForeground = Color(0xFFA8B0B4);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -695,7 +696,7 @@ class _CaptureHero extends StatelessWidget {
           Text(
             message,
             style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: const Color(0xFFA8B0B4)),
+                ?.copyWith(color: cameraForeground),
           ),
           const SizedBox(height: 20),
           if (capture.isBusy)
@@ -714,11 +715,17 @@ class _CaptureHero extends StatelessWidget {
                   ),
                 if (capture.hasPendingCapture)
                   TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: cameraForeground,
+                    ),
                     onPressed: capture.discardPending,
                     child: const Text('Discard capture'),
                   ),
                 if (capture.canOpenSettings)
                   TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: cameraForeground,
+                    ),
                     onPressed: capture.openSettings,
                     child: const Text('Open Settings'),
                   ),
@@ -744,7 +751,7 @@ class _CaptureHero extends StatelessWidget {
           Text(
             'Hold the centre camera button to switch modes, or use More → Camera mode.',
             style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: const Color(0xFFA8B0B4)),
+                ?.copyWith(color: cameraForeground),
           ),
         ],
       ),

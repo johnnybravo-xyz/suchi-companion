@@ -451,7 +451,7 @@ class _InboxScreenState extends State<InboxScreen> {
                 'Swipe right to file · left to trash · trash offers Undo',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: SuchiColors.of(context).faint,
+                  color: SuchiColors.of(context).muted,
                   fontSize: 10.5,
                 ),
               ),

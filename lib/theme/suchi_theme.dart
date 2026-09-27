@@ -10,7 +10,6 @@ final class SuchiColors extends ThemeExtension<SuchiColors> {
     required this.surface2,
     required this.ink,
     required this.muted,
-    required this.faint,
     required this.accent,
     required this.onAccent,
     required this.tint,
@@ -28,7 +27,6 @@ final class SuchiColors extends ThemeExtension<SuchiColors> {
   final Color surface2;
   final Color ink;
   final Color muted;
-  final Color faint;
   final Color accent;
   final Color onAccent;
   final Color tint;
@@ -45,18 +43,17 @@ final class SuchiColors extends ThemeExtension<SuchiColors> {
     surface: Color(0xFFFFFFFF),
     surface2: Color(0xFFF1F1ED),
     ink: Color(0xFF17181A),
-    muted: Color(0xFF6A7079),
-    faint: Color(0xFF8A8F97),
-    accent: Color(0xFF0575B6),
+    muted: Color(0xFF626871),
+    accent: Color(0xFF006DAA),
     onAccent: Color(0xFFFFFFFF),
     tint: Color(0xFFEDF5FA),
     manila: Color(0xFFF2E8CE),
-    success: Color(0xFF1E7A54),
-    warning: Color(0xFFB4541F),
-    danger: Color(0xFFC13A2C),
+    success: Color(0xFF19734D),
+    warning: Color(0xFFAA4D17),
+    danger: Color(0xFFBB3428),
     camera: Color(0xFF0F1519),
     line: Color(0x1C17181A),
-    lineStrong: Color(0x3317181A),
+    lineStrong: Color(0xFF8F9191),
   );
 
   static const dark = SuchiColors(
@@ -64,18 +61,17 @@ final class SuchiColors extends ThemeExtension<SuchiColors> {
     surface: Color(0xFF1D2023),
     surface2: Color(0xFF23262A),
     ink: Color(0xFFECEAE2),
-    muted: Color(0xFF9C9A90),
-    faint: Color(0xFF7E7C72),
+    muted: Color(0xFFA19F96),
     accent: Color(0xFF4FA8DC),
     onAccent: Color(0xFF10222E),
     tint: Color.fromRGBO(79, 168, 220, 0.12),
     manila: Color(0xFF38342A),
     success: Color(0xFF68C398),
     warning: Color(0xFFE09A5F),
-    danger: Color(0xFFF0765C),
+    danger: Color(0xFFF27A61),
     camera: Color(0xFF0F1519),
     line: Color.fromRGBO(236, 234, 226, 0.09),
-    lineStrong: Color.fromRGBO(236, 234, 226, 0.17),
+    lineStrong: Color(0xFF686C70),
   );
 
   static SuchiColors of(BuildContext context) {
@@ -91,7 +87,6 @@ final class SuchiColors extends ThemeExtension<SuchiColors> {
     Color? surface2,
     Color? ink,
     Color? muted,
-    Color? faint,
     Color? accent,
     Color? onAccent,
     Color? tint,
@@ -108,7 +103,6 @@ final class SuchiColors extends ThemeExtension<SuchiColors> {
     surface2: surface2 ?? this.surface2,
     ink: ink ?? this.ink,
     muted: muted ?? this.muted,
-    faint: faint ?? this.faint,
     accent: accent ?? this.accent,
     onAccent: onAccent ?? this.onAccent,
     tint: tint ?? this.tint,
@@ -130,7 +124,6 @@ final class SuchiColors extends ThemeExtension<SuchiColors> {
       surface2: Color.lerp(surface2, other.surface2, t)!,
       ink: Color.lerp(ink, other.ink, t)!,
       muted: Color.lerp(muted, other.muted, t)!,
-      faint: Color.lerp(faint, other.faint, t)!,
       accent: Color.lerp(accent, other.accent, t)!,
       onAccent: Color.lerp(onAccent, other.onAccent, t)!,
       tint: Color.lerp(tint, other.tint, t)!,
@@ -188,7 +181,7 @@ abstract final class SuchiTheme {
           ? SuchiColors.light.accent
           : SuchiColors.dark.accent,
       surfaceTint: colors.accent,
-      outline: colors.faint,
+      outline: colors.muted,
       outlineVariant: colors.line,
     );
     final base = ThemeData(
@@ -322,7 +315,7 @@ abstract final class SuchiTheme {
           backgroundColor: colors.accent,
           foregroundColor: colors.onAccent,
           disabledBackgroundColor: colors.surface2,
-          disabledForegroundColor: colors.faint,
+          disabledForegroundColor: colors.muted,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),

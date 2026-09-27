@@ -626,7 +626,7 @@ class _SearchRow extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: SuchiColors.of(context).faint),
+            Icon(Icons.chevron_right, color: SuchiColors.of(context).muted),
           ],
         ),
       ),

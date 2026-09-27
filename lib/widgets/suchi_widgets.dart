@@ -132,7 +132,7 @@ class SectionLabel extends StatelessWidget {
     final colors = SuchiColors.of(context);
     return Text(
       text.toUpperCase(),
-      style: SuchiTheme.monoLabel.copyWith(color: color ?? colors.faint),
+      style: SuchiTheme.monoLabel.copyWith(color: color ?? colors.muted),
     );
   }
 }
@@ -264,7 +264,7 @@ class EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 40, color: colors.faint),
+            Icon(icon, size: 40, color: colors.muted),
             const SizedBox(height: 14),
             Text(
               title,

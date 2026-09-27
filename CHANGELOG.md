@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Raise subdued text, semantic status colors and control outlines to WCAG AA
+  contrast in light and dark themes, including actions on the camera surface.
 - Open Documents after a successful empty initial Inbox load, without
   overriding a failed load, a deliberate tab choice or a changed account.
 - Round and clip Documents sorting and offline-copy option popups to match

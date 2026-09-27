@@ -98,6 +98,8 @@
 
 ### Added
 
+- Add **More → About** with installed version/build, source, dependency and
+  bundled-font licenses, privacy policy, support and mobile-security links.
 - Show byte progress while saving a document offline, both in document detail
   and in the persistent Documents activity bar after a swipe save. The indicator
   stays in a finishing state until the protected copy is verified; Cancel

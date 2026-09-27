@@ -176,9 +176,10 @@ The owner must supply and verify these gates **before** claiming store readiness
   closed-test requirement with the owner.
 - Audit artwork/trademark rights and dependency notices; obtain
   owner/license-counsel approval for AGPL-3.0 corresponding-source delivery and
-  Apple's standard-versus-custom EULA before any distribution. Select a public
-  mobile source location and keep its corresponding source available with
-  released binaries. The current private Forgejo remote is not that location.
+  Apple's standard-versus-custom EULA before any distribution. Publish the
+  selected `https://github.com/johnnybravo-xyz/suchi-mobile` source location and
+  keep its corresponding source available with released binaries. The current
+  private Forgejo remote is not that location.
 
 Document the signed physical-device matrix, reviewer credentials exchange and
 store decisions outside this repository's public source; no simulator or local

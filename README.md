@@ -224,6 +224,11 @@ browser, separate from the paired server and without credentials.
 privacy policy and an owner-designated monitored privacy contact remain
 separate requirements before store submission; the in-app explanation does
 not replace them.
+**More → About** shows the installed version and build, the intended public
+source repository, complete generated dependency and bundled-font license
+notices, and fixed privacy, support and mobile-security links. Those public
+targets must resolve before release; an in-app link is not deployment evidence.
+
 On Android, the document and pairing QR scanners are Google Play services ML
 Kit features. Suchi operates no ads, crash-reporting or document-relay service,
 but Google documents collection of device and app information, identifiers,
@@ -245,8 +250,9 @@ physical-device capture/share checks, public privacy/support/security contacts,
 a stable HTTPS reviewer server/account, store declarations and asset rights
 remain release gates. The source is AGPL-3.0; public corresponding-source
 delivery and Apple store EULA compatibility need owner/license-counsel approval
-before any binary distribution. The owner has not yet selected a public mobile
-source location; the current Forgejo remote remains private.
+before any binary distribution. The intended public mobile source location is
+`https://github.com/johnnybravo-xyz/suchi-mobile`; it must be published before
+release. The current Forgejo remote remains private.
 
 For server vulnerabilities, use the private GitHub Security Advisory form named
 in the [server security policy](https://github.com/johnnybravo-xyz/suchi/blob/main/SECURITY.md);

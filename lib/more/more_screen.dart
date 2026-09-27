@@ -10,6 +10,7 @@ import '../scan/scan_queue_store.dart';
 import '../scan/scanner_bridge.dart';
 import '../theme/suchi_theme.dart';
 import '../widgets/suchi_widgets.dart';
+import 'about_sheet.dart';
 import 'app_settings_controller.dart';
 
 class MoreScreen extends StatefulWidget {
@@ -485,6 +486,11 @@ class _MoreScreenState extends State<MoreScreen> {
     ),
   );
 
+  Future<void> _showAbout() => _showSettingsSheet<void>(
+    title: 'About',
+    builder: (context) => const AboutSuchiSheet(),
+  );
+
   ListTileThemeData _rowTheme(BuildContext context) {
     final colors = SuchiColors.of(context);
     return ListTileThemeData(
@@ -662,6 +668,13 @@ class _MoreScreenState extends State<MoreScreen> {
                       subtitle: const Text('suchi.page'),
                       trailing: const Icon(Icons.open_in_new),
                       onTap: () => _openWebsite(context),
+                    ),
+                    Divider(height: 1, thickness: 1, color: colors.line),
+                    ListTile(
+                      leading: const Icon(Icons.info_outline),
+                      title: const Text('About'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _showAbout,
                     ),
                   ],
                 ),

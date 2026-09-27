@@ -417,6 +417,13 @@ describes device-local behavior. A public privacy policy with a monitored
 contact remains an owner-controlled store-release dependency, not a server
 operator's policy; the in-app explanation does not replace it.
 
+More's **About** sheet reads the installed version and build through
+`package_info_plus` and links only to fixed public HTTPS source, privacy,
+support and mobile-security targets. **Open-source licenses** uses Flutter's
+generated dependency registry. `app/app_licenses.dart` adds the full bundled
+Schibsted Grotesk and Spline Sans Mono OFL texts from packaged assets, so font
+notices remain available offline.
+
 ## Verification
 
 `make check` covers Dart formatting, analysis and Flutter behavior tests. Tests

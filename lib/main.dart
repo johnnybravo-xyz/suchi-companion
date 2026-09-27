@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'app/app_licenses.dart';
 import 'app/app_services.dart';
 import 'app/lifecycle_privacy_shield.dart';
 import 'auth/pair_screen.dart';
@@ -14,6 +15,7 @@ import 'widgets/suchi_widgets.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  registerBundledLicenses();
   runApp(const _Bootstrap());
 }
 

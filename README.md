@@ -224,6 +224,17 @@ browser, separate from the paired server and without credentials.
 privacy policy and an owner-designated monitored privacy contact remain
 separate requirements before store submission; the in-app explanation does
 not replace them.
+On Android, the document and pairing QR scanners are Google Play services ML
+Kit features. Suchi operates no ads, crash-reporting or document-relay service,
+but Google documents collection of device and app information, identifiers,
+performance and configuration metrics, and feature event and error data for
+diagnostics and usage analytics. Pairing QR auto-zoom additionally collects a
+generated scanning-session ID, zoom changes and predicted barcode bounding-box
+coordinates. For pairing QR scans, Google says image processing occurs on-device
+and it does not store the image or result. See Google's [ML Kit Android data
+disclosure](https://developers.google.com/ml-kit/android-data-disclosure) and
+[Google code scanner
+guide](https://developers.google.com/ml-kit/vision/barcode-scanning/code-scanner).
 
 The exact compatible server revision and API version are recorded in
 [`tool/toolchain.json`](tool/toolchain.json). The mirrored response fixtures in

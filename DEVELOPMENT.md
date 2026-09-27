@@ -162,6 +162,13 @@ The owner must supply and verify these gates **before** claiming store readiness
   saved searches and protected queue payloads; temporary export copies may
   leave the app at a user's explicit share action. Verify platform SDK and
   processor disclosures rather than selecting “no data collected” by default.
+  Android ML Kit processors are not a “no data collected” dependency: Google
+  documents device and app information, identifiers, performance and
+  configuration metrics, feature event/error data, and the pairing code
+  scanner's auto-zoom session, zoom and predicted bounding-box data. Reconcile
+  the final dependencies against
+  <https://developers.google.com/ml-kit/android-data-disclosure> when completing
+  Play Data safety.
 - In the store consoles, approve App Store privacy labels and EULA, Play Data
   safety, advertising/target-audience/content-rating answers and reviewer
   access. Do not link download badges until actual approved URLs exist. If a

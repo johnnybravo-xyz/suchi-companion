@@ -799,7 +799,14 @@ class _StorageManagerState extends State<_StorageManager> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
-            'No analytics, ads, remote crash reporting, or document relay.',
+            'Suchi operates no ads, crash-reporting, or document-relay service. '
+            'On Android, Google Play services’ ML Kit scanners collect documented '
+            'device and app information, identifiers, performance and '
+            'configuration metrics, and feature event and error data for '
+            'diagnostics and usage analytics. Pairing QR auto-zoom also collects '
+            'a generated scanning-session ID, zoom changes, and predicted barcode '
+            'bounding-box coordinates. For pairing QR scans, Google says image '
+            'processing occurs on-device and it does not store the image or result.',
           ),
           const SizedBox(height: 16),
           const Text(

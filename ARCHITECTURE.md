@@ -2,9 +2,10 @@
 
 Suchi Companion captures documents and reads a user-owned server archive. Flutter
 owns the shared Android/iOS interface; native adapters handle scanning, device
-storage protection and platform sharing. The app has no document relay,
-analytics or remote crash-reporting service. The companion is still pre-release
-and pins one exact compatible server revision.
+storage protection and platform sharing. Suchi operates no ads, crash-reporting
+or document-relay service. Android's Google Play services ML Kit dependencies
+separately collect documented diagnostics and usage analytics. The companion is
+still pre-release and pins one exact compatible server revision.
 
 The unpublished Companion now uses `page.suchi.companion` on Android and iOS;
 its iOS Runner and Share Extension share `group.page.suchi.companion`.
@@ -128,8 +129,12 @@ precedes credential exchange; redirect responses are refused.
 
 The `page.suchi.companion/pairing` method channel's `scan` operation returns a QR
 string or null on cancellation. Android uses the Google Play services code
-scanner; iOS uses AVFoundation. Neither adapter opens URLs or handles account
-credentials. The channel also exposes `deviceName` without opening the scanner:
+scanner with auto-zoom; iOS uses AVFoundation. Google documents auto-zoom
+collection of a generated scanning-session ID, zoom changes and predicted barcode
+bounding-box coordinates. Google says QR image processing occurs on-device and
+it does not store the image or result. Neither adapter opens URLs or handles
+account credentials. The channel also exposes `deviceName` without opening the
+scanner:
 Android reads `Settings.Global.DEVICE_NAME` with `Build.MODEL` fallback;
 iOS uses `UIDevice.current.name`. iOS 16+ may return a generic name without
 Apple's user-assigned-device-name entitlement; no entitlement is added.
@@ -201,14 +206,19 @@ uses the platform scanner and server OCR fallback; iOS can attach validated
 Vision text. The Server OCR only setting omits device-recognized text from
 new upload attempts.
 
-The native scanner is also the image-quality boundary. Android uses ML Kit's
-full scanner mode for automatic capture and edge detection, perspective and
-rotation correction, filters, lighting cleanup and document cleaning. iOS uses
-VisionKit's document camera and retains its reviewed page images. Dart does not
-crop or enhance those results again; it only combines returned pages when a
-native PDF is absent. "Flattening" here means correcting the perspective of a
-planar or mildly wrinkled sheet. Strong book-spine curvature and pixels hidden
-by severe glare require a reviewed retake and are not reconstructed.
+The native scanner is also the image-quality boundary. Android uses Google Play
+services' ML Kit full scanner mode for automatic capture and edge detection,
+perspective and rotation correction, filters, lighting cleanup and document
+cleaning. Google documents collection across its Android ML Kit features of
+device and app information, identifiers, performance and API-configuration
+metrics, and feature event and error data for diagnostics and usage analytics.
+The document scanner's model, processing logic and UI are delivered by Google
+Play services. iOS uses VisionKit's document camera and retains its reviewed
+page images. Dart does not crop or enhance those results again; it only combines
+returned pages when a native PDF is absent. "Flattening" here means correcting
+the perspective of a planar or mildly wrinkled sheet. Strong book-spine
+curvature and pixels hidden by severe glare require a reviewed retake and are
+not reconstructed.
 
 Camera receipt IDs hash the resolved capture directory, so native paths and
 restart recovery agree across Apple system-directory aliases. Every receipt

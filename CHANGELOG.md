@@ -13,6 +13,9 @@
 - Embed required-reason privacy manifests in both iOS executables. Runner
   declares app-container file timestamps and disk capacity; the Share Extension
   declares its disk-capacity guard.
+- Replace the blanket no-analytics statement with the documented Android ML
+  Kit diagnostics, usage analytics and pairing auto-zoom data disclosures while
+  retaining Suchi's no-ads, no-crash-reporting and no-document-relay statement.
 - Open Documents after a successful empty initial Inbox load, without
   overriding a failed load, a deliberate tab choice or a changed account.
 - Round and clip Documents sorting and offline-copy option popups to match

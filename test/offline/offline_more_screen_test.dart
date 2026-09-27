@@ -146,7 +146,15 @@ void main() {
     expect(find.text('ON THIS DEVICE'), findsOneWidget);
     expect(find.text('1 offline copy · 12 B'), findsNWidgets(2));
     expect(find.textContaining('0 queued items · 0 B queued'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('remove-account-offline')));
+    final removeAccount = find
+        .byKey(const ValueKey('remove-account-offline'))
+        .first;
+    await tester.scrollUntilVisible(
+      removeAccount,
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(removeAccount);
     await tester.pumpAndSettle();
     expect(find.text('Remove this account’s offline copies?'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
@@ -186,7 +194,15 @@ void main() {
       find.text('1 copy from signed-out or expired accounts · 12 B'),
       findsOneWidget,
     );
-    await tester.tap(find.byKey(const ValueKey('remove-other-offline')));
+    final removeOther = find
+        .byKey(const ValueKey('remove-other-offline'))
+        .first;
+    await tester.scrollUntilVisible(
+      removeOther,
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(removeOther);
     await tester.pumpAndSettle();
     expect(find.text('Remove other account copies?'), findsOneWidget);
     await tester.tap(find.text('Cancel'));

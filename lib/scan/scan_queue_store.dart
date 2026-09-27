@@ -124,7 +124,7 @@ final class ScanQueueStore {
     required this._ownsDatabase,
   });
 
-  static const _manifestVersion = 2;
+  static const _manifestVersion = 1;
   static const _copyBufferSize = 64 * 1024;
   static const _maximumOcrBytes = 1024 * 1024;
   static const _supportedMimes = <String>{

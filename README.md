@@ -22,9 +22,9 @@ full frame as a one-page PDF without document cropping or cleanup. Both use the
 same protected queue, OCR and retry flow. Queue payloads, OCR text and the SQLite
 state that identifies their archive stay together in the device-protected,
 backup-excluded queue directory. Unresolved captures must be retried or discarded
-before starting another capture. An older pre-release queue database is detected
-before recovery starts; the app leaves its database and queue files untouched and
-asks for a reset or reinstall.
+before starting another capture. A pre-release queue database or recovery
+manifest other than version 1 is detected before recovery starts; the app leaves
+the database and queue files untouched and asks for a reset or reinstall.
 
 Scanner mode opens the platform document scanner. It detects
 page edges, straightens perspective, corrects rotation, improves lighting and

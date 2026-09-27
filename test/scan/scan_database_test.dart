@@ -6,6 +6,16 @@ import 'package:path/path.dart' as path;
 import 'package:suchi_mobile/scan/scan_database.dart';
 
 void main() {
+  test('creates the unreleased queue schema at version one', () async {
+    final database = ScanDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await database.allUploads();
+
+    final row = await database.customSelect('PRAGMA user_version').getSingle();
+    expect(row.read<int>('user_version'), 1);
+  });
+
   test('refuses an unsupported schema instead of migrating it', () async {
     final database = ScanDatabase(
       NativeDatabase.memory(

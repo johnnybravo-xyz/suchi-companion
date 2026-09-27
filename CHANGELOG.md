@@ -47,9 +47,9 @@
 - Require the current server identity and pairing contracts. Account, queue,
   capture, share, search and Saved View boundaries now include the token's
   filing-system ID. Changing filing systems requires pairing again.
-- Use a fresh-install local storage baseline for this unreleased app. Older
-  queue databases and recovery manifests fail clearly and remain untouched;
-  there is no mobile schema migration or silent reset path. Queue database,
+- Rebase the unreleased queue database schema and recovery manifest to version
+  1. Older pre-release formats fail clearly and remain untouched; there is no
+  mobile schema migration or silent reset path. Queue database,
   journals and temporary files now live with payloads in the protected,
   backup-excluded queue directory. Startup detects the former database location
   before reconciliation so existing pre-release queue files are not pruned.

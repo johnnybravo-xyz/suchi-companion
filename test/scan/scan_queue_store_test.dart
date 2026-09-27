@@ -350,7 +350,7 @@ void main() {
     );
     await database.deleteUpload(staged.id);
     final manifest = {
-      'version': 2,
+      'version': 1,
       'id': staged.id,
       'payload_path': staged.payloadPath,
       'ocr_content_path': null,
@@ -383,20 +383,23 @@ void main() {
     );
   });
 
-  test('refuses an old manifest without deleting queued files', () async {
-    final manifest = File(path.join(temporary.path, '$_firstId.json'));
-    final payload = File(path.join(temporary.path, '$_firstId.payload'));
-    await manifest.writeAsString(jsonEncode({'version': 1}), flush: true);
-    await payload.writeAsBytes(_pdf, flush: true);
+  test(
+    'refuses an incompatible manifest without deleting queued files',
+    () async {
+      final manifest = File(path.join(temporary.path, '$_firstId.json'));
+      final payload = File(path.join(temporary.path, '$_firstId.payload'));
+      await manifest.writeAsString(jsonEncode({'version': 2}), flush: true);
+      await payload.writeAsBytes(_pdf, flush: true);
 
-    await expectLater(
-      store.reconcile(),
-      throwsA(isA<UnsupportedLocalStorageException>()),
-    );
+      await expectLater(
+        store.reconcile(),
+        throwsA(isA<UnsupportedLocalStorageException>()),
+      );
 
-    expect(await manifest.exists(), isTrue);
-    expect(await payload.exists(), isTrue);
-  });
+      expect(await manifest.exists(), isTrue);
+      expect(await payload.exists(), isTrue);
+    },
+  );
 
   test('demotes interrupted upload and fails a changed payload', () async {
     final source = await _sourceFile(temporary, 'source.pdf', _pdf);

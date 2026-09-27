@@ -155,9 +155,10 @@ foreign-account queue entries remain durable but hidden from the current user.
 Session transitions pause uploads and invalidate retained memory state. API
 authorization still happens on every request at the server.
 
-The queue database and recovery manifest use only the current unreleased format.
-There is no schema migration path. Opening an older format fails with an explicit
-reset/reinstall message and leaves queue files untouched.
+The queue database schema and recovery manifest both start at version 1 for the
+current unreleased format. There is no schema migration path. Opening any other
+version fails with an explicit reset/reinstall message and leaves queue files
+untouched.
 The queue directory is protected and excluded from backup before its database is
 opened. SQLite state and sidecars therefore stay under the same boundary as
 payloads, OCR text and recovery manifests instead of the default Documents

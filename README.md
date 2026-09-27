@@ -64,6 +64,9 @@ guarantee progress.
 Tap an accepted upload in **Scan → Uploads** to open its document. Split uploads
 show their remaining child documents by title, never the superseded parent.
 Retry, account assignment and discard remain separate actions.
+Successful upload history and completed share/capture duplicate guards are kept
+for at most 30 days and the newest 20 records of each kind. Failed uploads and
+processing failures remain until you retry or discard them.
 
 Pair from the Suchi web app's Settings: generate a mobile pairing code, then
 choose **Scan QR code** in the mobile app. **Paste pairing link** also works

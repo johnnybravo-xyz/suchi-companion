@@ -145,6 +145,8 @@ final class ScanQueueStore {
   static final _uuid = Uuid();
   static const _shareClaimPrefix = 'share_picker_claim:';
   static const _shareClaimLifetime = Duration(hours: 24);
+  static const _completedReceiptLifetime = Duration(days: 30);
+  static const _maximumCompletedReceipts = 20;
   static Future<void> _reconcileTail = Future<void>.value();
 
   final ScanDatabase database;
@@ -615,7 +617,7 @@ final class ScanQueueStore {
   Future<int> cleanupCompleted({DateTime? now}) async {
     _ensureOpen();
     final cutoff = (now ?? DateTime.now().toUtc()).subtract(
-      const Duration(days: 7),
+      _completedReceiptLifetime,
     );
     final completed =
         (await database.allUploads())
@@ -635,13 +637,17 @@ final class ScanQueueStore {
         completed[index].completedAtMs!,
         isUtc: true,
       );
-      if (index >= 20 || completedAt.isBefore(cutoff)) {
+      if (index >= _maximumCompletedReceipts || completedAt.isBefore(cutoff)) {
         remove.add(completed[index]);
       }
     }
     for (final upload in remove) {
       await removeUpload(upload.id);
     }
+    await database.pruneCompletedReceipts(
+      beforeMs: cutoff.millisecondsSinceEpoch,
+      keepNewest: _maximumCompletedReceipts,
+    );
     return remove.length;
   }
 
@@ -870,6 +876,8 @@ final class ScanQueueStore {
         }
       }
     }
+
+    await cleanupCompleted();
 
     final knownIds = (await database.allUploads()).map((row) => row.id).toSet();
     final remaining = await root.list(followLinks: false).toList();

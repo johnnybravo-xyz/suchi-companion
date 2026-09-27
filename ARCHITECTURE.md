@@ -238,8 +238,10 @@ the queue.
 
 The upload coordinator uses durable idempotency keys and polls server work to
 distinguish accepted bytes from finished processing. It respects connectivity,
-account binding and explicit retry. Successfully completed entries have age
-and count bounds; failed uploads and processing failures stay until resolved.
+account binding and explicit retry. Successful queue history and completed
+share/capture deduplication receipts are pruned after 30 days and capped at the
+newest 20 records of each kind. Reconciliation applies the same bounds on cold
+start. Failed uploads and processing failures stay until resolved.
 The existing queue is the sole durable upload path. Background execution remains
 subject to platform scheduling limits.
 

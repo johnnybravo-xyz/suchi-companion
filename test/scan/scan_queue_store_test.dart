@@ -472,14 +472,14 @@ void main() {
   });
 
   test(
-    'prunes successful completions without deleting failed queue rows',
+    'prunes completed queue history and receipts by age and count',
     () async {
       final now = DateTime.utc(2026, 6, 10);
       for (var index = 0; index < 23; index++) {
         final suffix = index.toString().padLeft(12, '0');
         final id = '00000000-0000-4000-8000-$suffix';
         final completedAt = index == 22
-            ? now.subtract(const Duration(days: 8))
+            ? now.subtract(const Duration(days: 31))
             : now.subtract(Duration(minutes: index));
         await database.insertUpload(
           ScanUploadsCompanion.insert(
@@ -497,13 +497,33 @@ void main() {
             completedAtMs: Value(completedAt.millisecondsSinceEpoch),
           ),
         );
+        await database.insertShareReceipt(
+          ShareReceiptsCompanion.insert(
+            batchId: id,
+            itemIndex: 0,
+            sha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            byteSize: 1,
+            mimeType: 'application/pdf',
+            queueId: Value(id),
+            status: 'staged',
+            createdAtMs: completedAt.millisecondsSinceEpoch,
+            updatedAtMs: completedAt.millisecondsSinceEpoch,
+          ),
+        );
+        await database.insertCaptureReceipt(
+          CaptureReceiptsCompanion.insert(
+            captureId: id,
+            queueId: id,
+            createdAtMs: completedAt.millisecondsSinceEpoch,
+          ),
+        );
       }
       const failures = {
         '44444444-4444-4444-8444-444444444444': 'uploadFailed',
         '55555555-5555-4555-8555-555555555555': 'processingFailed',
       };
       for (final MapEntry(key: id, value: state) in failures.entries) {
-        final failedAt = now.subtract(const Duration(days: 30));
+        final failedAt = now.subtract(const Duration(days: 31));
         await database.insertUpload(
           ScanUploadsCompanion.insert(
             id: id,
@@ -531,15 +551,28 @@ void main() {
             (upload) => upload.state == 'filed' || upload.state == 'duplicate',
           )
           .toList(growable: false);
+      final shareReceipts = await database.select(database.shareReceipts).get();
+      final captureReceipts = await database
+          .select(database.captureReceipts)
+          .get();
+      final cutoff = now
+          .subtract(const Duration(days: 30))
+          .millisecondsSinceEpoch;
 
       expect(removed, 3);
       expect(successes, hasLength(20));
       expect(
-        successes.every(
-          (upload) =>
-              upload.completedAtMs! >=
-              now.subtract(const Duration(days: 7)).millisecondsSinceEpoch,
-        ),
+        successes.every((upload) => upload.completedAtMs! >= cutoff),
+        isTrue,
+      );
+      expect(shareReceipts, hasLength(20));
+      expect(
+        shareReceipts.every((receipt) => receipt.updatedAtMs >= cutoff),
+        isTrue,
+      );
+      expect(captureReceipts, hasLength(20));
+      expect(
+        captureReceipts.every((receipt) => receipt.createdAtMs >= cutoff),
         isTrue,
       );
       expect(
@@ -556,6 +589,35 @@ void main() {
       }
     },
   );
+
+  test('reconciliation prunes expired transient receipts', () async {
+    final expired = DateTime.utc(2020).millisecondsSinceEpoch;
+    await database.insertShareReceipt(
+      ShareReceiptsCompanion.insert(
+        batchId: _firstId,
+        itemIndex: 0,
+        sha256:
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        byteSize: 1,
+        mimeType: 'application/pdf',
+        status: 'rejected',
+        createdAtMs: expired,
+        updatedAtMs: expired,
+      ),
+    );
+    await database.insertCaptureReceipt(
+      CaptureReceiptsCompanion.insert(
+        captureId: _secondId,
+        queueId: _thirdId,
+        createdAtMs: expired,
+      ),
+    );
+
+    await store.reconcile();
+
+    expect(await database.shareReceipt(_firstId, 0), equals(null));
+    expect(await database.captureReceipt(_secondId), equals(null));
+  });
 
   test('removes orphaned part files', () async {
     final orphan = File(path.join(temporary.path, 'orphan.payload.part'));

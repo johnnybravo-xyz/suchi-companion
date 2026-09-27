@@ -36,6 +36,8 @@
   when storage recovery must be retried.
 - Reject zero-byte payloads consistently across Android OS sharing and pickers,
   iOS Files/Photos/Share Extension intake, and the Dart native-manifest boundary.
+- Prune successful queue history and completed share/capture duplicate receipts
+  after 30 days or beyond the newest 20 records, including on cold start.
 
 - Promote the current Documents scope to its heading, with search and sort
   alongside, document/offline counts below, and **Saved offline** in the scope

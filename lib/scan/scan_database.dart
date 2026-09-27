@@ -187,6 +187,46 @@ final class ScanDatabase extends _$ScanDatabase {
   Future<void> insertCaptureReceipt(CaptureReceiptsCompanion receipt) =>
       into(captureReceipts).insert(receipt);
 
+  Future<int> pruneCompletedReceipts({
+    required int beforeMs,
+    required int keepNewest,
+  }) {
+    if (beforeMs <= 0 || keepNewest <= 0) {
+      throw ArgumentError('Receipt retention bounds must be positive.');
+    }
+    return transaction(() async {
+      final shareCount = await customUpdate(
+        '''
+DELETE FROM share_receipts
+WHERE updated_at_ms < ?
+   OR rowid NOT IN (
+     SELECT rowid
+     FROM share_receipts
+     ORDER BY updated_at_ms DESC, batch_id DESC, item_index DESC
+     LIMIT ?
+   )
+''',
+        variables: [Variable<int>(beforeMs), Variable<int>(keepNewest)],
+        updates: {shareReceipts},
+      );
+      final captureCount = await customUpdate(
+        '''
+DELETE FROM capture_receipts
+WHERE created_at_ms < ?
+   OR rowid NOT IN (
+     SELECT rowid
+     FROM capture_receipts
+     ORDER BY created_at_ms DESC, capture_id DESC
+     LIMIT ?
+   )
+''',
+        variables: [Variable<int>(beforeMs), Variable<int>(keepNewest)],
+        updates: {captureReceipts},
+      );
+      return shareCount + captureCount;
+    });
+  }
+
   Future<void> setSetting(String key, String value) => into(
     appSettings,
   ).insertOnConflictUpdate(AppSettingsCompanion.insert(key: key, value: value));

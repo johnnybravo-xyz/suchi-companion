@@ -3,6 +3,8 @@ package page.suchi.companion
 import android.app.Activity
 import android.content.ClipData
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
 import android.os.SystemClock
 import android.provider.MediaStore
@@ -35,16 +37,22 @@ class NativeAdapterInstrumentedTest {
         targetContext.getSharedPreferences("suchi-share-picker", Activity.MODE_PRIVATE)
     }
     private val shareRoot by lazy { File(targetContext.filesDir, "suchi-share-imports") }
+    private val photoRoot by lazy { File(targetContext.filesDir, "suchi-photo-capture") }
+    private val captureRoot by lazy { File(targetContext.filesDir, "suchi-scanner-captures") }
 
     @Before
     fun clearShareStore() {
         shareRoot.deleteRecursively()
+        photoRoot.deleteRecursively()
+        captureRoot.deleteRecursively()
         assertTrue(pickerPreferences.edit().clear().commit())
     }
 
     @After
     fun removeShareStore() {
         shareRoot.deleteRecursively()
+        photoRoot.deleteRecursively()
+        captureRoot.deleteRecursively()
         assertTrue(pickerPreferences.edit().clear().commit())
     }
 
@@ -108,6 +116,40 @@ class NativeAdapterInstrumentedTest {
                 "${targetContext.packageName}.photo-capture",
                 File(targetContext.filesDir, "suchi-scanner-captures/private.jpg"),
             )
+        }
+    }
+
+    @Test
+    fun coldStartRecoversACompletePhotoAndRemovesAnEmptyOutput() {
+        instrumentation.context.startActivity(
+            Intent(targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+        val activity = waitForActivity()
+        try {
+            assertTrue(photoRoot.mkdirs())
+            val pending = File(photoRoot, "pending.jpg")
+            val bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
+            bitmap.eraseColor(Color.WHITE)
+            pending.outputStream().use {
+                assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it))
+            }
+            bitmap.recycle()
+
+            ScanChannel(activity).onResume()
+
+            assertFalse(pending.exists())
+            val capture = requireNotNull(captureRoot.listFiles()).single { it.isDirectory }
+            val manifest = JSONObject(File(capture, "manifest.json").readText())
+            assertEquals(1, manifest.getInt("page_count"))
+            assertTrue(File(capture, "page-000.jpg").isFile)
+
+            captureRoot.deleteRecursively()
+            assertTrue(pending.createNewFile())
+            ScanChannel(activity).onResume()
+            assertFalse(pending.exists())
+            assertFalse(captureRoot.exists())
+        } finally {
+            instrumentation.runOnMainSync { activity.finishAndRemoveTask() }
         }
     }
 

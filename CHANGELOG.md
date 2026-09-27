@@ -31,6 +31,9 @@
 - Timestamp in-app picker ownership and reconcile it on cold start. Claims
   without a protected native batch expire after 24 hours; retained batches
   remain account-bound, and Android clears matching abandoned launch markers.
+- Recover a complete abandoned Android Photo output into the protected capture
+  store on cold resume, remove empty or invalid output, and retain valid bytes
+  when storage recovery must be retried.
 
 - Promote the current Documents scope to its heading, with search and sort
   alongside, document/offline counts below, and **Saved offline** in the scope

@@ -26,6 +26,11 @@ before starting another capture. A pre-release queue database or recovery
 manifest other than version 1 is detected before recovery starts; the app leaves
 the database and queue files untouched and asks for a reset or reinstall.
 
+If Android stops while the Photo camera owns its private output, the next cold
+resume validates that output before continuing. A complete JPEG moves into the
+recoverable capture store; an empty or invalid file is removed. A valid photo
+that cannot yet be retained stays private for a later retry.
+
 Scanner mode opens the platform document scanner. It detects
 page edges, straightens perspective, corrects rotation, improves lighting and
 lets you crop, filter, retake or remove pages before saving. Review the

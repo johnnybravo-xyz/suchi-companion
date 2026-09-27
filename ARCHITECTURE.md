@@ -182,10 +182,14 @@ iOS Photo uses the native still-camera picker without editing. Android Photo
 uses a camera intent with one full-size output URI through a separate,
 non-exported `PhotoCaptureProvider`, scoped to `suchi-photo-capture/`.
 Its temporary read/write grants are revoked on return. Successful captures are
-copied into the existing native capture store before temporary output is removed;
-restored activity results have no account assignment until explicitly resolved.
-Neither mode writes to the user's photo library. The existing pipeline wraps
-photo pages as PDFs and owns account binding, OCR, receipts, recovery and uploads.
+copied into the existing native capture store before temporary output is
+removed. If the process stops while the camera owns `pending.jpg`, the next
+activity resume runs after result delivery: it validates a bounded JPEG and
+copies it into a manifested capture directory, removes empty/invalid output,
+and retains a valid photo when storage prevents recovery. Restored activity
+results have no account assignment until explicitly resolved. Neither mode
+writes to the user's photo library. The existing pipeline wraps photo pages as
+PDFs and owns account binding, OCR, receipts, recovery and uploads.
 
 Native scanning first writes protected local files. Dart validates and stages
 them in the SQLite-backed queue before acknowledging native handoff. Android

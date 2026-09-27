@@ -73,6 +73,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        scanChannel?.onResume()
         privacyCover?.let { (it.parent as? ViewGroup)?.removeView(it) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             window.decorView.findViewById<View>(android.R.id.content)?.setRenderEffect(null)

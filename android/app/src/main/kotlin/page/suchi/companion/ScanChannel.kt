@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.MediaStore
 import android.provider.Settings
@@ -113,14 +114,18 @@ class ScanChannel(private val activity: FlutterActivity) {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
                 )
                 when (resultCode) {
-                    Activity.RESULT_CANCELED -> result?.success(ScanResultPayload.cancelled())
-                    Activity.RESULT_OK -> retainCapture(listOf(photoFile.toUri()), null, 1, result)
-                    else -> result?.error("capture_failed", "The camera did not complete.", null)
+                    Activity.RESULT_CANCELED -> {
+                        photoFile.delete()
+                        result?.success(ScanResultPayload.cancelled())
+                    }
+                    Activity.RESULT_OK -> retainPendingPhoto(result)
+                    else -> {
+                        photoFile.delete()
+                        result?.error("capture_failed", "The camera did not complete.", null)
+                    }
                 }
             } catch (_: Exception) {
                 result?.error("capture_failed", "The photo could not be retained. Try again.", mapOf("retryable" to true))
-            } finally {
-                photoFile.delete()
             }
             return true
         }
@@ -147,6 +152,42 @@ class ScanChannel(private val activity: FlutterActivity) {
             result,
         )
         return true
+    }
+
+    fun onResume() {
+        if (pendingCapture == null && photoFile.exists()) {
+            retainPendingPhoto(null)
+        }
+    }
+
+    private fun retainPendingPhoto(result: MethodChannel.Result?) {
+        if (!isRecoverablePhoto(photoFile)) {
+            photoFile.delete()
+            result?.error(
+                "capture_failed",
+                "The camera returned an invalid photo. Try again.",
+                mapOf("retryable" to true),
+            )
+            return
+        }
+        if (retainCapture(listOf(photoFile.toUri()), null, 1, result)) {
+            photoFile.delete()
+        }
+    }
+
+    private fun isRecoverablePhoto(file: File): Boolean {
+        if (
+            !file.isFile ||
+                file.length() <= 0 ||
+                file.length() > NativeIntakeLimits.MAX_CAPTURE_PAGE_BYTES
+        ) {
+            return false
+        }
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, options)
+        return options.outWidth > 0 &&
+            options.outHeight > 0 &&
+            options.outMimeType == "image/jpeg"
     }
 
     private fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -284,10 +325,13 @@ class ScanChannel(private val activity: FlutterActivity) {
         pdfUri: Uri?,
         pageCount: Int,
         result: MethodChannel.Result?,
-    ) {
+    ): Boolean {
         val root = File(activity.filesDir, STORE_NAME)
         val captureDirectory = File(root, UUID.randomUUID().toString())
         try {
+            if (!root.isDirectory && !root.mkdirs()) {
+                throw IOException("capture root unavailable")
+            }
             WritableStorage.requireCapacity(
                 root,
                 NativeIntakeLimits.MAX_CAPTURE_WORKING_BYTES,
@@ -326,6 +370,7 @@ class ScanChannel(private val activity: FlutterActivity) {
                     pagePaths = pageFiles.map(File::getAbsolutePath),
                 ),
             )
+            return true
         } catch (_: IntakeLimitExceededException) {
             captureDirectory.deleteRecursively()
             result?.error(
@@ -333,6 +378,7 @@ class ScanChannel(private val activity: FlutterActivity) {
                 NativeIntakeLimits.CAPTURE_LIMIT_MESSAGE,
                 mapOf("retryable" to false),
             )
+            return false
         } catch (_: Exception) {
             captureDirectory.deleteRecursively()
             result?.error(
@@ -340,6 +386,7 @@ class ScanChannel(private val activity: FlutterActivity) {
                 "Captured files could not be retained.",
                 mapOf("retryable" to true),
             )
+            return false
         }
     }
 

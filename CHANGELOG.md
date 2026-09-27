@@ -17,6 +17,10 @@
 - Regenerate Android legacy, adaptive and monochrome launcher icons plus the
   opaque iPhone and App Store catalog from committed canonical vectors. Remove
   iPad-only icon slots and validate generated icon dimensions and alpha modes.
+- Persist the downloaded offline representation's MIME type, byte count and
+  SHA-256 digest independently from remote source metadata. Rehash copies on
+  startup and use payload metadata for filenames, previews and native handoff,
+  including image sources archived by the server as PDF.
 
 - Promote the current Documents scope to its heading, with search and sort
   alongside, document/offline counts below, and **Saved offline** in the scope

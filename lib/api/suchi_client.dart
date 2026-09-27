@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
@@ -28,6 +29,18 @@ final class ThumbnailGated extends ThumbnailResult {
 
 final class ThumbnailUnavailable extends ThumbnailResult {
   const ThumbnailUnavailable();
+}
+
+final class DocumentDownload {
+  const DocumentDownload({
+    required this.mimeType,
+    required this.byteSize,
+    required this.sha256,
+  });
+
+  final String mimeType;
+  final int byteSize;
+  final String sha256;
 }
 
 final class SuchiClient {
@@ -548,7 +561,7 @@ final class SuchiClient {
     }
   }
 
-  Future<String> downloadDocument(
+  Future<DocumentDownload> downloadDocument(
     int id, {
     required File destination,
     bool reveal = false,
@@ -645,20 +658,27 @@ final class SuchiClient {
         );
       }
       output = await destination.open(mode: FileMode.write);
+      final digestSink = _DigestSink();
+      final digestInput = crypto.sha256.startChunkedConversion(digestSink);
       var received = 0;
-      await for (final chunk in response.stream.timeout(_readTimeout)) {
-        if (abort.isCompleted) {
-          throw http.RequestAbortedException();
+      try {
+        await for (final chunk in response.stream.timeout(_readTimeout)) {
+          if (abort.isCompleted) {
+            throw http.RequestAbortedException();
+          }
+          received += chunk.length;
+          if (received > byteLimit) {
+            throw const ApiException(
+              kind: ApiFailureKind.rejected,
+              message: 'Documents larger than 64 MiB must be opened in the Suchi web app.',
+            );
+          }
+          digestInput.add(chunk);
+          await output.writeFrom(chunk);
+          onProgress?.call(received);
         }
-        received += chunk.length;
-        if (received > byteLimit) {
-          throw const ApiException(
-            kind: ApiFailureKind.rejected,
-            message: 'Documents larger than 64 MiB must be opened in the Suchi web app.',
-          );
-        }
-        await output.writeFrom(chunk);
-        onProgress?.call(received);
+      } finally {
+        digestInput.close();
       }
       if (abort.isCompleted) throw http.RequestAbortedException();
       if (received == 0 ||
@@ -670,8 +690,16 @@ final class SuchiClient {
         );
       }
       await output.flush();
+      final digest = digestSink.value;
+      if (digest == null) {
+        throw StateError('Document download digest was not finalized.');
+      }
       completed = true;
-      return mimeType;
+      return DocumentDownload(
+        mimeType: mimeType,
+        byteSize: received,
+        sha256: digest.toString(),
+      );
     } on TimeoutException {
       throw const ApiException(
         kind: ApiFailureKind.timeout,
@@ -1145,6 +1173,19 @@ final class SuchiClient {
     if (value.contains('\n') || value.contains('\r')) return null;
     return value;
   }
+}
+
+final class _DigestSink implements Sink<crypto.Digest> {
+  crypto.Digest? value;
+
+  @override
+  void add(crypto.Digest data) {
+    if (value != null) throw StateError('Document digest was emitted twice.');
+    value = data;
+  }
+
+  @override
+  void close() {}
 }
 
 final class _ApiResponse {

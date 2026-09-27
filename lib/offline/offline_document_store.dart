@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
@@ -33,7 +34,9 @@ final class OfflineDocument {
     required this.document,
     required this.payload,
     required this.directory,
+    required this.payloadMimeType,
     required this.byteSize,
+    required this.payloadSha256,
     required this.savedAt,
   });
 
@@ -41,13 +44,15 @@ final class OfflineDocument {
   final DocumentDetail document;
   final File payload;
   final Directory directory;
+  final String payloadMimeType;
   final int byteSize;
+  final String payloadSha256;
   final DateTime savedAt;
 
   DocumentSummary get summary => DocumentSummary(
     id: document.id,
     title: document.title,
-    mimeType: document.mimeType,
+    mimeType: payloadMimeType,
     originalSize: byteSize,
     jdCategoryId: document.jdCategoryId,
     jdCategoryCode: document.jdCategoryCode,
@@ -256,7 +261,7 @@ final class OfflineDocumentStore extends ChangeNotifier {
     var published = false;
     try {
       final partialPayload = File(path.join(staging.path, 'payload.part'));
-      final downloadedMime = await client.downloadDocument(
+      final download = await client.downloadDocument(
         document.id,
         destination: partialPayload,
         preview: false,
@@ -266,16 +271,13 @@ final class OfflineDocumentStore extends ChangeNotifier {
             _recordSavingProgress(identity, generation, bytes),
       );
       _checkGeneration(generation);
-      final normalizedMime = _normalizedMime(document.mimeType);
-      if (downloadedMime != normalizedMime) {
-        throw const ApiException(
-          kind: ApiFailureKind.malformedResponse,
-          message: 'Suchi returned a different document type than expected.',
-        );
+      final payloadMimeType = _normalizedMime(download.mimeType);
+      if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(download.sha256)) {
+        throw StateError('Document download returned an invalid digest.');
       }
       final stat = await partialPayload.stat();
       if (stat.type != FileSystemEntityType.file ||
-          stat.size != document.originalSize ||
+          stat.size != download.byteSize ||
           stat.size <= 0 ||
           stat.size > offlineDocumentByteLimit) {
         throw const ApiException(
@@ -284,7 +286,7 @@ final class OfflineDocumentStore extends ChangeNotifier {
         );
       }
       final payloadName =
-          'document-${document.id}${DocumentFiles.extensionForMimeType(normalizedMime)}';
+          'document-${document.id}${DocumentFiles.extensionForMimeType(payloadMimeType)}';
       await partialPayload.rename(path.join(staging.path, payloadName));
       _checkGeneration(generation);
       final savedAt = _now().toUtc();
@@ -298,7 +300,9 @@ final class OfflineDocumentStore extends ChangeNotifier {
         identity: identity,
         document: document,
         payloadName: payloadName,
-        byteSize: stat.size,
+        payloadMimeType: payloadMimeType,
+        byteSize: download.byteSize,
+        payloadSha256: download.sha256,
         savedAt: savedAt,
       );
       final encoded = utf8.encode(jsonEncode(manifest));
@@ -449,7 +453,7 @@ final class OfflineDocumentStore extends ChangeNotifier {
     }
     return _files.handoffLocal(
       file: entry.payload,
-      mimeType: entry.document.mimeType,
+      mimeType: entry.payloadMimeType,
       share: share,
     );
   }
@@ -576,7 +580,9 @@ final class OfflineDocumentStore extends ChangeNotifier {
             'identity_system_id',
             'document',
             'payload_filename',
-            'byte_size',
+            'payload_mime_type',
+            'payload_byte_size',
+            'payload_sha256',
             'saved_at',
           }) ||
           manifest['version'] != _manifestVersion) {
@@ -586,7 +592,9 @@ final class OfflineDocumentStore extends ChangeNotifier {
       final userId = manifest['identity_user_id'];
       final systemId = manifest['identity_system_id'];
       final payloadName = manifest['payload_filename'];
-      final byteSize = manifest['byte_size'];
+      final payloadMimeValue = manifest['payload_mime_type'];
+      final byteSize = manifest['payload_byte_size'];
+      final payloadSha256 = manifest['payload_sha256'];
       final savedAtSeconds = manifest['saved_at'];
       if (originValue is! String ||
           userId is! int ||
@@ -594,9 +602,12 @@ final class OfflineDocumentStore extends ChangeNotifier {
           systemId is! int ||
           systemId <= 0 ||
           payloadName is! String ||
+          payloadMimeValue is! String ||
           byteSize is! int ||
           byteSize <= 0 ||
           byteSize > offlineDocumentByteLimit ||
+          payloadSha256 is! String ||
+          !RegExp(r'^[0-9a-f]{64}$').hasMatch(payloadSha256) ||
           savedAtSeconds is! int ||
           savedAtSeconds <= 0) {
         return null;
@@ -609,12 +620,10 @@ final class OfflineDocumentStore extends ChangeNotifier {
         return null;
       }
       final document = DocumentDetail.fromJson(documentValue);
-      final normalizedMime = _normalizedMime(document.mimeType);
+      final payloadMimeType = _normalizedMime(payloadMimeValue);
       final expectedPayload =
-          'document-${document.id}${DocumentFiles.extensionForMimeType(normalizedMime)}';
-      if (payloadName != expectedPayload || byteSize != document.originalSize) {
-        return null;
-      }
+          'document-${document.id}${DocumentFiles.extensionForMimeType(payloadMimeType)}';
+      if (payloadName != expectedPayload) return null;
       final payload = File(path.join(directory.path, payloadName));
       if (path.basename(payload.path) != payloadName ||
           await FileSystemEntity.type(payload.path, followLinks: false) !=
@@ -622,7 +631,11 @@ final class OfflineDocumentStore extends ChangeNotifier {
         return null;
       }
       final payloadStat = await payload.stat();
-      if (payloadStat.size != byteSize) return null;
+      if (payloadStat.size != byteSize ||
+          (await crypto.sha256.bind(payload.openRead()).first).toString() !=
+              payloadSha256) {
+        return null;
+      }
       return OfflineDocument(
         identity: AccountIdentity(
           origin: origin,
@@ -632,7 +645,9 @@ final class OfflineDocumentStore extends ChangeNotifier {
         document: document,
         payload: payload,
         directory: directory,
+        payloadMimeType: payloadMimeType,
         byteSize: byteSize,
+        payloadSha256: payloadSha256,
         savedAt: DateTime.fromMillisecondsSinceEpoch(
           savedAtSeconds * 1000,
           isUtc: true,
@@ -653,7 +668,9 @@ final class OfflineDocumentStore extends ChangeNotifier {
     required AccountIdentity identity,
     required DocumentDetail document,
     required String payloadName,
+    required String payloadMimeType,
     required int byteSize,
+    required String payloadSha256,
     required DateTime savedAt,
   }) => {
     'version': _manifestVersion,
@@ -699,7 +716,9 @@ final class OfflineDocumentStore extends ChangeNotifier {
       'content': '',
     },
     'payload_filename': payloadName,
-    'byte_size': byteSize,
+    'payload_mime_type': payloadMimeType,
+    'payload_byte_size': byteSize,
+    'payload_sha256': payloadSha256,
     'saved_at': savedAt.millisecondsSinceEpoch ~/ 1000,
   };
 

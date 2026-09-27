@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -44,9 +46,12 @@ void main() {
       }),
     );
 
+    final download = await api.downloadDocument(91, destination: destination);
+    expect(download.mimeType, 'application/pdf');
+    expect(download.byteSize, 9);
     expect(
-      await api.downloadDocument(91, destination: destination),
-      'application/pdf',
+      download.sha256,
+      sha256.convert(utf8.encode('%PDF-test')).toString(),
     );
     expect(await destination.readAsString(), '%PDF-test');
   });
@@ -81,7 +86,7 @@ void main() {
 
     chunks.add([4, 5, 6]);
     await chunks.close();
-    expect(await download, 'application/pdf');
+    expect((await download).mimeType, 'application/pdf');
     expect(progress, [3, 6]);
     expect(await destination.readAsBytes(), [1, 2, 3, 4, 5, 6]);
   });

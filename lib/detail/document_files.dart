@@ -110,7 +110,7 @@ final class DocumentFiles {
     var retained = false;
     try {
       final partial = File(path.join(directory.path, 'download.part'));
-      final mimeType = await client.downloadDocument(
+      final download = await client.downloadDocument(
         documentId,
         destination: partial,
         preview: !share,
@@ -121,13 +121,13 @@ final class DocumentFiles {
       final file = await partial.rename(
         path.join(
           directory.path,
-          'document-$documentId${extensionForMimeType(mimeType)}',
+          'document-$documentId${extensionForMimeType(download.mimeType)}',
         ),
       );
       if (generation != _generation) return;
       await _channel.invokeMethod<void>(share ? 'share' : 'open', {
         'path': file.path,
-        'mime_type': mimeType,
+        'mime_type': download.mimeType,
       });
       // Android recipients may read after the chooser returns. Retain until
       // sign-out, next cold launch, or the next export after 24 hours.

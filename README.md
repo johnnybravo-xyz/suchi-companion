@@ -79,15 +79,16 @@ pruned during later exports.
 Choose **Save offline** in document detail, or swipe right on an online
 Documents row to reveal Save/Update. Swipe left on a saved row to reveal
 **Remove offline copy**, which asks for confirmation and deletes only the
-device copy. Saving checks current server metadata before retaining the
-verified full file in protected,
-backup-excluded app storage. A saved document shows its offline status beside
-the file type and size inside the preview; **Offline copy options** offers
-**Update offline copy** when stale and **Remove offline copy**. Each file
-remains subject to the 64 MiB limit; sensitive
-files ask before retention and again before handoff to
-another app. Previews, email HTML and extracted text are never written into
-the offline store.
+device copy. Saving checks current server metadata before retaining and hashing
+the exact downloaded representation in protected, backup-excluded app storage.
+The response MIME type and byte count drive its filename, preview metadata and
+native handoff, so an archived PDF remains a PDF even when its source was an
+image. The server's original-blob digest is used only to detect a newer remote
+version. **Offline copy options** offers **Update offline copy** when stale and
+**Remove offline copy**. Each payload remains subject to the 64 MiB limit;
+sensitive files ask before retention and again before handoff to another app.
+Previews, email HTML and extracted text are never written into the offline
+store.
 
 While a file downloads, document detail shows its byte progress and Documents
 keeps a persistent progress bar, including after a swipe action closes. The

@@ -261,13 +261,16 @@ viewers and share targets receive file handles, not server credentials.
 `OfflineDocumentStore` owns `suchi-offline-documents` under protected,
 backup-excluded application support. Each committed `offline-<UUID>/` contains
 exactly one full payload and a bounded, versioned `manifest.json` with canonical
-origin, user ID, filing-system ID, complete metadata, original-blob digest,
-payload name, size and save time. Downloads use the full `/download` endpoint,
+origin, user ID, filing-system ID, complete remote metadata, payload filename,
+response MIME type, byte count, SHA-256 digest and save time. The remote
+`original_blob` is retained solely for freshness comparison; it is never treated
+as the downloaded payload digest. Downloads use the full `/download` endpoint,
 are account-bound, cancellable and capped at 64 MiB. Payload and manifest are
 staged and flushed before the directory rename publishes them; a failed update
-leaves the previous verified copy intact. Startup follows no links, deletes
-staging/malformed/unknown entries and retains only the newest valid duplicate.
-Thumbnails, email HTML and extracted text are never persisted there.
+leaves the previous verified copy intact. Startup follows no links, rehashes
+payloads, deletes staging/malformed/unknown/corrupt entries and retains only the
+newest valid duplicate. Thumbnails, email HTML and extracted text are never
+persisted there.
 
 `SuchiClient.downloadDocument` reports bytes written to its protected
 temporary file. The store owns account-bound save progress, throttles change

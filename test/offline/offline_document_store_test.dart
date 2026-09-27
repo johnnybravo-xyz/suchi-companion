@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -71,7 +72,9 @@ void main() {
     expect(manifest['identity_user_id'], _identity.userId);
     expect(manifest['identity_system_id'], _identity.systemId);
     expect(manifest['payload_filename'], 'document-91.pdf');
-    expect(manifest['byte_size'], bytes.length);
+    expect(manifest['payload_mime_type'], 'application/pdf');
+    expect(manifest['payload_byte_size'], bytes.length);
+    expect(manifest['payload_sha256'], sha256.convert(bytes).toString());
     expect((manifest['document'] as Map)['original_blob'], 'b' * 64);
     expect((manifest['document'] as Map)['content'], '');
 
@@ -86,6 +89,28 @@ void main() {
     expect(recovered, isNotNull);
     expect(recovered!.document.title, 'Quarterly report');
     expect(await recovered.payload.readAsBytes(), bytes);
+  });
+
+  test('startup removes a payload whose digest changed in place', () async {
+    final bytes = utf8.encode('%PDF-intact');
+    final store = await _openStore(root, files, protection, uuids: [_uuid(1)]);
+    final entry = await store.save(
+      identity: _identity,
+      document: _document(size: bytes.length),
+      client: _client((_) async => _download(bytes)),
+    );
+    await store.close();
+    await entry.payload.writeAsBytes(utf8.encode('%PDF-broken'), flush: true);
+
+    final restored = await OfflineDocumentStore.open(
+      files: files,
+      root: root,
+      storageProtection: protection,
+    );
+    addTearDown(restored.close);
+
+    expect(restored.entriesFor(_identity), isEmpty);
+    expect(root.listSync(), isEmpty);
   });
 
   test(
@@ -142,7 +167,7 @@ void main() {
   );
 
   test(
-    'saved payload reaches the native viewer directly and survives refusal',
+    'archived payload metadata drives offline previews and native handoff',
     () async {
       TestWidgetsFlutterBinding.ensureInitialized();
       const channel = MethodChannel('test.suchi/offline-handoff');
@@ -172,9 +197,18 @@ void main() {
       final bytes = utf8.encode('%PDF-offline');
       final entry = await store.save(
         identity: _identity,
-        document: _document(size: bytes.length),
+        document: _document(size: 1234, mimeType: 'image/jpeg'),
         client: _client((_) async => _download(bytes)),
       );
+
+      expect(entry.document.mimeType, 'image/jpeg');
+      expect(entry.document.originalSize, 1234);
+      expect(entry.payloadMimeType, 'application/pdf');
+      expect(entry.byteSize, bytes.length);
+      expect(entry.payloadSha256, sha256.convert(bytes).toString());
+      expect(entry.summary.mimeType, 'application/pdf');
+      expect(entry.summary.originalSize, bytes.length);
+      expect(entry.payloadSha256, isNot(entry.document.originalBlob));
 
       await store.handoff(identity: _identity, entry: entry, share: false);
       expect(calls.single.method, 'open');
@@ -336,7 +370,18 @@ void main() {
         store.save(
           identity: _identity,
           document: _document(size: original.length, blob: 'c' * 64),
-          client: _client((_) async => _download(utf8.encode('short'))),
+          client: SuchiClient(
+            origin: _identity.origin,
+            token: 'a' * 64,
+            httpClient: MockClient.streaming(
+              (_, _) async => http.StreamedResponse(
+                Stream.value(utf8.encode('short')),
+                200,
+                contentLength: original.length,
+                headers: {'content-type': 'application/pdf'},
+              ),
+            ),
+          ),
         ),
         throwsA(
           isA<ApiException>().having(
@@ -514,39 +559,43 @@ http.Response _download(List<int> bytes) => http.Response.bytes(
   headers: {'content-type': 'application/pdf'},
 );
 
-DocumentDetail _document({int id = 91, required int size, String blob = ''}) =>
-    DocumentDetail.fromJson({
-      'id': id,
-      'title': 'Quarterly report',
-      'mime_type': 'application/pdf',
-      'original_size': size,
-      'original_blob': blob.isEmpty ? 'b' * 64 : blob,
-      'jd_category_id': 31,
-      'jd_category_code': 31,
-      'jd_category_name': 'Utilities',
-      'jd_area_name': 'Home',
-      'sensitivity': '',
-      'created_at': 100,
-      'added_at': 110,
-      'updated_at': 120,
-      'source_mtime': 90,
-      'trashed_at': null,
-      'sources': [
-        {
-          'kind': 'email',
-          'label': 'Email attachment',
-          'detail': 'report.pdf',
-          'observed_at': 95,
-        },
-      ],
-      'tags': ['tax', 'quarterly'],
-      'correspondents': [
-        {'id': 3, 'name': 'Accountant', 'role': 'sender'},
-      ],
-      'languages': 'eng',
-      'languages_locked': true,
-      'content': '',
-    });
+DocumentDetail _document({
+  int id = 91,
+  required int size,
+  String blob = '',
+  String mimeType = 'application/pdf',
+}) => DocumentDetail.fromJson({
+  'id': id,
+  'title': 'Quarterly report',
+  'mime_type': mimeType,
+  'original_size': size,
+  'original_blob': blob.isEmpty ? 'b' * 64 : blob,
+  'jd_category_id': 31,
+  'jd_category_code': 31,
+  'jd_category_name': 'Utilities',
+  'jd_area_name': 'Home',
+  'sensitivity': '',
+  'created_at': 100,
+  'added_at': 110,
+  'updated_at': 120,
+  'source_mtime': 90,
+  'trashed_at': null,
+  'sources': [
+    {
+      'kind': 'email',
+      'label': 'Email attachment',
+      'detail': 'report.pdf',
+      'observed_at': 95,
+    },
+  ],
+  'tags': ['tax', 'quarterly'],
+  'correspondents': [
+    {'id': 3, 'name': 'Accountant', 'role': 'sender'},
+  ],
+  'languages': 'eng',
+  'languages_locked': true,
+  'content': '',
+});
 
 String _uuid(int value) =>
     '00000000-0000-4000-8000-${value.toString().padLeft(12, '0')}';

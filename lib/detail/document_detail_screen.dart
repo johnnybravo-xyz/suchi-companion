@@ -1131,9 +1131,13 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
               runSpacing: 4,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                QuietBadge(_friendlyType(document.mimeType)),
+                QuietBadge(
+                  _friendlyType(
+                    offlineEntry?.payloadMimeType ?? document.mimeType,
+                  ),
+                ),
                 Text(
-                  _formatBytes(document.originalSize),
+                  _formatBytes(offlineEntry?.byteSize ?? document.originalSize),
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: colors.muted),
                 ),

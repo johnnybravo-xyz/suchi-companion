@@ -30,6 +30,8 @@ void main() {
   late bool failDocumentMetadata;
   late bool sensitive;
   late String originalBlob;
+  late String documentMime;
+  late int documentSize;
   late StreamController<List<int>>? downloadChunks;
   late List<MethodCall> handoffs;
 
@@ -53,6 +55,8 @@ void main() {
     failDocumentMetadata = false;
     sensitive = false;
     originalBlob = 'b' * 64;
+    documentMime = 'application/pdf';
+    documentSize = _payload.length;
     downloadChunks = null;
     session = SessionController(
       vault: _MemoryVault(),
@@ -80,7 +84,12 @@ void main() {
             '/api/jd/categories/' => _fixture('jd-categories.json'),
             '/api/documents/91' => http.Response(
               jsonEncode(
-                _documentJson(sensitive: sensitive, blob: originalBlob),
+                _documentJson(
+                  sensitive: sensitive,
+                  blob: originalBlob,
+                  mimeType: documentMime,
+                  originalSize: documentSize,
+                ),
               ),
               200,
               headers: {'content-type': 'application/json'},
@@ -158,6 +167,8 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    documentMime = 'image/jpeg';
+    documentSize = 1234;
     await _pumpDetail(tester, session, files, store);
 
     final preview = find.byKey(const ValueKey('document-preview'));
@@ -174,13 +185,13 @@ void main() {
     expect(saveBounds.height, greaterThanOrEqualTo(52));
     expect(
       tester
-          .getRect(find.descendant(of: preview, matching: find.text('PDF')))
+          .getRect(find.descendant(of: preview, matching: find.text('JPEG')))
           .bottom,
       lessThan(saveBounds.top),
     );
     expect(
       tester
-          .getRect(find.descendant(of: preview, matching: find.text('12 B')))
+          .getRect(find.descendant(of: preview, matching: find.text('1.2 KB')))
           .bottom,
       lessThan(saveBounds.top),
     );
@@ -193,6 +204,10 @@ void main() {
     expect(handoffs, isEmpty);
     expect(find.text('Available offline'), findsOneWidget);
     expect(find.text('Save offline'), findsNothing);
+    expect(find.text('PDF'), findsOneWidget);
+    expect(find.text('12 B'), findsOneWidget);
+    expect(find.text('JPEG'), findsNothing);
+    expect(find.text('1.2 KB'), findsNothing);
     await tester.tap(find.byTooltip('Offline copy options'));
     await tester.pumpAndSettle();
     expect(find.text('Remove offline copy'), findsOneWidget);
@@ -521,11 +536,16 @@ http.Response _fixture(String name) => http.Response(
   headers: {'content-type': 'application/json'},
 );
 
-Map<String, Object?> _documentJson({bool sensitive = false, String? blob}) => {
+Map<String, Object?> _documentJson({
+  bool sensitive = false,
+  String? blob,
+  String mimeType = 'application/pdf',
+  int? originalSize,
+}) => {
   'id': 91,
   'title': 'Quarterly report',
-  'mime_type': 'application/pdf',
-  'original_size': _payload.length,
+  'mime_type': mimeType,
+  'original_size': originalSize ?? _payload.length,
   'original_blob': blob ?? 'b' * 64,
   'jd_category_id': 31,
   'jd_category_code': 31,

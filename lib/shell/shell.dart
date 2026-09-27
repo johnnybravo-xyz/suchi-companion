@@ -354,6 +354,8 @@ class _SuchiShellState extends State<SuchiShell> {
         MoreScreen(
           session: widget.services.session,
           settings: widget.services.settings,
+          offlineDocuments: widget.services.offlineDocuments,
+          queue: widget.services.queue,
         ),
       ];
       return Scaffold(
@@ -405,6 +407,8 @@ class _SuchiShellState extends State<SuchiShell> {
       MoreScreen(
         session: widget.services.session,
         settings: widget.services.settings,
+        offlineDocuments: widget.services.offlineDocuments,
+        queue: widget.services.queue,
         onOpenTrash: _openTrash,
       ),
     ];

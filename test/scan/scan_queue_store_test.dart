@@ -72,6 +72,10 @@ void main() {
     expect(staged.identitySystemId, 1);
     expect(await store.payloadFile(staged).readAsBytes(), _pdf);
     expect(await store.readOcr(staged), 'Recognized text');
+    expect(await store.storageUsage(), (
+      itemCount: 1,
+      byteSize: _pdf.length + utf8.encode('Recognized text').length,
+    ));
     expect(
       await temporary
           .list()

@@ -25,6 +25,9 @@
   queue, temporary export and offline writes. Low-storage failures keep
   unresolved sources and previously verified offline copies available for
   retry instead of replacing or falsely completing them.
+- Add account and device-wide storage totals to **More → Privacy & storage**,
+  including queue bytes and free space. Users can explicitly remove current
+  account or all offline copies without bulk-deleting unresolved uploads.
 
 - Promote the current Documents scope to its heading, with search and sort
   alongside, document/offline counts below, and **Saved offline** in the scope

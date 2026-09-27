@@ -103,6 +103,12 @@ capture/share source and any previously verified offline copy for retry instead
 of turning an unresolved item into a successful import or replacing durable
 data.
 
+**More → Privacy & storage** reports the current account’s offline-copy usage,
+all offline copies on the device, protected queue usage and available device
+space. It can remove the current account’s copies or, when other account data is
+present, every offline copy after confirmation. Queued items remain managed
+individually in Scan and are never included in bulk offline cleanup.
+
 If the first Inbox load on an online cold start succeeds with no documents,
 Suchi Companion opens Documents instead. A failed load stays in Inbox for
 **Retry**, and choosing a tab yourself prevents the automatic switch. Documents

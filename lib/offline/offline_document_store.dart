@@ -156,6 +156,18 @@ final class OfflineDocumentStore extends ChangeNotifier {
     return null;
   }
 
+  int get totalCount => _entries.length;
+
+  int get totalBytes {
+    var total = 0;
+    for (final entry in _entries) {
+      total += entry.byteSize;
+    }
+    return total;
+  }
+
+  Future<int> availableBytes() => _storageCapacity.availableBytes(root.path);
+
   int totalBytesFor(AccountIdentity? identity) {
     if (identity == null) return 0;
     var total = 0;
@@ -407,9 +419,15 @@ final class OfflineDocumentStore extends ChangeNotifier {
     }
   }
 
-  Future<void> clearAccount(AccountIdentity identity) async {
-    _ensureOpen();
+  Future<void> clearAccount(AccountIdentity identity) {
     _validateIdentity(identity);
+    return _clearWhere((entry) => entry.identity == identity);
+  }
+
+  Future<void> clearAll() => _clearWhere((_) => true);
+
+  Future<void> _clearWhere(bool Function(OfflineDocument) shouldClear) async {
+    _ensureOpen();
     cancelPending();
     while (_idle != null) {
       await _waitForIdle();
@@ -422,23 +440,23 @@ final class OfflineDocumentStore extends ChangeNotifier {
     notifyListeners();
     try {
       // Reconciliation removes malformed and duplicate directories before the
-      // account deletion is allowed to succeed.
+      // deletion is allowed to succeed.
       await _reconcile();
-      final owned = entriesFor(identity);
-      for (final entry in owned) {
+      final selected = _entries.where(shouldClear).toList(growable: false);
+      for (final entry in selected) {
         if (await entry.directory.exists()) {
           await entry.directory.delete(recursive: true);
         }
       }
       _entries = List.unmodifiable(
-        _entries.where((entry) => entry.identity != identity),
+        _entries.where((entry) => !shouldClear(entry)),
       );
       _errorMessage = null;
     } on FileSystemException {
       try {
         await _reconcile();
       } on FileSystemException {
-        // Preserve the first cleanup failure for the sign-out caller.
+        // Preserve the first cleanup failure for the caller.
       }
       _errorMessage =
           'Offline documents could not be removed from protected storage.';

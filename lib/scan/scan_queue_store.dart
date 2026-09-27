@@ -187,6 +187,19 @@ final class ScanQueueStore {
 
   Future<List<ScanUpload>> allUploads() => database.allUploads();
 
+  Future<({int itemCount, int byteSize})> storageUsage() async {
+    _ensureOpen();
+    final uploads = await database.allUploads();
+    var byteSize = 0;
+    for (final upload in uploads) {
+      for (final file in [payloadFile(upload), ?ocrFile(upload)]) {
+        final stat = await file.stat();
+        if (stat.type == FileSystemEntityType.file) byteSize += stat.size;
+      }
+    }
+    return (itemCount: uploads.length, byteSize: byteSize);
+  }
+
   Future<void> ensureWritableCapacity(int byteCount) async {
     _ensureOpen();
     try {

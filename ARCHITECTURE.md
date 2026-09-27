@@ -297,6 +297,14 @@ and opens the local payload even when a client is available.
 Swiping right on an online row exposes Make/Update; swiping left on a saved
 row (including the local-only library) exposes confirmed removal without
 contacting the server.
+
+More’s **Privacy & storage** sheet is the storage-management boundary. It reads
+account and device-wide offline totals from `OfflineDocumentStore`, actual
+payload/OCR bytes from `ScanQueueStore`, and available capacity through the
+native storage channel. Account and all-device offline cleanup require explicit
+confirmation; queue rows are reported there but remain individually resolved in
+Scan.
+
 Actions collapse when tapped. Saving fetches current detail, asks
 consent if classification is newly sensitive, and rejects results after an
 identity change. Network/timeout detail failures may fall back only to the

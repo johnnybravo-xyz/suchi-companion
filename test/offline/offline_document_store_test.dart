@@ -266,7 +266,7 @@ void main() {
   });
 
   test(
-    'keeps account scopes separate and clears only the selected account',
+    'reports global usage and clears account or device copies explicitly',
     () async {
       final bytes = utf8.encode('%PDF-a');
       final store = await _openStore(
@@ -295,6 +295,8 @@ void main() {
       expect(store.entriesFor(_otherIdentity).map((item) => item.document.id), [
         92,
       ]);
+      expect(store.totalCount, 2);
+      expect(store.totalBytes, bytes.length * 2);
       await store.clearAccount(_identity);
       expect(store.entriesFor(_identity), isEmpty);
       expect(store.entriesFor(_otherIdentity).map((item) => item.document.id), [
@@ -304,9 +306,15 @@ void main() {
         await store.entriesFor(_otherIdentity).single.payload.exists(),
         isTrue,
       );
+      expect(store.totalCount, 1);
+      expect(store.totalBytes, bytes.length);
       expect(root.listSync().whereType<Directory>().map((item) => item.path), [
         second.directory.path,
       ]);
+      await store.clearAll();
+      expect(store.totalCount, 0);
+      expect(store.totalBytes, 0);
+      expect(root.listSync(), isEmpty);
     },
   );
 

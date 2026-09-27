@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../auth/session_controller.dart';
 import '../documents/document_list_mode.dart';
+import '../offline/offline_document_store.dart';
+import '../scan/scan_queue_store.dart';
 import '../scan/scanner_bridge.dart';
 import '../theme/suchi_theme.dart';
 import '../widgets/suchi_widgets.dart';
@@ -14,12 +16,16 @@ class MoreScreen extends StatefulWidget {
   const MoreScreen({
     required this.session,
     required this.settings,
+    required this.offlineDocuments,
+    required this.queue,
     this.onOpenTrash,
     super.key,
   });
 
   final SessionController session;
   final AppSettingsController settings;
+  final OfflineDocumentStore offlineDocuments;
+  final ScanQueueStore queue;
   final VoidCallback? onOpenTrash;
 
   @override
@@ -472,24 +478,10 @@ class _MoreScreenState extends State<MoreScreen> {
 
   Future<void> _showPrivacyDetails() => _showSettingsSheet<void>(
     title: 'Privacy & storage',
-    builder: (context) => Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text(
-          'No analytics, ads, remote crash reporting, or document relay.',
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Credentials use device-only secure storage. Queued files and offline document copies stay protected on this device and are excluded from cloud backup. Offline copies remain until you remove them or sign out; thumbnails stay in memory only.',
-        ),
-        const SizedBox(height: 24),
-        const SectionLabel('Server OCR only'),
-        const SizedBox(height: 8),
-        const Text(
-          'Uploads started while this is on omit text recognized on this phone. Suchi will extract or OCR the document instead.',
-        ),
-      ],
+    builder: (context) => _StorageManager(
+      session: widget.session,
+      offlineDocuments: widget.offlineDocuments,
+      queue: widget.queue,
     ),
   );
 
@@ -693,6 +685,203 @@ class _MoreScreenState extends State<MoreScreen> {
       },
     ),
   );
+}
+
+final class _DeviceStorageUsage {
+  const _DeviceStorageUsage({
+    required this.availableBytes,
+    required this.queueCount,
+    required this.queueBytes,
+  });
+
+  final int availableBytes;
+  final int queueCount;
+  final int queueBytes;
+}
+
+class _StorageManager extends StatefulWidget {
+  const _StorageManager({
+    required this.session,
+    required this.offlineDocuments,
+    required this.queue,
+  });
+
+  final SessionController session;
+  final OfflineDocumentStore offlineDocuments;
+  final ScanQueueStore queue;
+
+  @override
+  State<_StorageManager> createState() => _StorageManagerState();
+}
+
+class _StorageManagerState extends State<_StorageManager> {
+  late Future<_DeviceStorageUsage> _usage = _loadUsage();
+  bool _removing = false;
+
+  Future<_DeviceStorageUsage> _loadUsage() async {
+    final queue = await widget.queue.storageUsage();
+    final available = await widget.offlineDocuments.availableBytes();
+    return _DeviceStorageUsage(
+      availableBytes: available,
+      queueCount: queue.itemCount,
+      queueBytes: queue.byteSize,
+    );
+  }
+
+  Future<void> _removeOffline({required bool all}) async {
+    if (_removing) return;
+    final identity = widget.session.identity;
+    if (!all && identity == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          all
+              ? 'Remove every offline copy?'
+              : 'Remove this account’s offline copies?',
+        ),
+        content: Text(
+          all
+              ? 'This removes all saved document copies from this device. Queued uploads are not removed.'
+              : 'This removes saved document copies for the current account. Queued uploads are not removed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove copies'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _removing = true);
+    try {
+      if (all) {
+        await widget.offlineDocuments.clearAll();
+      } else {
+        await widget.offlineDocuments.clearAccount(identity!);
+      }
+      if (mounted) setState(() => _usage = _loadUsage());
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Offline copies could not be removed. Try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _removing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.offlineDocuments,
+    builder: (context, _) {
+      final identity = widget.session.identity;
+      final accountCount = widget.offlineDocuments.entriesFor(identity).length;
+      final accountBytes = widget.offlineDocuments.totalBytesFor(identity);
+      final totalCount = widget.offlineDocuments.totalCount;
+      final totalBytes = widget.offlineDocuments.totalBytes;
+      final otherCopies = totalCount > accountCount;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'No analytics, ads, remote crash reporting, or document relay.',
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Credentials use device-only secure storage. Queued files and offline document copies stay protected on this device and are excluded from cloud backup.',
+          ),
+          const SizedBox(height: 24),
+          const SectionLabel('Current account'),
+          const SizedBox(height: 8),
+          Text(
+            identity == null
+                ? 'No active account'
+                : '${_itemCount(accountCount, 'offline copy', 'offline copies')} · ${_formatStorageBytes(accountBytes)}',
+            key: const ValueKey('account-storage-usage'),
+          ),
+          if (identity != null && accountCount > 0) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: const ValueKey('remove-account-offline'),
+              onPressed: _removing ? null : () => _removeOffline(all: false),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Remove account copies'),
+            ),
+          ],
+          const SizedBox(height: 24),
+          const SectionLabel('On this device'),
+          const SizedBox(height: 8),
+          Text(
+            '${_itemCount(totalCount, 'offline copy', 'offline copies')} · ${_formatStorageBytes(totalBytes)}',
+            key: const ValueKey('device-offline-usage'),
+          ),
+          const SizedBox(height: 6),
+          FutureBuilder<_DeviceStorageUsage>(
+            future: _usage,
+            builder: (context, snapshot) {
+              final usage = snapshot.data;
+              if (usage == null) {
+                return Text(
+                  snapshot.hasError
+                      ? 'Queue and free-space details unavailable'
+                      : 'Checking queue and free space…',
+                );
+              }
+              return Text(
+                '${_itemCount(usage.queueCount, 'queued item')} · '
+                '${_formatStorageBytes(usage.queueBytes)} queued\n'
+                '${_formatStorageBytes(usage.availableBytes)} available',
+                key: const ValueKey('device-storage-usage'),
+              );
+            },
+          ),
+          if (otherCopies) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: const ValueKey('remove-all-offline'),
+              onPressed: _removing ? null : () => _removeOffline(all: true),
+              icon: const Icon(Icons.delete_sweep_outlined),
+              label: const Text('Remove all offline copies'),
+            ),
+          ],
+          const SizedBox(height: 8),
+          const Text(
+            'Manage unresolved uploads individually in Scan. Suchi Companion never evicts queued files or offline copies automatically.',
+          ),
+          const SizedBox(height: 24),
+          const SectionLabel('Server OCR only'),
+          const SizedBox(height: 8),
+          const Text(
+            'Uploads started while this is on omit text recognized on this phone. Suchi will extract or OCR the document instead.',
+          ),
+        ],
+      );
+    },
+  );
+}
+
+String _itemCount(int count, String singular, [String? plural]) =>
+    '$count ${count == 1 ? singular : plural ?? '${singular}s'}';
+
+String _formatStorageBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) {
+    return '${(bytes / 1024).toStringAsFixed(1)} KiB';
+  }
+  if (bytes < 1024 * 1024 * 1024) {
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MiB';
+  }
+  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GiB';
 }
 
 class _PreferenceTile extends StatelessWidget {

@@ -11,6 +11,9 @@ its iOS Runner and Share Extension share `group.page.suchi.companion`.
 This is a fresh install without migration from the old development identity.
 All five Flutter/native channels use `page.suchi.companion/` with the
 `pairing`, `documents`, `scan`, `share` and `storage` suffixes.
+The iOS distribution targets iPhone only with iOS 16 as its floor. Android
+targets API 36 with API 26 as its floor; its activity remains resizable for
+large-screen sideloading, without claiming a tablet-specific interface.
 
 ## Ownership
 
@@ -251,7 +254,7 @@ adds a native material blur before the switcher snapshot. Android 12+ also
 blurs the Flutter window and tints its Recents card; older Android can capture
 before pause callbacks, so `MainActivity` keeps `FLAG_SECURE` set there and
 Recents uses an empty system card instead. This also disables screenshots and
-screen recording on Android 7–11. Native covers and blur effects are removed
+screen recording on Android 8–11. Native covers and blur effects are removed
 on resume. Native exports use scoped requests and protected local files;
 viewers and share targets receive file handles, not server credentials.
 

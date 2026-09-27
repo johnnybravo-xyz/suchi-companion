@@ -31,7 +31,7 @@ sdkmanager \
   'build-tools;36.0.0' \
   'cmake;3.22.1' \
   'ndk;28.2.13676358' \
-  'system-images;android-24;google_apis;arm64-v8a' \
+  'system-images;android-26;google_apis;arm64-v8a' \
   'system-images;android-36;google_apis_playstore;arm64-v8a'
 ```
 
@@ -50,9 +50,9 @@ just to raise transitive version numbers.
 Install full Xcode 26.6 or later from the App Store, select it with
 `xcode-select`, run first-launch setup, and install iOS runtimes. Command Line
 Tools alone cannot build the iOS target. The iOS deployment floor is explicitly
-15.0 for the app, share extension and native tests; do not silently inherit a
-higher Xcode-recommended target. Xcode 27.0/iOS 26.5 simulator was exercised,
-but does not establish iOS 15 or physical-device behavior.
+16.0 for the iPhone app, share extension and native tests; do not silently
+inherit a higher Xcode-recommended target. Xcode 27.0/iOS 26.5 simulator was
+exercised, but does not establish iOS 16 or physical-device behavior.
 
 ## Verify the host
 
@@ -100,6 +100,10 @@ Large-text behavior is covered by each feature's widget tests.
 
 ## First release candidate: `1.0.0+1`
 
+The iOS distribution is iPhone-only. Android remains resizable and installable
+on supported large-screen devices, but the first release is phone-focused and
+does not claim a tablet-specific interface.
+
 This is an **unpublished**, free build. Do not sign, upload, or change store
 metadata as part of ordinary development. The Flutter debug APK and unsigned
 iOS Simulator build are diagnostic artifacts, not store packages. An unsigned
@@ -122,7 +126,7 @@ used. Check merged packaged manifests rather than inferring permissions or ATS
 from source files.
 
 Verify the app-switcher snapshot on a physical iPhone and on Android both below
-and above API 31. Android 7–11 keeps `FLAG_SECURE` while the activity is open:
+and above API 31. Android 8–11 keeps `FLAG_SECURE` while the activity is open:
 Recents gets a blank system card, and screenshots/screen recording are unavailable
 there. Android 12+ and iOS use blurred live content, not a persisted last-screen
 image. A signed build alone does not prove the switcher transition.
@@ -132,7 +136,7 @@ The owner must supply and verify these gates **before** claiming store readiness
 - Verify the paid Apple team can register the new
   `page.suchi.companion` Runner and `page.suchi.companion.ShareExtension`
   bundle IDs and attach `group.page.suchi.companion` to both. Provision both
-  targets and exercise a physically signed iOS 15+ build. A Personal Team
+  targets and exercise a physically signed iOS 16+ build. A Personal Team
   cannot provision Suchi Personal's unchanged CloudKit capability; resolve
   paid-team access rather than changing Personal's identity or entitlements.
   Test document scanner, Files/iCloud, Photos, cold/warm share extension,
@@ -142,7 +146,7 @@ The owner must supply and verify these gates **before** claiming store readiness
   target API 36, merged permissions, 64-bit libraries, 16 KiB ELF/ZIP alignment
   and bundle-delivered APKs on a 16 KiB emulator. Existing generated release
   packages predating the HTTPS manifest change are stale; never submit them.
-  Test native camera, file/photo picker fallback and OS shares across API 24–36.
+  Test native camera, file/photo picker fallback and OS shares across API 26–36.
 - Provide a stable HTTPS reviewer server and a non-expiring disposable reviewer
   account with sample documents and the needed scopes. Give reviewer pairing,
   Files/Photos, search and sign-out instructions privately in the App Store and

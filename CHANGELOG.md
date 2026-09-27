@@ -11,6 +11,9 @@
 - Run iOS builds with an explicit environment allowlist, disable Xcode shell
   environment logging, and fail the native-build canary if inherited secret
   values reach activity logs or build-data attachments.
+- Set the first-release floors to Android API 26 and iOS 16 while retaining
+  Android target API 36. iOS distributes to iPhone only; Android remains
+  resizable for large screens without claiming a tablet-specific interface.
 
 - Promote the current Documents scope to its heading, with search and sort
   alongside, document/offline counts below, and **Saved offline** in the scope
@@ -151,7 +154,7 @@
 ### Fixed
 
 - Show a strongly blurred, tinted live screen instead of a plain app-switcher
-  card on iOS and Android 12+. Android 7–11 uses a blank Recents card and
+  card on iOS and Android 12+. Android 8–11 uses a blank Recents card and
   disables screenshots because it can snapshot before pause callbacks.
   Returning to the app restores its readable screen.
 - Keep ML Kit's manifest-discovered component registrar constructors in

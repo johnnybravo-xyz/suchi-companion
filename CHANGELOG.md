@@ -34,6 +34,8 @@
 - Recover a complete abandoned Android Photo output into the protected capture
   store on cold resume, remove empty or invalid output, and retain valid bytes
   when storage recovery must be retried.
+- Reject zero-byte payloads consistently across Android OS sharing and pickers,
+  iOS Files/Photos/Share Extension intake, and the Dart native-manifest boundary.
 
 - Promote the current Documents scope to its heading, with search and sort
   alongside, document/offline counts below, and **Saved offline** in the scope

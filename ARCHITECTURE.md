@@ -218,8 +218,12 @@ allocate a UUIDv4 in Dart and persist its original account identity in the
 queue database's existing `AppSettings` table; only then can the native picker
 open. `page.suchi.companion/share` handles `pick` with `{source: files|photos,
 batch_id: UUIDv4}`, returning the same ID after protected staging or null on
-cancel. Native adapters enforce 20 items and 64 MiB per item, with no broad
-photo/storage permission. Picker ownership records include their creation time.
+cancel. Native adapters enforce 20 items, a positive byte count and 64 MiB per
+item, with no broad photo/storage permission. Android routes OS sharing and
+both pickers through one inspected copy path; Apple does the same for Files,
+Photos and the Share Extension. Zero-byte inputs become rejected indices
+without a retained payload, and Dart rejects any nonpositive native item size.
+Picker ownership records include their creation time.
 The first pending pass removes claims at least 24 hours old only when no native
 batch with that ID exists. Android timestamps its matching picker-launch marker
 and applies the same bound during channel construction. A retained native batch

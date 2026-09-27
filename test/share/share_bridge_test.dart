@@ -130,6 +130,33 @@ void main() {
     await expectLater(bridge.pending(), throwsA(isA<FormatException>()));
   });
 
+  test('pending rejects a zero-byte native item', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          channel,
+          (_) async => [
+            {
+              'batch_id': 'c4652f32-b979-4fc0-adbe-1d761beb2209',
+              'created_at': 2000,
+              'rejected_count': 0,
+              'complete': true,
+              'items': [
+                {
+                  'index': 0,
+                  'path': '/incoming/empty.pdf',
+                  'mime': 'application/pdf',
+                  'name': 'empty.pdf',
+                  'size': 0,
+                  'sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+                },
+              ],
+            },
+          ],
+        );
+
+    await expectLater(bridge.pending(), throwsA(isA<FormatException>()));
+  });
+
   test('discard sends the stable batch receipt', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {

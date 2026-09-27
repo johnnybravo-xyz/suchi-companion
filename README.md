@@ -39,12 +39,14 @@ result and retake a page when glare or deep curvature still hides content.
 The **Scan** header also offers **Files** and **Photos** imports. Files accepts
 PDF, JPEG, PNG and HEIC/HEIF through the system document picker; Photos uses the
 system photo picker for images. Select up to 20 items at a time; each staged
-file is limited to 64 MiB. Selections enter the same protected upload queue as
-camera captures and OS shares. The app saves the originating account before
-opening either picker: switching accounts while the picker is open never sends
-its selected files to the new account. Unsupported items are reported, and
-failed queue files remain available for retry or explicit discard. The app
-does not request broad photo-library or storage access.
+file is limited to 64 MiB and must contain bytes matching its declared type.
+Selections enter the same protected upload queue as camera captures and OS
+shares. Empty files are rejected by Android OS sharing and pickers and by the
+iOS Files, Photos and share-extension paths. The app saves the originating
+account before opening either picker: switching accounts while the picker is
+open never sends its selected files to the new account. Unsupported items are
+reported, and failed queue files remain available for retry or explicit
+discard. The app does not request broad photo-library or storage access.
 
 Picker ownership survives activity or process recreation. On cold start, Suchi
 Companion removes a picker claim only when it is at least 24 hours old and no

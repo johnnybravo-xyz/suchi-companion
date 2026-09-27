@@ -148,26 +148,31 @@ final class RunnerTests: XCTestCase {
     let channel = ShareChannel(appGroupRoot: groupRoot, hostRoot: hostRoot)
     let valid = temporaryRoot.appendingPathComponent("real.png")
     let spoofed = temporaryRoot.appendingPathComponent("not-an-image.png")
+    let empty = temporaryRoot.appendingPathComponent("empty.pdf")
     try validPNG().write(to: valid)
     try Data("%PDF-1.7\n".utf8).write(to: spoofed)
+    try Data().write(to: empty)
     let batchId = UUID().uuidString.lowercased()
 
-    try await channel.stagePickedDocuments([valid, spoofed], batchId: batchId)
+    try await channel.stagePickedDocuments([valid, spoofed, empty], batchId: batchId)
     let directory = hostRoot.appendingPathComponent(batchId, isDirectory: true)
     let manifest = try SuchiShareStorage.readManifest(in: directory)
     XCTAssertTrue(manifest.complete)
-    XCTAssertEqual(manifest.inputCount, 2)
-    XCTAssertEqual(manifest.rejectedIndices, [1])
+    XCTAssertEqual(manifest.inputCount, 3)
+    XCTAssertEqual(manifest.rejectedIndices, [1, 2])
     XCTAssertEqual(manifest.items.map(\.index), [0])
     XCTAssertEqual(manifest.items.first?.mime, "image/png")
     let pending = try XCTUnwrap(channel.importPendingBatches().first)
     XCTAssertEqual(pending["batch_id"] as? String, batchId)
-    XCTAssertEqual(pending["rejected_count"] as? Int, 1)
+    XCTAssertEqual(pending["rejected_count"] as? Int, 2)
     let items = try XCTUnwrap(pending["items"] as? [[String: Any]])
     let retained = URL(fileURLWithPath: try XCTUnwrap(items.first?["path"] as? String))
     XCTAssertEqual(try Data(contentsOf: retained), validPNG())
     XCTAssertFalse(FileManager.default.fileExists(
       atPath: directory.appendingPathComponent("item-001.payload").path
+    ))
+    XCTAssertFalse(FileManager.default.fileExists(
+      atPath: directory.appendingPathComponent("item-002.payload").path
     ))
 
     try channel.discardBatch(batchId)
@@ -517,6 +522,30 @@ final class RunnerTests: XCTestCase {
       )
       XCTFail("Expected provider timeout")
     } catch SuchiShareStorageError.providerTimedOut {
+      XCTAssertFalse(
+        FileManager.default.fileExists(
+          atPath: temporaryRoot.appendingPathComponent("item-000.payload").path
+        )
+      )
+    } catch {
+      XCTFail("Unexpected error: \(error)")
+    }
+  }
+
+  func testProviderLoaderRejectsZeroBytePayloadWithoutLeavingCopy() async throws {
+    let source = temporaryRoot.appendingPathComponent("empty.png")
+    try Data().write(to: source)
+    let provider = try XCTUnwrap(NSItemProvider(contentsOf: source))
+
+    do {
+      _ = try await SuchiShareProviderLoader.retain(
+        provider: provider,
+        index: 0,
+        in: temporaryRoot,
+        timeout: 2
+      )
+      XCTFail("Expected zero-byte provider rejection")
+    } catch SuchiShareStorageError.unsupportedContent {
       XCTAssertFalse(
         FileManager.default.fileExists(
           atPath: temporaryRoot.appendingPathComponent("item-000.payload").path

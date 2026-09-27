@@ -211,7 +211,7 @@ class ShareBridge implements ShareIntake {
               name is! String ||
               name.isEmpty ||
               size is! int ||
-              size < 0 ||
+              size <= 0 ||
               sha256 is! String ||
               !_sha256Pattern.hasMatch(sha256)) {
             throw const FormatException(

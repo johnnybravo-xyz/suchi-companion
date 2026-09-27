@@ -10,6 +10,9 @@
   and cover those platform touch-target dimensions in widget tests.
 - Remove concealed app content from accessibility and pointer hit testing while
   the lifecycle privacy shield covers the screen.
+- Embed required-reason privacy manifests in both iOS executables. Runner
+  declares app-container file timestamps and disk capacity; the Share Extension
+  declares its disk-capacity guard.
 - Open Documents after a successful empty initial Inbox load, without
   overriding a failed load, a deliberate tab choice or a changed account.
 - Round and clip Documents sorting and offline-copy option popups to match

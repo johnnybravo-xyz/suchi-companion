@@ -17,6 +17,7 @@
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		B916A0E7B6234A8E9DF01901 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B916A0E7B6234A8E9DF01902 /* PrivacyInfo.xcprivacy */; };
+		D10000000000000000000006 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000008 /* PrivacyInfo.xcprivacy */; };
 		A71B3C4E2F00123456789ABC /* ScanChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71B3C4D2F00123456789ABC /* ScanChannel.swift */; };
 		D10000000000000000000001 /* ShareChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* ShareChannel.swift */; };
 		D10000000000000000000002 /* ShareStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000002 /* ShareStorage.swift */; };
@@ -97,6 +98,7 @@
 		D20000000000000000000005 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
 		D20000000000000000000006 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		D20000000000000000000007 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D20000000000000000000008 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		E20000000000000000000001 /* StorageChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageChannel.swift; sourceTree = "<group>"; };
 		E20000000000000000000002 /* DocumentChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentChannel.swift; sourceTree = "<group>"; };
 		E20000000000000000000003 /* PairingChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingChannel.swift; sourceTree = "<group>"; };
@@ -200,6 +202,7 @@
 			children = (
 				D20000000000000000000003 /* ShareViewController.swift */,
 				D20000000000000000000004 /* Info.plist */,
+				D20000000000000000000008 /* PrivacyInfo.xcprivacy */,
 				D20000000000000000000005 /* ShareExtension.entitlements */,
 			);
 			path = ShareExtension;
@@ -337,6 +340,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D10000000000000000000006 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

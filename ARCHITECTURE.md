@@ -240,6 +240,12 @@ Empty follow-up checks retain meaningful attention notices; dismissal clears
 presentation only. Service shutdown awaits import completion before closing
 the queue.
 
+The Runner and Share Extension each embed their own `PrivacyInfo.xcprivacy`.
+Both declare the disk-capacity check used to preserve the free-space reserve;
+Runner additionally declares app-container file timestamp access used by
+Flutter. Release validation uses the archived products, not project membership
+alone, because Apple aggregates manifests from each executable and bundled SDK.
+
 The upload coordinator uses durable idempotency keys and polls server work to
 distinguish accepted bytes from finished processing. It respects connectivity,
 account binding and explicit retry. Successful queue history and completed

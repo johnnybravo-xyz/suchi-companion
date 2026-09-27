@@ -38,6 +38,9 @@
   iOS Files/Photos/Share Extension intake, and the Dart native-manifest boundary.
 - Prune successful queue history and completed share/capture duplicate receipts
   after 30 days or beyond the newest 20 records, including on cold start.
+- Make sign-out transactional for offline copies: quarantine before credential
+  deletion, restore on credential failure, and expose protected leftovers or
+  expired-account copies for explicit cleanup in **Privacy & storage**.
 
 - Promote the current Documents scope to its heading, with search and sort
   alongside, document/offline counts below, and **Saved offline** in the scope

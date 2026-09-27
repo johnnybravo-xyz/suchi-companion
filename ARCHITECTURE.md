@@ -112,10 +112,14 @@ Search and Trash remain unavailable. Scan uses the existing native capture,
 protected queue and original account snapshot, not an unauthenticated upload
 path. Network recovery alone never starts uploads: **Retry** repeats the
 anonymous handshake and whoami first, then a same-account queue may resume and
-the full navigation returns. Sign-out cancels account-bound work and removes
-that account's offline directories before secure credential deletion. Any
-protected cleanup failure restores the prior signed-in/offline state instead
-of reporting a successful sign-out.
+the full navigation returns. Sign-out cancels account-bound work, renames that
+account's verified offline directories into protected quarantine, and only then
+deletes the secure credential. Credential-deletion failure rolls those renames
+back and restores the prior signed-in/offline state. After credential deletion,
+sign-out remains complete even when quarantine deletion fails; those directories
+stay unavailable as documents and become explicit storage-manager cleanup.
+Restoring a pre-existing credential retries rollback after an interrupted
+pre-deletion sign-out. Expiry never silently removes offline or queued data.
 
 `ServerOrigin` permits localhost/private-LAN HTTP only in debug builds. Profile
 and release pairing, manual entry and stored-credential restoration require
@@ -276,14 +280,17 @@ viewers and share targets receive file handles, not server credentials.
 backup-excluded application support. Each committed `offline-<UUID>/` contains
 exactly one full payload and a bounded, versioned `manifest.json` with canonical
 origin, user ID, filing-system ID, complete remote metadata, payload filename,
-response MIME type, byte count, SHA-256 digest and save time. The remote
-`original_blob` is retained solely for freshness comparison; it is never treated
-as the downloaded payload digest. Downloads use the full `/download` endpoint,
-are account-bound, cancellable and capped at 64 MiB. Payload and manifest are
-staged and flushed before the directory rename publishes them; a failed update
-leaves the previous verified copy intact. Startup follows no links, rehashes
-payloads, deletes staging/malformed/unknown/corrupt entries and retains only the
-newest valid duplicate. Thumbnails, email HTML and extracted text are never
+response MIME type, byte count, SHA-256 digest and save time. Sign-out reserves
+`quarantine-offline-<UUID>/`; these verified directories remain protected but
+are never exposed as documents. The remote `original_blob` is retained solely
+for freshness comparison; it is never treated as the downloaded payload digest.
+Downloads use the full `/download` endpoint, are account-bound, cancellable and
+capped at 64 MiB. Payload and manifest are staged and flushed before the
+directory rename publishes them; a failed update leaves the previous verified
+copy intact. Startup follows no links, rehashes committed and quarantined
+payloads, retains valid quarantine for rollback or explicit cleanup, deletes
+staging/malformed/unknown/corrupt entries and retains only the newest valid
+committed duplicate. Thumbnails, email HTML and extracted text are never
 persisted there.
 
 All bounded payload writers query the destination volume before opening their
@@ -312,12 +319,15 @@ Swiping right on an online row exposes Make/Update; swiping left on a saved
 row (including the local-only library) exposes confirmed removal without
 contacting the server.
 
-More’s **Privacy & storage** sheet is the storage-management boundary. It reads
-account and device-wide offline totals from `OfflineDocumentStore`, actual
-payload/OCR bytes from `ScanQueueStore`, and available capacity through the
-native storage channel. Account and all-device offline cleanup require explicit
+More’s **Privacy & storage** sheet is the signed-in storage-management boundary.
+It reads account, orphaned and device-wide offline totals from
+`OfflineDocumentStore`, actual payload/OCR bytes from `ScanQueueStore`, and
+available capacity through the native storage channel. Current-account cleanup
+and cleanup for signed-out, expired or unfinished-sign-out data require separate
 confirmation; queue rows are reported there but remain individually resolved in
-Scan.
+Scan. When no account can enter More, the signed-out/expired pairing screen
+exposes only confirmed removal of all remaining offline copies; it never removes
+queued uploads.
 
 Actions collapse when tapped. Saving fetches current detail, asks
 consent if classification is newly sensitive, and rejects results after an

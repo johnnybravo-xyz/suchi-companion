@@ -86,6 +86,10 @@ final class OfflineDocumentStore extends ChangeNotifier {
   static final _committedName = RegExp(
     r'^offline-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
   );
+  static const _quarantinePrefix = 'quarantine-';
+  static final _quarantinedName = RegExp(
+    r'^quarantine-offline-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+  );
 
   final Directory root;
   final DocumentFiles _files;
@@ -93,6 +97,7 @@ final class OfflineDocumentStore extends ChangeNotifier {
   final DateTime Function() _now;
   final String Function() _newUuid;
   List<OfflineDocument> _entries = const [];
+  List<OfflineDocument> _quarantined = const [];
   Completer<void>? _abort;
   Completer<void>? _idle;
   int _generation = 0;
@@ -156,11 +161,11 @@ final class OfflineDocumentStore extends ChangeNotifier {
     return null;
   }
 
-  int get totalCount => _entries.length;
+  int get totalCount => _entries.length + _quarantined.length;
 
   int get totalBytes {
     var total = 0;
-    for (final entry in _entries) {
+    for (final entry in [..._entries, ..._quarantined]) {
       total += entry.byteSize;
     }
     return total;
@@ -173,6 +178,21 @@ final class OfflineDocumentStore extends ChangeNotifier {
     var total = 0;
     for (final entry in _entries) {
       if (entry.identity == identity) total += entry.byteSize;
+    }
+    return total;
+  }
+
+  int orphanedCountFor(AccountIdentity identity) =>
+      _quarantined.length +
+      _entries.where((entry) => entry.identity != identity).length;
+
+  int orphanedBytesFor(AccountIdentity identity) {
+    var total = 0;
+    for (final entry in _entries) {
+      if (entry.identity != identity) total += entry.byteSize;
+    }
+    for (final entry in _quarantined) {
+      total += entry.byteSize;
     }
     return total;
   }
@@ -350,7 +370,7 @@ final class OfflineDocumentStore extends ChangeNotifier {
       _checkGeneration(generation);
       await staging.rename(committed.path);
       _checkGeneration(generation);
-      final entry = await _readCommitted(committed);
+      final entry = await _readStored(committed, _committedName);
       if (entry == null) {
         throw const OfflineDocumentException(
           'offline_commit',
@@ -419,14 +439,89 @@ final class OfflineDocumentStore extends ChangeNotifier {
     }
   }
 
-  Future<void> clearAccount(AccountIdentity identity) {
+  Future<void> beginSignOut(AccountIdentity identity) {
     _validateIdentity(identity);
-    return _clearWhere((entry) => entry.identity == identity);
+    return _mutateStorage(() async {
+      await _reconcile();
+      await _renameDirectories([
+        for (final entry in _entries)
+          if (entry.identity == identity)
+            (
+              source: entry.directory,
+              destination: path.join(
+                root.path,
+                '$_quarantinePrefix${path.basename(entry.directory.path)}',
+              ),
+            ),
+      ]);
+      await _reconcile();
+    });
   }
 
-  Future<void> clearAll() => _clearWhere((_) => true);
+  Future<void> rollbackSignOut(AccountIdentity identity) {
+    _validateIdentity(identity);
+    return _mutateStorage(() async {
+      await _reconcile();
+      await _renameDirectories([
+        for (final entry in _quarantined)
+          if (entry.identity == identity)
+            (
+              source: entry.directory,
+              destination: path.join(
+                root.path,
+                path
+                    .basename(entry.directory.path)
+                    .substring(_quarantinePrefix.length),
+              ),
+            ),
+      ]);
+      await _reconcile();
+    });
+  }
 
-  Future<void> _clearWhere(bool Function(OfflineDocument) shouldClear) async {
+  Future<void> finishSignOut(AccountIdentity identity) {
+    _validateIdentity(identity);
+    return _clearWhere(
+      (_) => false,
+      shouldClearQuarantined: (entry) => entry.identity == identity,
+    );
+  }
+
+  Future<void> clearAccount(AccountIdentity identity) {
+    _validateIdentity(identity);
+    return _clearWhere(
+      (entry) => entry.identity == identity,
+      shouldClearQuarantined: (entry) => entry.identity == identity,
+    );
+  }
+
+  Future<void> clearOtherAccounts(AccountIdentity identity) {
+    _validateIdentity(identity);
+    return _clearWhere(
+      (entry) => entry.identity != identity,
+      shouldClearQuarantined: (_) => true,
+    );
+  }
+
+  Future<void> clearAll() =>
+      _clearWhere((_) => true, shouldClearQuarantined: (_) => true);
+
+  Future<void> _clearWhere(
+    bool Function(OfflineDocument) shouldClear, {
+    required bool Function(OfflineDocument) shouldClearQuarantined,
+  }) => _mutateStorage(() async {
+    await _reconcile();
+    final selected = _entries.where(shouldClear);
+    final quarantined = _quarantined.where(shouldClearQuarantined);
+    for (final entry in [...selected, ...quarantined]) {
+      if (await entry.directory.exists()) {
+        await entry.directory.delete(recursive: true);
+      }
+    }
+    await _reconcile();
+  });
+
+  Future<void> _mutateStorage(Future<void> Function() mutation) async {
     _ensureOpen();
     cancelPending();
     while (_idle != null) {
@@ -439,32 +534,62 @@ final class OfflineDocumentStore extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
     try {
-      // Reconciliation removes malformed and duplicate directories before the
-      // deletion is allowed to succeed.
-      await _reconcile();
-      final selected = _entries.where(shouldClear).toList(growable: false);
-      for (final entry in selected) {
-        if (await entry.directory.exists()) {
-          await entry.directory.delete(recursive: true);
-        }
-      }
-      _entries = List.unmodifiable(
-        _entries.where((entry) => !shouldClear(entry)),
-      );
+      await mutation();
       _errorMessage = null;
     } on FileSystemException {
       try {
         await _reconcile();
       } on FileSystemException {
-        // Preserve the first cleanup failure for the caller.
+        // Preserve the first storage failure for the caller.
       }
       _errorMessage =
-          'Offline documents could not be removed from protected storage.';
+          'Offline documents could not be updated in protected storage.';
       rethrow;
     } finally {
       _idle = null;
       if (!idle.isCompleted) idle.complete();
       notifyListeners();
+    }
+  }
+
+  Future<void> _renameDirectories(
+    List<({Directory source, String destination})> moves,
+  ) async {
+    final completed = <({Directory original, Directory renamed})>[];
+    try {
+      for (final move in moves) {
+        if (await FileSystemEntity.type(move.destination, followLinks: false) !=
+            FileSystemEntityType.notFound) {
+          throw FileSystemException(
+            'Offline sign-out destination already exists.',
+            move.destination,
+          );
+        }
+        completed.add((
+          original: move.source,
+          renamed: await move.source.rename(move.destination),
+        ));
+      }
+    } catch (error, stackTrace) {
+      for (final move in completed.reversed) {
+        try {
+          if (await FileSystemEntity.type(
+                    move.original.path,
+                    followLinks: false,
+                  ) ==
+                  FileSystemEntityType.notFound &&
+              await FileSystemEntity.type(
+                    move.renamed.path,
+                    followLinks: false,
+                  ) ==
+                  FileSystemEntityType.directory) {
+            await move.renamed.rename(move.original.path);
+          }
+        } on FileSystemException {
+          // Reconciliation retains either protected location for retry.
+        }
+      }
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
@@ -524,6 +649,7 @@ final class OfflineDocumentStore extends ChangeNotifier {
     cancelPending();
     await _waitForIdle();
     _entries = const [];
+    _quarantined = const [];
     super.dispose();
   }
 
@@ -534,23 +660,34 @@ final class OfflineDocumentStore extends ChangeNotifier {
 
   Future<void> _reconcile() async {
     final valid = <OfflineDocument>[];
+    final quarantined = <OfflineDocument>[];
     await for (final entity in root.list(followLinks: false)) {
-      final name = path.basename(entity.path);
-      if (entity is Directory && _committedName.hasMatch(name)) {
-        final entry = await _readCommitted(entity);
-        if (entry != null) {
-          valid.add(entry);
-          continue;
+      if (entity is Directory) {
+        final name = path.basename(entity.path);
+        final RegExp? expectedName;
+        if (_committedName.hasMatch(name)) {
+          expectedName = _committedName;
+        } else if (_quarantinedName.hasMatch(name)) {
+          expectedName = _quarantinedName;
+        } else {
+          expectedName = null;
+        }
+        if (expectedName != null) {
+          final entry = await _readStored(entity, expectedName);
+          if (entry != null) {
+            if (identical(expectedName, _quarantinedName)) {
+              quarantined.add(entry);
+            } else {
+              valid.add(entry);
+            }
+            continue;
+          }
         }
       }
       await _deleteEntity(entity);
     }
-    valid.sort((left, right) {
-      final byDate = right.savedAt.compareTo(left.savedAt);
-      return byDate != 0
-          ? byDate
-          : right.directory.path.compareTo(left.directory.path);
-    });
+    valid.sort(_newestFirst);
+    quarantined.sort(_newestFirst);
     final seen = <String>{};
     final retained = <OfflineDocument>[];
     for (final entry in valid) {
@@ -567,10 +704,21 @@ final class OfflineDocumentStore extends ChangeNotifier {
       }
     }
     _entries = List.unmodifiable(retained);
+    _quarantined = List.unmodifiable(quarantined);
     notifyListeners();
   }
 
-  Future<OfflineDocument?> _readCommitted(Directory directory) async {
+  static int _newestFirst(OfflineDocument left, OfflineDocument right) {
+    final byDate = right.savedAt.compareTo(left.savedAt);
+    return byDate != 0
+        ? byDate
+        : right.directory.path.compareTo(left.directory.path);
+  }
+
+  Future<OfflineDocument?> _readStored(
+    Directory directory,
+    RegExp expectedName,
+  ) async {
     try {
       final directoryType = await FileSystemEntity.type(
         directory.path,
@@ -578,7 +726,7 @@ final class OfflineDocumentStore extends ChangeNotifier {
       );
       if (directoryType != FileSystemEntityType.directory ||
           directory.parent.absolute.path != root.absolute.path ||
-          !_committedName.hasMatch(path.basename(directory.path))) {
+          !expectedName.hasMatch(path.basename(directory.path))) {
         return null;
       }
       final entities = await directory.list(followLinks: false).toList();

@@ -728,21 +728,21 @@ class _StorageManagerState extends State<_StorageManager> {
     );
   }
 
-  Future<void> _removeOffline({required bool all}) async {
+  Future<void> _removeOffline({required bool otherAccounts}) async {
     if (_removing) return;
     final identity = widget.session.identity;
-    if (!all && identity == null) return;
+    if (identity == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          all
-              ? 'Remove every offline copy?'
+          otherAccounts
+              ? 'Remove other account copies?'
               : 'Remove this account’s offline copies?',
         ),
         content: Text(
-          all
-              ? 'This removes all saved document copies from this device. Queued uploads are not removed.'
+          otherAccounts
+              ? 'This removes saved copies left by signed-out or expired accounts, including any unfinished sign-out cleanup. Current-account copies and queued uploads are not removed.'
               : 'This removes saved document copies for the current account. Queued uploads are not removed.',
         ),
         actions: [
@@ -760,10 +760,10 @@ class _StorageManagerState extends State<_StorageManager> {
     if (confirmed != true || !mounted) return;
     setState(() => _removing = true);
     try {
-      if (all) {
-        await widget.offlineDocuments.clearAll();
+      if (otherAccounts) {
+        await widget.offlineDocuments.clearOtherAccounts(identity);
       } else {
-        await widget.offlineDocuments.clearAccount(identity!);
+        await widget.offlineDocuments.clearAccount(identity);
       }
       if (mounted) setState(() => _usage = _loadUsage());
     } catch (_) {
@@ -788,7 +788,12 @@ class _StorageManagerState extends State<_StorageManager> {
       final accountBytes = widget.offlineDocuments.totalBytesFor(identity);
       final totalCount = widget.offlineDocuments.totalCount;
       final totalBytes = widget.offlineDocuments.totalBytes;
-      final otherCopies = totalCount > accountCount;
+      final orphanedCount = identity == null
+          ? totalCount
+          : widget.offlineDocuments.orphanedCountFor(identity);
+      final orphanedBytes = identity == null
+          ? totalBytes
+          : widget.offlineDocuments.orphanedBytesFor(identity);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -813,7 +818,9 @@ class _StorageManagerState extends State<_StorageManager> {
             const SizedBox(height: 8),
             OutlinedButton.icon(
               key: const ValueKey('remove-account-offline'),
-              onPressed: _removing ? null : () => _removeOffline(all: false),
+              onPressed: _removing
+                  ? null
+                  : () => _removeOffline(otherAccounts: false),
               icon: const Icon(Icons.delete_outline),
               label: const Text('Remove account copies'),
             ),
@@ -845,13 +852,20 @@ class _StorageManagerState extends State<_StorageManager> {
               );
             },
           ),
-          if (otherCopies) ...[
+          if (identity != null && orphanedCount > 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${_itemCount(orphanedCount, 'copy', 'copies')} from signed-out or expired accounts · ${_formatStorageBytes(orphanedBytes)}',
+              key: const ValueKey('orphaned-offline-usage'),
+            ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              key: const ValueKey('remove-all-offline'),
-              onPressed: _removing ? null : () => _removeOffline(all: true),
+              key: const ValueKey('remove-other-offline'),
+              onPressed: _removing
+                  ? null
+                  : () => _removeOffline(otherAccounts: true),
               icon: const Icon(Icons.delete_sweep_outlined),
-              label: const Text('Remove all offline copies'),
+              label: const Text('Remove other account copies'),
             ),
           ],
           const SizedBox(height: 8),

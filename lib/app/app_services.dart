@@ -70,7 +70,9 @@ final class AppServices {
           await uploads.pause();
           await documentFiles!.clear();
         },
-        onClearOfflineDocuments: offlineDocuments.clearAccount,
+        onBeginOfflineSignOut: offlineDocuments.beginSignOut,
+        onRollbackOfflineSignOut: offlineDocuments.rollbackSignOut,
+        onFinishOfflineSignOut: offlineDocuments.finishSignOut,
         onClearMemoryCaches: () {
           thumbnails.clear();
           capture.concealForIdentityTransition();

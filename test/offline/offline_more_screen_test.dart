@@ -7,8 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:suchi_mobile/api/api_error.dart';
 import 'package:suchi_mobile/api/api_models.dart';
 import 'package:suchi_mobile/api/suchi_client.dart';
+import 'package:suchi_mobile/auth/account_identity.dart';
+import 'package:suchi_mobile/auth/pair_screen.dart';
 import 'package:suchi_mobile/auth/credential_vault.dart';
 import 'package:suchi_mobile/auth/session_controller.dart';
 import 'package:suchi_mobile/more/app_settings_controller.dart';
@@ -149,6 +152,51 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(find.text('1 offline copy · 12 B'), findsNWidgets(2));
+
+    final previousAccount = AccountIdentity(
+      origin: session.identity!.origin,
+      userId: session.identity!.userId + 1,
+      systemId: session.identity!.systemId,
+    );
+    final previousBytes = utf8.encode('%PDF-expired');
+    await tester.runAsync(
+      () => offlineDocuments.save(
+        identity: previousAccount,
+        document: DocumentDetail.fromJson(
+          jsonDecode(
+            File('test/fixtures/api/v1/document-detail.json')
+                .readAsStringSync(),
+          ) as Map<String, dynamic>,
+        ),
+        client: SuchiClient(
+          origin: previousAccount.origin,
+          token: 'b' * 64,
+          httpClient: MockClient(
+            (_) async => http.Response.bytes(
+              previousBytes,
+              200,
+              headers: {'content-type': 'application/pdf'},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('1 copy from signed-out or expired accounts · 12 B'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('remove-other-offline')));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove other account copies?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    await tester.runAsync(
+      () => offlineDocuments.clearOtherAccounts(session.identity!),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('orphaned-offline-usage')), findsNothing);
+    expect(find.text('1 offline copy · 12 B'), findsNWidgets(2));
     await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
     expect(find.text('Privacy policy'), findsNothing);
@@ -172,6 +220,44 @@ void main() {
       findsOneWidget,
     );
     await tester.tap(find.text('Cancel'));
+  });
+  testWidgets('expired session exposes orphaned offline cleanup', (
+    tester,
+  ) async {
+    await session.expire(
+      const ApiException(
+        kind: ApiFailureKind.unauthorized,
+        message: 'Token expired',
+      ),
+    );
+    expect(session.state, SessionState.expired);
+    expect(offlineDocuments.totalCount, 1);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: SuchiTheme.light,
+        home: PairScreen(session: session, offlineDocuments: offlineDocuments),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('PROTECTED OFFLINE COPIES'), findsOneWidget);
+    expect(
+      find.text(
+        '1 copy remains on this device from a signed-out or expired account.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('remove-unpaired-offline')));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove saved offline copies?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    await tester.runAsync(offlineDocuments.clearAll);
+    await tester.pumpAndSettle();
+
+    expect(offlineDocuments.totalCount, 0);
+    expect(find.text('PROTECTED OFFLINE COPIES'), findsNothing);
   });
 }
 

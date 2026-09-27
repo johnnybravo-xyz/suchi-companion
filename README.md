@@ -121,9 +121,10 @@ data.
 
 **More → Privacy & storage** reports the current account’s offline-copy usage,
 all offline copies on the device, protected queue usage and available device
-space. It can remove the current account’s copies or, when other account data is
-present, every offline copy after confirmation. Queued items remain managed
-individually in Scan and are never included in bulk offline cleanup.
+space. It can remove current-account copies or copies left by signed-out and
+expired accounts, including unfinished sign-out cleanup, after confirmation.
+Queued items remain managed individually in Scan and are never included in bulk
+offline cleanup.
 
 If the first Inbox load on an online cold start succeeds with no documents,
 Suchi Companion opens Documents instead. A failed load stays in Inbox for
@@ -147,9 +148,13 @@ account-bound upload queue, remain on this device, and resume uploading only
 after connectivity returns **and** the stored credential is verified again.
 Inbox, Search, Trash and other server actions remain unavailable until then.
 **More → Retry** performs a new anonymous handshake before reusing the token.
-Signing out removes the account's offline copies before deleting its
-credential; if protected cleanup fails, sign-out fails and the session remains
-active. Failed queue files remain available for explicit resolution.
+Signing out first moves the account’s offline copies into protected quarantine,
+then deletes its credential. Credential-deletion failure restores the copies and
+keeps the session active. Once credentials are gone, sign-out succeeds; if final
+file removal fails, **More → Privacy & storage** exposes those protected files
+for explicit retry. The signed-out/expired pairing screen also offers confirmed
+removal before re-pairing. Expired or unreachable credentials do not silently
+delete offline copies or failed queue files.
 
 Document detail opens on a large preview: tap the page or the filled **Open**
 button to hand off the full file. An outlined **Save offline** button sits

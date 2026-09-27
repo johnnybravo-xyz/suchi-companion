@@ -141,6 +141,7 @@ class _SuchiMobileAppState extends State<SuchiMobileApp> {
             SessionState.verifying ||
             SessionState.expired => PairScreen(
               session: widget.services.session,
+              offlineDocuments: widget.services.offlineDocuments,
             ),
           },
         ),

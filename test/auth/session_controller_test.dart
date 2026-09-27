@@ -490,8 +490,12 @@ void main() {
       final controller = SessionController(
         vault: vault,
         onPauseUploads: () async => events.add('pause'),
-        onClearOfflineDocuments: (identity) async =>
-            events.add('offline:${identity.userId}'),
+        onBeginOfflineSignOut: (identity) async =>
+            events.add('quarantine:${identity.userId}'),
+        onRollbackOfflineSignOut: (identity) async =>
+            events.add('restore:${identity.userId}'),
+        onFinishOfflineSignOut: (identity) async =>
+            events.add('finish:${identity.userId}'),
         onClearMemoryCaches: () => events.add('cache'),
         clientFactory: (origin, token) =>
             SuchiClient(origin: origin, token: token, httpClient: transport),
@@ -503,7 +507,14 @@ void main() {
 
       await controller.signOut();
 
-      expect(events, ['pause', 'offline:7', 'clear', 'logout', 'cache']);
+      expect(events, [
+        'pause',
+        'quarantine:7',
+        'clear',
+        'finish:7',
+        'logout',
+        'cache',
+      ]);
       expect(controller.state, SessionState.signedOut);
       expect(controller.client, isNull);
     },
@@ -520,6 +531,12 @@ void main() {
       vault: vault,
       onPauseUploads: () async => events.add('pause'),
       onResumeUploads: () async => events.add('resume'),
+      onBeginOfflineSignOut: (identity) async =>
+          events.add('quarantine:${identity.userId}'),
+      onRollbackOfflineSignOut: (identity) async =>
+          events.add('restore:${identity.userId}'),
+      onFinishOfflineSignOut: (identity) async =>
+          events.add('finish:${identity.userId}'),
       clientFactory: (origin, token) => SuchiClient(
         origin: origin,
         token: token,
@@ -552,7 +569,7 @@ void main() {
     final signedOut = await controller.signOut();
 
     expect(signedOut, isFalse);
-    expect(events, ['pause', 'clear', 'resume']);
+    expect(events, ['pause', 'quarantine:7', 'clear', 'restore:7', 'resume']);
     expect(logoutRequests, 0);
     expect(controller.state, SessionState.signedIn);
     expect(controller.client, isNotNull);
@@ -560,7 +577,7 @@ void main() {
   });
 
   test(
-    'failed offline-copy cleanup keeps the offline session active',
+    'failed offline-copy quarantine keeps the offline session active',
     () async {
       final events = <String>[];
       final vault = _MemoryVault(initial: _storedWithSnapshot());
@@ -568,9 +585,9 @@ void main() {
         vault: vault,
         onPauseUploads: () async => events.add('pause'),
         onResumeUploads: () async => events.add('resume'),
-        onClearOfflineDocuments: (identity) async {
-          events.add('offline:${identity.userId}');
-          throw const FileSystemException('offline cleanup failed');
+        onBeginOfflineSignOut: (identity) async {
+          events.add('quarantine:${identity.userId}');
+          throw const FileSystemException('offline quarantine failed');
         },
         clientFactory: (origin, token) => SuchiClient(
           origin: origin,
@@ -591,7 +608,80 @@ void main() {
       expect(controller.client, isNull);
       expect(controller.identity?.userId, 7);
       expect(vault.clearCount, 0);
-      expect(events, ['pause', 'offline:7']);
+      expect(events, ['pause', 'quarantine:7']);
+    },
+  );
+
+  test(
+    'restored credentials retry interrupted offline sign-out recovery',
+    () async {
+      final events = <String>[];
+      final controller = SessionController(
+        vault: _MemoryVault(initial: _storedWithSnapshot()),
+        onPauseUploads: () async => events.add('pause'),
+        onRollbackOfflineSignOut: (identity) async =>
+            events.add('restore:${identity.userId}'),
+        clientFactory: (origin, token) => SuchiClient(
+          origin: origin,
+          token: token,
+          httpClient: MockClient(
+            (_) async => throw const SocketException('offline'),
+          ),
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+
+      expect(controller.state, SessionState.offline);
+      expect(events, ['restore:7', 'pause']);
+    },
+  );
+
+  test(
+    'post-credential offline cleanup failure still completes sign-out',
+    () async {
+      final events = <String>[];
+      final vault = _MemoryVault();
+      final controller = SessionController(
+        vault: vault,
+        onPauseUploads: () async => events.add('pause'),
+        onBeginOfflineSignOut: (identity) async =>
+            events.add('quarantine:${identity.userId}'),
+        onRollbackOfflineSignOut: (identity) async =>
+            events.add('restore:${identity.userId}'),
+        onFinishOfflineSignOut: (identity) async {
+          events.add('finish:${identity.userId}');
+          throw const FileSystemException('offline deletion failed');
+        },
+        clientFactory: (origin, token) => SuchiClient(
+          origin: origin,
+          token: token,
+          httpClient: MockClient(
+            (request) async => http.Response(
+              _fixture(
+                request.url.path == '/api/handshake'
+                    ? 'handshake.json'
+                    : 'whoami.json',
+              ),
+              200,
+              headers: {'content-type': 'application/json'},
+            ),
+          ),
+        ),
+      );
+      await controller.pairWithToken(
+        serverAddress: _origin.toString(),
+        token: _token,
+      );
+      events.clear();
+
+      expect(await controller.signOut(), isTrue);
+
+      expect(events, ['pause', 'quarantine:7', 'finish:7']);
+      expect(controller.state, SessionState.signedOut);
+      expect(controller.client, isNull);
+      expect(vault.clearCount, 1);
     },
   );
 

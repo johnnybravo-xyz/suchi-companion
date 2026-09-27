@@ -20,17 +20,20 @@ final class SessionController extends ChangeNotifier {
     this.allowDevelopmentHttp = true,
     this.onClearMemoryCaches,
     this.onResumeUploads,
-    this.onClearOfflineDocuments,
+    this.onBeginOfflineSignOut,
+    this.onRollbackOfflineSignOut,
+    this.onFinishOfflineSignOut,
   }) : _clientFactory =
            clientFactory ??
            ((origin, token) => SuchiClient(origin: origin, token: token));
-
   final CredentialVault vault;
   final Future<void> Function()? onPauseUploads;
   final VoidCallback? onClearMemoryCaches;
   final Future<void> Function()? onResumeUploads;
+  final Future<void> Function(AccountIdentity identity)? onBeginOfflineSignOut;
   final Future<void> Function(AccountIdentity identity)?
-  onClearOfflineDocuments;
+  onRollbackOfflineSignOut;
+  final Future<void> Function(AccountIdentity identity)? onFinishOfflineSignOut;
   // The production policy always rejects HTTP outside debug, even if true.
   final bool allowDevelopmentHttp;
   final SuchiClientFactory _clientFactory;
@@ -229,15 +232,31 @@ final class SessionController extends ChangeNotifier {
   Future<bool> signOut() async {
     final previousState = _state;
     final account = identity;
+    var offlineQuarantined = false;
     ++_generation;
     try {
       await onPauseUploads?.call();
-      if (account != null) await onClearOfflineDocuments?.call(account);
+      if (account != null && onBeginOfflineSignOut != null) {
+        await onBeginOfflineSignOut!(account);
+        offlineQuarantined = true;
+      }
       await vault.clear();
     } catch (_) {
+      var offlineRestored = true;
+      if (offlineQuarantined &&
+          account != null &&
+          onRollbackOfflineSignOut != null) {
+        try {
+          await onRollbackOfflineSignOut!(account);
+        } catch (_) {
+          offlineRestored = false;
+        }
+      }
       _setState(
         previousState,
-        error: 'This device could not clear protected local data. You are still signed in.',
+        error: offlineRestored
+            ? 'This device could not clear protected local data. You are still signed in.'
+            : 'This device could not clear protected local data. You are still signed in, and offline-copy recovery will retry after restart.',
       );
       if (previousState == SessionState.signedIn) {
         try {
@@ -247,6 +266,16 @@ final class SessionController extends ChangeNotifier {
         }
       }
       return false;
+    }
+    if (offlineQuarantined &&
+        account != null &&
+        onFinishOfflineSignOut != null) {
+      try {
+        await onFinishOfflineSignOut!(account);
+      } catch (_) {
+        // Credentials are gone. Protected leftovers stay visible to storage
+        // management for an explicit retry.
+      }
     }
     final client = _client;
     if (client != null) {
@@ -372,7 +401,17 @@ final class SessionController extends ChangeNotifier {
       _origin = origin;
       _retryCredentials = verifiedCredentials;
       _preparedOrigin = null;
-      _setState(SessionState.signedIn);
+      final recoveryError = restoring
+          ? await _restoreInterruptedOfflineSignOut(
+              AccountIdentity(
+                origin: origin,
+                userId: user.userId,
+                systemId: user.systemId,
+              ),
+            )
+          : null;
+      if (generation != _generation) return;
+      _setState(SessionState.signedIn, error: recoveryError);
       await onResumeUploads?.call();
     } on ApiException catch (error) {
       if (generation != _generation) return;
@@ -386,6 +425,14 @@ final class SessionController extends ChangeNotifier {
         _origin = origin;
         _retryCredentials = credentials;
         _preparedOrigin = null;
+        final recoveryError = await _restoreInterruptedOfflineSignOut(
+          AccountIdentity(
+            origin: origin,
+            userId: credentials.userSnapshot!.userId,
+            systemId: credentials.userSnapshot!.systemId,
+          ),
+        );
+        if (generation != _generation) return;
         try {
           await onPauseUploads?.call();
         } catch (_) {
@@ -394,7 +441,7 @@ final class SessionController extends ChangeNotifier {
         if (generation != _generation) return;
         _setState(
           SessionState.offline,
-          error: 'Suchi could not be reached. Saved documents and scans remain available; uploads are paused.',
+          error: recoveryError ?? 'Suchi could not be reached. Saved documents and scans remain available; uploads are paused.',
           requestId: error.requestId,
         );
         return;
@@ -426,6 +473,18 @@ final class SessionController extends ChangeNotifier {
       );
     } finally {
       client?.close();
+    }
+  }
+
+  Future<String?> _restoreInterruptedOfflineSignOut(
+    AccountIdentity account,
+  ) async {
+    if (onRollbackOfflineSignOut == null) return null;
+    try {
+      await onRollbackOfflineSignOut!(account);
+      return null;
+    } catch (_) {
+      return 'Offline copies from an interrupted sign-out remain protected. Restart Suchi Companion to retry recovery.';
     }
   }
 

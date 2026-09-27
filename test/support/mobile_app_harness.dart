@@ -70,8 +70,12 @@ final class MobileAppHarness {
       onResumeUploads: () async {
         if (_initialized) await services.uploads.resume();
       },
-      onClearOfflineDocuments: (identity) =>
-          offlineDocuments.clearAccount(identity),
+      onBeginOfflineSignOut: (identity) =>
+          offlineDocuments.beginSignOut(identity),
+      onRollbackOfflineSignOut: (identity) =>
+          offlineDocuments.rollbackSignOut(identity),
+      onFinishOfflineSignOut: (identity) =>
+          offlineDocuments.finishSignOut(identity),
       clientFactory: (origin, token) => SuchiClient(
         origin: origin,
         token: token,

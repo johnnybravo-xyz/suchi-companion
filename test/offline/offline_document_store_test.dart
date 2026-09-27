@@ -477,6 +477,88 @@ void main() {
   });
 
   test(
+    'sign-out quarantine survives restart, restores, and finishes explicitly',
+    () async {
+      final bytes = utf8.encode('%PDF-sign-out');
+      final store = await _openStore(
+        root,
+        files,
+        protection,
+        uuids: [_uuid(1)],
+      );
+      final saved = await store.save(
+        identity: _identity,
+        document: _document(size: bytes.length),
+        client: _client((_) async => _download(bytes)),
+      );
+
+      await store.beginSignOut(_identity);
+
+      expect(store.entriesFor(_identity), isEmpty);
+      expect(store.totalCount, 1);
+      expect(store.totalBytes, bytes.length);
+      expect(store.orphanedCountFor(_identity), 1);
+      expect(
+        root.listSync().single.path,
+        endsWith('${Platform.pathSeparator}quarantine-offline-${_uuid(1)}'),
+      );
+      expect(await saved.directory.exists(), isFalse);
+      await store.close();
+
+      final restored = await OfflineDocumentStore.open(
+        files: files,
+        root: root,
+        storageProtection: protection,
+        storageCapacity: protection,
+      );
+      addTearDown(restored.close);
+      expect(restored.entriesFor(_identity), isEmpty);
+      expect(restored.totalCount, 1);
+
+      await restored.rollbackSignOut(_identity);
+
+      final recovered = restored.find(_identity, 91);
+      expect(recovered, isNotNull);
+      expect(await recovered!.payload.readAsBytes(), bytes);
+      expect(restored.orphanedCountFor(_identity), 0);
+
+      await restored.beginSignOut(_identity);
+      await restored.finishSignOut(_identity);
+
+      expect(restored.totalCount, 0);
+      expect(root.listSync(), isEmpty);
+    },
+  );
+
+  test('other-account cleanup includes unfinished sign-out data', () async {
+    final bytes = utf8.encode('%PDF-cleanup');
+    final store = await _openStore(
+      root,
+      files,
+      protection,
+      uuids: [_uuid(1), _uuid(2)],
+    );
+    addTearDown(store.close);
+    await store.save(
+      identity: _identity,
+      document: _document(size: bytes.length),
+      client: _client((_) async => _download(bytes)),
+    );
+    await store.save(
+      identity: _otherIdentity,
+      document: _document(id: 92, size: bytes.length),
+      client: _client((_) async => _download(bytes)),
+    );
+    await store.beginSignOut(_identity);
+
+    await store.clearOtherAccounts(_otherIdentity);
+
+    expect(store.entriesFor(_otherIdentity), hasLength(1));
+    expect(store.totalCount, 1);
+    expect(store.orphanedCountFor(_otherIdentity), 0);
+  });
+
+  test(
     'startup keeps the newest duplicate and removes unsafe entries',
     () async {
       final bytes = utf8.encode('%PDF-reconcile');

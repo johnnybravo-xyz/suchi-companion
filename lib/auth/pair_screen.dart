@@ -3,16 +3,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../offline/offline_document_store.dart';
 import '../theme/suchi_theme.dart';
 import '../widgets/suchi_widgets.dart';
 import 'session_controller.dart';
 import 'pairing_link.dart';
 
 class PairScreen extends StatefulWidget {
-  const PairScreen({required this.session, super.key});
+  const PairScreen({required this.session, this.offlineDocuments, super.key});
 
   final SessionController session;
-
+  final OfflineDocumentStore? offlineDocuments;
   @override
   State<PairScreen> createState() => _PairScreenState();
 }
@@ -27,6 +28,7 @@ class _PairScreenState extends State<PairScreen> {
   bool _readingPairingLink = false;
   String? _pairingError;
   int _pairingGeneration = 0;
+  bool _removingOffline = false;
 
   @override
   void initState() {
@@ -183,6 +185,80 @@ class _PairScreenState extends State<PairScreen> {
     }
   }
 
+  Future<void> _removeOfflineCopies() async {
+    final store = widget.offlineDocuments;
+    if (store == null || _removingOffline || store.totalCount == 0) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove saved offline copies?'),
+        content: const Text(
+          'This permanently removes offline copies left by signed-out or expired accounts. Queued uploads are not removed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove copies'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _removingOffline = true);
+    try {
+      await store.clearAll();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Offline copies could not be removed. Try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _removingOffline = false);
+    }
+  }
+
+  Widget _offlineCleanup() {
+    final store = widget.offlineDocuments;
+    if (store == null) return const SizedBox.shrink();
+    return ListenableBuilder(
+      listenable: store,
+      builder: (context, _) {
+        final count = store.totalCount;
+        if (count == 0) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 18),
+          child: SuchiCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SectionLabel('Protected offline copies'),
+                const SizedBox(height: 10),
+                Text(
+                  '$count ${count == 1 ? 'copy remains' : 'copies remain'} on this device from a signed-out or expired account.',
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  key: const ValueKey('remove-unpaired-offline'),
+                  onPressed: _removingOffline ? null : _removeOfflineCopies,
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                  label: const Text('Remove offline copies'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.session,
@@ -230,6 +306,7 @@ class _PairScreenState extends State<PairScreen> {
                       message: 'Your session expired. Verify your server and pair this device again.',
                     ),
                   ],
+                  _offlineCleanup(),
                   const SizedBox(height: 22),
                   SuchiCard(
                     padding: const EdgeInsets.all(16),

@@ -6,6 +6,10 @@
 
 - Raise subdued text, semantic status colors and control outlines to WCAG AA
   contrast in light and dark themes, including actions on the camera surface.
+- Keep document selectors and swipe actions at least 48 by 48 logical pixels
+  and cover those platform touch-target dimensions in widget tests.
+- Remove concealed app content from accessibility and pointer hit testing while
+  the lifecycle privacy shield covers the screen.
 - Open Documents after a successful empty initial Inbox load, without
   overriding a failed load, a deliberate tab choice or a changed account.
 - Round and clip Documents sorting and offline-copy option popups to match

@@ -58,7 +58,10 @@ class _LifecyclePrivacyShieldState extends State<LifecyclePrivacyShield>
     fit: StackFit.expand,
     alignment: Alignment.topLeft,
     children: [
-      widget.child,
+      ExcludeSemantics(
+        excluding: _concealed,
+        child: IgnorePointer(ignoring: _concealed, child: widget.child),
+      ),
       if (_concealed)
         Positioned.fill(
           child: ExcludeSemantics(

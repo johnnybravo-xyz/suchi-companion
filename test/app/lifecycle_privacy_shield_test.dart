@@ -6,19 +6,43 @@ void main() {
   testWidgets('conceals app content whenever the app is inactive', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     var concealed = 0;
     var resumed = 0;
+    var taps = 0;
     await tester.pumpWidget(
-      LifecyclePrivacyShield(
-        onConceal: () => concealed++,
-        onResume: () async => resumed++,
-        child: const ColoredBox(color: Colors.white),
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: LifecyclePrivacyShield(
+          onConceal: () => concealed++,
+          onResume: () async => resumed++,
+          child: Semantics(
+            label: 'Private document',
+            button: true,
+            child: GestureDetector(
+              key: const ValueKey('private-content'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => taps++,
+              child: const ColoredBox(color: Colors.white),
+            ),
+          ),
+        ),
       ),
     );
 
     expect(
       find.byKey(const ValueKey('lifecycle-privacy-shield')),
       findsNothing,
+    );
+    expect(
+      tester.semantics.simulatedAccessibilityTraversal().map(
+        (node) => node.label,
+      ),
+      contains('Private document'),
+    );
+    expect(
+      find.byKey(const ValueKey('private-content')).hitTestable(),
+      findsOneWidget,
     );
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
@@ -30,6 +54,21 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(BackdropFilter), findsOneWidget);
+    expect(
+      tester.semantics.simulatedAccessibilityTraversal().map(
+        (node) => node.label,
+      ),
+      isNot(contains('Private document')),
+    );
+    expect(
+      find.byKey(const ValueKey('private-content')).hitTestable(),
+      findsNothing,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('private-content')),
+      warnIfMissed: false,
+    );
+    expect(taps, 0);
     expect(
       tester
           .widget<ColoredBox>(
@@ -50,5 +89,16 @@ void main() {
       find.byKey(const ValueKey('lifecycle-privacy-shield')),
       findsNothing,
     );
+    expect(
+      tester.semantics.simulatedAccessibilityTraversal().map(
+        (node) => node.label,
+      ),
+      contains('Private document'),
+    );
+    expect(
+      find.byKey(const ValueKey('private-content')).hitTestable(),
+      findsOneWidget,
+    );
+    semantics.dispose();
   });
 }

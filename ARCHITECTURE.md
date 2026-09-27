@@ -266,10 +266,11 @@ Account transitions immediately conceal and remove only the owned picker.
 The server remains authoritative for document state, ACLs, filing and Trash
 retention. List/detail calls avoid downloading extracted content unnecessarily.
 Thumbnails remain in bounded memory and sensitive previews require a reveal
-decision. When the app becomes inactive, Flutter blurs and lightly tints its
-live content without storing a separate last-screen image. iOS `SceneDelegate`
-adds a native material blur before the switcher snapshot. Android 12+ also
-blurs the Flutter window and tints its Recents card; older Android can capture
+decision. When the app becomes inactive, Flutter removes the live content from
+the semantics and pointer trees, then blurs and lightly tints it without storing
+a separate last-screen image. iOS `SceneDelegate` adds a native material blur
+before the switcher snapshot. Android 12+ also blurs the Flutter window and
+tints its Recents card; older Android can capture
 before pause callbacks, so `MainActivity` keeps `FLAG_SECURE` set there and
 Recents uses an empty system card instead. This also disables screenshots and
 screen recording on Android 8–11. Native covers and blur effects are removed

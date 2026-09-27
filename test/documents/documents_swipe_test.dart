@@ -43,6 +43,12 @@ void main() {
       await tester.drag(find.text('Receipt'), const Offset(220, 0));
       await tester.pumpAndSettle();
       expect(action, findsOneWidget);
+      final swipeAction = find.widgetWithText(
+        TextButton,
+        'Make available offline',
+      );
+      expect(tester.getSize(swipeAction).width, greaterThanOrEqualTo(48));
+      expect(tester.getSize(swipeAction).height, greaterThanOrEqualTo(48));
       expect(fixture.detailRequests, 0);
       expect(fixture.downloadRequests, 0);
       await tester.tapAt(Offset(340, rowY));
@@ -84,6 +90,8 @@ void main() {
         expect(find.text('1 document'), findsOneWidget);
         final right = tester.getRect(toggle).right;
         final top = tester.getRect(toggle).top;
+        expect(tester.getSize(toggle).width, greaterThanOrEqualTo(48));
+        expect(tester.getSize(toggle).height, greaterThanOrEqualTo(48));
         expect(right, closeTo(370, 0.5));
 
         await tester.tap(toggle);

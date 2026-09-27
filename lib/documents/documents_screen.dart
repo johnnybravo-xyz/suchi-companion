@@ -741,8 +741,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                             disabledForegroundColor: colors.accent,
                             textStyle: Theme.of(context).textTheme.bodySmall,
                             padding: EdgeInsets.zero,
-                            minimumSize: const Size(0, 44),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            minimumSize: const Size(48, 48),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,

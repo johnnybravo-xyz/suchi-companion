@@ -13,6 +13,7 @@ import '../auth/server_origin.dart';
 
 import 'intake_limits.dart';
 import 'scan_database.dart';
+import 'payload_mime.dart';
 import 'storage_protection.dart';
 
 enum ScanSource { camera, share }
@@ -434,8 +435,11 @@ final class ScanQueueStore {
           'Document checksum changed while it was staged.',
         );
       }
-      final detectedMime = await _detectMime(payloadPart);
-      if (detectedMime != input.mimeType) {
+      final mimeMatches = await payloadMatchesDeclaredMime(
+        payloadPart,
+        input.mimeType,
+      );
+      if (!mimeMatches) {
         throw const QueueStageException(
           'mime_mismatch',
           'Document contents do not match the declared file type.',
@@ -548,7 +552,7 @@ final class ScanQueueStore {
       final inspected = await _hashFile(file);
       return inspected.size == upload.byteSize &&
           inspected.sha256 == upload.sha256 &&
-          await _detectMime(file) == upload.mimeType;
+          await payloadMatchesDeclaredMime(file, upload.mimeType);
     } catch (_) {
       return false;
     }
@@ -784,7 +788,7 @@ final class ScanQueueStore {
         final inspected = await _hashFile(payload);
         if (inspected.size != manifest.byteSize ||
             inspected.sha256 != manifest.sha256 ||
-            await _detectMime(payload) != manifest.mimeType) {
+            !await payloadMatchesDeclaredMime(payload, manifest.mimeType)) {
           throw const FormatException();
         }
         if (manifest.ocrContentPath case final ocrPath?) {
@@ -839,7 +843,7 @@ final class ScanQueueStore {
           final inspected = await _hashFile(payload);
           if (inspected.size != upload.byteSize ||
               inspected.sha256 != upload.sha256 ||
-              await _detectMime(payload) != upload.mimeType) {
+              !await payloadMatchesDeclaredMime(payload, upload.mimeType)) {
             throw const FormatException();
           }
           if (upload.ocrContentPath case final ocrPath?) {
@@ -1049,61 +1053,6 @@ final class ScanQueueStore {
     return (size: await file.length(), sha256: digest.toString());
   }
 
-  Future<String> _detectMime(File file) async {
-    final handle = await file.open();
-    try {
-      final bytes = await handle.read(4096);
-      if (bytes.length >= 5 &&
-          bytes[0] == 0x25 &&
-          bytes[1] == 0x50 &&
-          bytes[2] == 0x44 &&
-          bytes[3] == 0x46 &&
-          bytes[4] == 0x2d) {
-        return 'application/pdf';
-      }
-      if (bytes.length >= 3 &&
-          bytes[0] == 0xff &&
-          bytes[1] == 0xd8 &&
-          bytes[2] == 0xff) {
-        return 'image/jpeg';
-      }
-      const png = <int>[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-      if (bytes.length >= png.length && _bytesEqual(bytes, png, png.length)) {
-        return 'image/png';
-      }
-      if (bytes.length >= 16 &&
-          bytes[4] == 0x66 &&
-          bytes[5] == 0x74 &&
-          bytes[6] == 0x79 &&
-          bytes[7] == 0x70) {
-        final boxSize =
-            bytes[0] << 24 | bytes[1] << 16 | bytes[2] << 8 | bytes[3];
-        if (boxSize >= 16 &&
-            boxSize <= bytes.length &&
-            boxSize <= 4096 &&
-            (boxSize - 16) % 4 == 0) {
-          final brands = <String>[];
-          for (var offset = 8; offset < boxSize; offset += 4) {
-            if (offset == 12) continue;
-            brands.add(
-              ascii.decode(bytes.sublist(offset, offset + 4)).toLowerCase(),
-            );
-          }
-          if (brands.any(const {'avif', 'avis'}.contains)) return '';
-          if (brands.any(const {'heic', 'heix', 'hevc', 'hevx'}.contains)) {
-            return 'image/heic';
-          }
-          if (brands.any(const {'mif1', 'msf1'}.contains)) return 'image/heif';
-        }
-      }
-      return '';
-    } on FormatException {
-      return '';
-    } finally {
-      await handle.close();
-    }
-  }
-
   Future<void> _writeAndFlush(File file, List<int> bytes) async {
     final handle = await file.open(mode: FileMode.writeOnly);
     try {
@@ -1163,13 +1112,6 @@ final class ScanQueueStore {
   static bool _isCanonicalUuidV4(String value) => RegExp(
     r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
   ).hasMatch(value);
-
-  static bool _bytesEqual(List<int> left, List<int> right, int length) {
-    for (var index = 0; index < length; index++) {
-      if (left[index] != right[index]) return false;
-    }
-    return true;
-  }
 
   static ScanUploadsCompanion _companionFromManifest(
     _StagingManifest manifest,

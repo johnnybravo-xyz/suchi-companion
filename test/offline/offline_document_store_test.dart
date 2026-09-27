@@ -153,16 +153,16 @@ void main() {
         ),
       );
 
-      chunks.add([1, 2, 3]);
+      chunks.add(utf8.encode('%PD'));
       await halfWritten.future;
       expect(store.savingIdentity, _identity);
       expect(store.savingProgress, 0.5);
       expect(store.find(_identity, 91), isNull);
-      chunks.add([4, 5, 6]);
+      chunks.add(utf8.encode('F-x'));
       await chunks.close();
       final saved = await save;
       expect(finalizingBeforeCommit, isTrue);
-      expect(await saved.payload.readAsBytes(), [1, 2, 3, 4, 5, 6]);
+      expect(await saved.payload.readAsString(), '%PDF-x');
       expect(store.savingIdentity, isNull);
       expect(store.savingProgress, isNull);
     },

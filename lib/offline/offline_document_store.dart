@@ -14,6 +14,7 @@ import '../api/suchi_client.dart';
 import '../auth/account_identity.dart';
 import '../auth/server_origin.dart';
 import '../detail/document_files.dart';
+import '../scan/payload_mime.dart';
 import '../scan/storage_protection.dart';
 
 const offlineDocumentByteLimit = 64 * 1024 * 1024;
@@ -327,6 +328,13 @@ final class OfflineDocumentStore extends ChangeNotifier {
         throw const ApiException(
           kind: ApiFailureKind.malformedResponse,
           message: 'Suchi returned an incomplete document download.',
+        );
+      }
+      if (!await payloadMatchesDeclaredMime(partialPayload, payloadMimeType)) {
+        throw const ApiException(
+          kind: ApiFailureKind.malformedResponse,
+          message:
+              'Suchi returned a document whose contents do not match its type.',
         );
       }
       final payloadName =
@@ -811,7 +819,8 @@ final class OfflineDocumentStore extends ChangeNotifier {
       final payloadStat = await payload.stat();
       if (payloadStat.size != byteSize ||
           (await crypto.sha256.bind(payload.openRead()).first).toString() !=
-              payloadSha256) {
+              payloadSha256 ||
+          !await payloadMatchesDeclaredMime(payload, payloadMimeType)) {
         return null;
       }
       return OfflineDocument(

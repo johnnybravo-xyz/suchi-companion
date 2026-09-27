@@ -15,6 +15,7 @@ import 'package:suchi_mobile/detail/email_preview.dart';
 import 'package:suchi_mobile/detail/document_files.dart';
 import 'package:suchi_mobile/documents/jd_category_store.dart';
 import 'package:suchi_mobile/documents/thumbnail_cache.dart';
+import 'package:suchi_mobile/scan/storage_protection.dart';
 import 'package:suchi_mobile/theme/suchi_theme.dart';
 import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
 
@@ -87,7 +88,10 @@ void main() {
         MaterialApp(
           theme: SuchiTheme.light,
           home: DocumentDetailScreen(
-            files: DocumentFiles(root: filesDirectory),
+            files: DocumentFiles(
+              root: filesDirectory,
+              storageCapacity: _UnlimitedStorage(),
+            ),
             documentId: 91,
             client: session.client!,
             session: session,
@@ -900,7 +904,10 @@ Future<SessionController> _openDetail(
         child: child!,
       ),
       home: DocumentDetailScreen(
-        files: DocumentFiles(root: directory),
+        files: DocumentFiles(
+          root: directory,
+          storageCapacity: _UnlimitedStorage(),
+        ),
         documentId: 91,
         client: session.client!,
         session: session,
@@ -922,4 +929,9 @@ final class _MemoryVault implements CredentialVault {
 
   @override
   Future<void> save(StoredCredentials credentials) async {}
+}
+
+final class _UnlimitedStorage implements StorageCapacity {
+  @override
+  Future<int> availableBytes(String absolutePath) async => 1 << 60;
 }

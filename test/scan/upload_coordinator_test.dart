@@ -41,6 +41,7 @@ void main() {
       database: database,
       root: Directory(path.join(temporary.path, 'queue')),
       storageProtection: _NoopProtection(),
+      storageCapacity: _NoopProtection(),
     );
     network = _FakeNetwork();
     now = DateTime.utc(2026, 6, 1, 12);
@@ -613,7 +614,10 @@ final class _FakeNetwork implements NetworkMonitor {
   Future<void> close() => _changes.close();
 }
 
-final class _NoopProtection implements StorageProtection {
+final class _NoopProtection implements StorageProtection, StorageCapacity {
+  @override
+  Future<int> availableBytes(String absolutePath) async => 1 << 60;
+
   @override
   Future<void> protectDirectory(String absolutePath) async {}
 }

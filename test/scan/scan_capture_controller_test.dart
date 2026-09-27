@@ -30,6 +30,7 @@ void main() {
       database: database,
       root: Directory(path.join(temporary.path, 'queue')),
       storageProtection: const _NoopProtection(),
+      storageCapacity: const _NoopProtection(),
     );
   });
 
@@ -589,8 +590,11 @@ final class _FakeScanner implements DocumentScanner {
   }
 }
 
-final class _NoopProtection implements StorageProtection {
+final class _NoopProtection implements StorageProtection, StorageCapacity {
   const _NoopProtection();
+
+  @override
+  Future<int> availableBytes(String absolutePath) async => 1 << 60;
 
   @override
   Future<void> protectDirectory(String absolutePath) async {}

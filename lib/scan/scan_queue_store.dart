@@ -121,6 +121,7 @@ final class ScanQueueStore {
   ScanQueueStore._({
     required this.database,
     required this.root,
+    required this._storageCapacity,
     required this._ownsDatabase,
   });
 
@@ -140,6 +141,7 @@ final class ScanQueueStore {
 
   final ScanDatabase database;
   final Directory root;
+  final StorageCapacity _storageCapacity;
   final bool _ownsDatabase;
   bool _closed = false;
 
@@ -147,6 +149,7 @@ final class ScanQueueStore {
     ScanDatabase? database,
     Directory? root,
     StorageProtection storageProtection = const NativeStorageProtection(),
+    StorageCapacity storageCapacity = const NativeStorageCapacity(),
   }) async {
     if (database == null && root == null) {
       await ScanDatabase.rejectLegacyLocation(
@@ -168,6 +171,7 @@ final class ScanQueueStore {
     final store = ScanQueueStore._(
       database: resolvedDatabase,
       root: support.absolute,
+      storageCapacity: storageCapacity,
       ownsDatabase: ownsDatabase,
     );
     try {
@@ -182,6 +186,22 @@ final class ScanQueueStore {
   Stream<List<ScanUpload>> watchUploads() => database.watchUploads();
 
   Future<List<ScanUpload>> allUploads() => database.allUploads();
+
+  Future<void> ensureWritableCapacity(int byteCount) async {
+    _ensureOpen();
+    try {
+      await ensureWritableStorage(
+        capacity: _storageCapacity,
+        path: root.path,
+        byteCount: byteCount,
+      );
+    } on StorageCapacityException {
+      throw const QueueStageException(
+        'storage_full',
+        StorageCapacityException.message,
+      );
+    }
+  }
 
   Future<bool> hasShareReceipt(String batchId, int itemIndex) async =>
       await database.shareReceipt(batchId, itemIndex) != null;
@@ -323,6 +343,9 @@ final class ScanQueueStore {
         'Queue id already exists.',
       );
     }
+    await ensureWritableCapacity(
+      maximumDocumentBytes + _maximumOcrBytes + _maximumOcrBytes,
+    );
 
     final payloadPart = File(path.join(root.path, '$queueId.payload.part'));
     final payload = File(path.join(root.path, '$queueId.payload'));

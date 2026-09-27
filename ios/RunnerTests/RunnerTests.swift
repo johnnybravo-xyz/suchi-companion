@@ -18,6 +18,23 @@ final class RunnerTests: XCTestCase {
     temporaryRoot = nil
   }
 
+  func testWritableStoragePreservesReserveAfterWrite() {
+    let reserve = SuchiWritableStorage.minimumFreeBytes
+
+    XCTAssertTrue(
+      SuchiWritableStorage.canWrite(
+        availableBytes: reserve + 1_024,
+        byteCount: 1_024
+      )
+    )
+    XCTAssertFalse(
+      SuchiWritableStorage.canWrite(
+        availableBytes: reserve + 1_024,
+        byteCount: 1_025
+      )
+    )
+  }
+
   func testDocumentExportsAcceptOnlyExactTemporaryAndOfflinePayloads() throws {
     let exportRoot = temporaryRoot.appendingPathComponent("suchi-document-exports", isDirectory: true)
     let offlineRoot = temporaryRoot.appendingPathComponent("suchi-offline-documents", isDirectory: true)

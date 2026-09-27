@@ -344,6 +344,8 @@ class ShareChannel(private val activity: FlutterActivity) {
                 retained.add(item)
                 retained.sortBy(RetainedItem::index)
                 retainedIndexes.add(input.index)
+            } catch (error: LowStorageException) {
+                throw error
             } catch (_: Exception) {
                 rejectedIndexes.add(input.index)
             }
@@ -379,6 +381,10 @@ class ShareChannel(private val activity: FlutterActivity) {
         destination: File,
     ): RetainedItem {
         val part = File(destination.parentFile, destination.name + ".part")
+        WritableStorage.requireCapacity(
+            destination.parentFile!!,
+            NativeIntakeLimits.MAX_DOCUMENT_BYTES,
+        )
         part.delete()
         val digest = MessageDigest.getInstance("SHA-256")
         val itemBudget = BoundedByteCounter(NativeIntakeLimits.MAX_DOCUMENT_BYTES)
@@ -501,6 +507,7 @@ class ShareChannel(private val activity: FlutterActivity) {
                     ),
                 )
         val encoded = json.toString().toByteArray(Charsets.UTF_8)
+        WritableStorage.requireCapacity(directory, encoded.size.toLong())
         if (encoded.size > MAX_MANIFEST_BYTES) throw IOException("share manifest too large")
         val destination = File(directory, "manifest.json")
         val part = File(directory, "manifest.json.part")

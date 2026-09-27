@@ -53,6 +53,7 @@ final class MobileAppHarness {
       database: database,
       root: Directory('${temporary.path}/queue'),
       storageProtection: const TestStorageProtection(),
+      storageCapacity: const TestStorageProtection(),
     );
     late OfflineDocumentStore offlineDocuments;
     final session = SessionController(
@@ -111,11 +112,15 @@ final class MobileAppHarness {
     );
     final bridge = ShareBridge();
     final exports = await Directory('${temporary.path}/exports').create();
-    final documentFiles = DocumentFiles(root: exports);
+    final documentFiles = DocumentFiles(
+      root: exports,
+      storageCapacity: const TestStorageProtection(),
+    );
     offlineDocuments = await OfflineDocumentStore.open(
       files: documentFiles,
       root: Directory('${temporary.path}/offline'),
       storageProtection: const TestStorageProtection(),
+      storageCapacity: const TestStorageProtection(),
     );
     final settings = AppSettingsController(database);
     await settings.initialize();
@@ -200,8 +205,13 @@ final class TestCredentialVault implements CredentialVault {
   Future<void> save(StoredCredentials credentials) async {}
 }
 
-final class TestStorageProtection implements StorageProtection {
+final class TestStorageProtection
+    implements StorageProtection, StorageCapacity {
   const TestStorageProtection();
+
+  @override
+  Future<int> availableBytes(String path) async => 1 << 60;
+
   @override
   Future<void> protectDirectory(String path) async {}
 }

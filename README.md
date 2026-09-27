@@ -96,6 +96,13 @@ display switches to **Finishing offline copy** until the protected copy is
 verified; only then does it appear as saved. **Cancel** abandons an in-flight
 copy without replacing a previously saved version.
 
+Before camera, picker, share, queue, temporary export, or offline payload writes,
+Suchi Companion checks the destination volume can complete the bounded write
+while leaving at least 512 MiB free. A low-storage refusal keeps the original
+capture/share source and any previously verified offline copy for retry instead
+of turning an unresolved item into a successful import or replacing durable
+data.
+
 If the first Inbox load on an online cold start succeeds with no documents,
 Suchi Companion opens Documents instead. A failed load stays in Inbox for
 **Retry**, and choosing a tab yourself prevents the automatic switch. Documents

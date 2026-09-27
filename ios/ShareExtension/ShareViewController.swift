@@ -162,6 +162,12 @@ private final class ShareExtensionStager {
         )
         manifest.items.append(item)
         manifest.items.sort { $0.index < $1.index }
+      } catch SuchiShareStorageError.storageUnavailable {
+        return ShareStagingOutcome(
+          savedCount: manifest.items.count,
+          rejectedCount: manifest.rejectedCount,
+          storageFailed: true
+        )
       } catch {
         if !manifest.rejectedIndices.contains(index) {
           manifest.rejectedIndices.append(index)

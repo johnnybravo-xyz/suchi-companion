@@ -7,26 +7,34 @@ import 'package:path_provider/path_provider.dart';
 
 import '../api/api_error.dart';
 import '../api/suchi_client.dart';
+import '../scan/intake_limits.dart';
 import '../scan/storage_protection.dart';
 
 final class DocumentFiles {
-  DocumentFiles({required this.root, MethodChannel? channel})
-    : _channel =
-          channel ?? const MethodChannel('page.suchi.companion/documents');
+  DocumentFiles({
+    required this.root,
+    MethodChannel? channel,
+    StorageCapacity? storageCapacity,
+  }) : _channel =
+           channel ?? const MethodChannel('page.suchi.companion/documents'),
+       _storageCapacity = storageCapacity ?? const NativeStorageCapacity();
 
   final Directory root;
   final MethodChannel _channel;
+  final StorageCapacity _storageCapacity;
   Future<void>? _operation;
   Future<void> _cleanup = Future.value();
   Completer<void>? _abort;
   int _generation = 0;
 
-  static Future<DocumentFiles> open() async {
+  static Future<DocumentFiles> open({
+    StorageCapacity storageCapacity = const NativeStorageCapacity(),
+  }) async {
     final support = await getApplicationSupportDirectory();
     final root = Directory(path.join(support.path, 'suchi-document-exports'));
     await root.create(recursive: true);
     await const NativeStorageProtection().protectDirectory(root.path);
-    final files = DocumentFiles(root: root);
+    final files = DocumentFiles(root: root, storageCapacity: storageCapacity);
     await files.clear();
     return files;
   }
@@ -106,6 +114,11 @@ final class DocumentFiles {
     required Future<void> abort,
   }) async {
     await _removeExpired();
+    await ensureWritableStorage(
+      capacity: _storageCapacity,
+      path: root.path,
+      byteCount: maximumDocumentBytes,
+    );
     final directory = await root.createTemp('document-');
     var retained = false;
     try {

@@ -21,6 +21,10 @@
   SHA-256 digest independently from remote source metadata. Rehash copies on
   startup and use payload metadata for filenames, previews and native handoff,
   including image sources archived by the server as PDF.
+- Preserve a 512 MiB free-space reserve before bounded camera, picker/share,
+  queue, temporary export and offline writes. Low-storage failures keep
+  unresolved sources and previously verified offline copies available for
+  retry instead of replacing or falsely completing them.
 
 - Promote the current Documents scope to its heading, with search and sort
   alongside, document/offline counts below, and **Saved offline** in the scope

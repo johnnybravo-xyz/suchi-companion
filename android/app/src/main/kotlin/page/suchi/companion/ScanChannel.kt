@@ -207,6 +207,7 @@ class ScanChannel(private val activity: FlutterActivity) {
             result.error("scan_busy", "A document scan is already active.", null)
             return
         }
+        if (!reserveCaptureStorage(result)) return
         pendingCapture = result
         scanner.getStartScanIntent(activity)
             .addOnSuccessListener { sender ->
@@ -239,6 +240,7 @@ class ScanChannel(private val activity: FlutterActivity) {
             result.error("scan_busy", "A capture is already active.", null)
             return
         }
+        if (!reserveCaptureStorage(result)) return
         try {
             val directory = photoFile.parentFile!!
             if (!directory.isDirectory && !directory.mkdirs()) throw IOException("photo directory unavailable")
@@ -261,6 +263,22 @@ class ScanChannel(private val activity: FlutterActivity) {
         }
     }
 
+    private fun reserveCaptureStorage(result: MethodChannel.Result): Boolean =
+        try {
+            WritableStorage.requireCapacity(
+                activity.filesDir,
+                NativeIntakeLimits.MAX_CAPTURE_WORKING_BYTES,
+            )
+            true
+        } catch (_: IOException) {
+            result.error(
+                "storage_unavailable",
+                "Free at least 512 MiB of device storage before capturing documents.",
+                mapOf("retryable" to true),
+            )
+            false
+        }
+
     private fun retainCapture(
         pageUris: List<Uri>,
         pdfUri: Uri?,
@@ -270,6 +288,10 @@ class ScanChannel(private val activity: FlutterActivity) {
         val root = File(activity.filesDir, STORE_NAME)
         val captureDirectory = File(root, UUID.randomUUID().toString())
         try {
+            WritableStorage.requireCapacity(
+                root,
+                NativeIntakeLimits.MAX_CAPTURE_WORKING_BYTES,
+            )
             if (!captureDirectory.mkdirs()) {
                 throw IOException("capture directory unavailable")
             }
@@ -371,6 +393,7 @@ class ScanChannel(private val activity: FlutterActivity) {
     ): File {
         val part = File(destination.parentFile, destination.name + ".part")
         val itemBudget = BoundedByteCounter(maximumBytes)
+        WritableStorage.requireCapacity(destination.parentFile!!, maximumBytes)
         activity.contentResolver.openInputStream(uri).use { input ->
             if (input == null) throw IOException("capture stream unavailable")
             FileOutputStream(part).use { output ->
@@ -412,8 +435,10 @@ class ScanChannel(private val activity: FlutterActivity) {
                 .put("pages", JSONArray(pages.map(File::getName)))
         val destination = File(directory, "manifest.json")
         val part = File(directory, "manifest.json.part")
+        val encoded = json.toString().toByteArray(Charsets.UTF_8)
+        WritableStorage.requireCapacity(directory, encoded.size.toLong())
         FileOutputStream(part).use { output ->
-            output.write(json.toString().toByteArray(Charsets.UTF_8))
+            output.write(encoded)
             output.fd.sync()
         }
         if (!part.renameTo(destination)) {

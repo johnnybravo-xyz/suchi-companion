@@ -167,6 +167,22 @@ final class ScanChannel: NSObject {
       return
     }
 
+    do {
+      try SuchiWritableStorage.requireCapacity(
+        at: try storeRoot(),
+        byteCount: ScanIntakeLimits.maximumSourceBytes
+      )
+    } catch {
+      result(
+        FlutterError(
+          code: "storage_unavailable",
+          message: "Free at least 512 MiB of device storage before capturing documents.",
+          details: ["retryable": true]
+        )
+      )
+      return
+    }
+
     pendingCapture = result
     switch AVCaptureDevice.authorizationStatus(for: .video) {
     case .authorized:
@@ -250,6 +266,10 @@ final class ScanChannel: NSObject {
       throw ScanStorageError.captureTooLarge
     }
     let root = try storeRoot()
+    try SuchiWritableStorage.requireCapacity(
+      at: root,
+      byteCount: ScanIntakeLimits.maximumSourceBytes
+    )
     let captureDirectory = root.appendingPathComponent(
       UUID().uuidString,
       isDirectory: true
@@ -500,6 +520,10 @@ final class ScanChannel: NSObject {
   }
 
   private func writeAtomically(_ data: Data, to destination: URL) throws {
+    try SuchiWritableStorage.requireCapacity(
+      at: destination.deletingLastPathComponent(),
+      byteCount: Int64(data.count)
+    )
     let part = destination.appendingPathExtension("part")
     try? fileManager.removeItem(at: part)
     guard

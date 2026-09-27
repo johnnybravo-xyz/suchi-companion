@@ -19,7 +19,7 @@ final class StorageChannel {
   }
 
   private func handle(_ call: FlutterMethodCall, result: FlutterResult) {
-    guard call.method == "protectDirectory" else {
+    guard call.method == "protectDirectory" || call.method == "availableBytes" else {
       result(FlutterMethodNotImplemented)
       return
     }
@@ -59,6 +59,11 @@ final class StorageChannel {
     }
 
     do {
+      if call.method == "availableBytes" {
+        result(try SuchiWritableStorage.availableBytes(at: directory))
+        return
+      }
+
       var resourceURL = directory
       var resourceValues = URLResourceValues()
       resourceValues.isExcludedFromBackup = true
@@ -71,7 +76,7 @@ final class StorageChannel {
     } catch {
       result(FlutterError(
         code: "storage_protection_failed",
-        message: "Storage protection failed.",
+        message: "Storage check failed.",
         details: nil
       ))
     }

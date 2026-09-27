@@ -78,6 +78,7 @@ void main() {
       database: database,
       root: Directory('${temporary.path}/queue'),
       storageProtection: const _NoopProtection(),
+      storageCapacity: const _NoopProtection(),
     );
     final session = SessionController(
       vault: vault,
@@ -100,11 +101,15 @@ void main() {
     final shareBridge = ShareBridge();
     final files = Directory('${temporary.path}/exports');
     await files.create();
-    final documentFiles = DocumentFiles(root: files);
+    final documentFiles = DocumentFiles(
+      root: files,
+      storageCapacity: const _NoopProtection(),
+    );
     final offlineDocuments = await OfflineDocumentStore.open(
       files: documentFiles,
       root: Directory('${temporary.path}/offline'),
       storageProtection: const _NoopProtection(),
+      storageCapacity: const _NoopProtection(),
     );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
@@ -1340,8 +1345,11 @@ final class _MemoryVault implements CredentialVault {
   Future<void> save(StoredCredentials value) async => credentials = value;
 }
 
-final class _NoopProtection implements StorageProtection {
+final class _NoopProtection implements StorageProtection, StorageCapacity {
   const _NoopProtection();
+
+  @override
+  Future<int> availableBytes(String path) async => 1 << 60;
 
   @override
   Future<void> protectDirectory(String path) async {}

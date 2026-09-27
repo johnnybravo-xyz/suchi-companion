@@ -33,6 +33,7 @@ void main() {
       database: database,
       root: temporary,
       storageProtection: protection,
+      storageCapacity: protection,
     );
   });
 
@@ -269,6 +270,42 @@ void main() {
           'payload_changed',
         ),
       ),
+    );
+  });
+
+  test('low storage leaves the unresolved source untouched', () async {
+    final source = await _sourceFile(temporary, 'pending.pdf', _pdf);
+    protection.available = minimumFreeStorageReserveBytes;
+
+    await expectLater(
+      store.stage(
+        StageDocumentInput(
+          sourceFile: source,
+          mimeType: 'application/pdf',
+          filename: 'Pending.pdf',
+          source: ScanSource.share,
+          pageCount: 1,
+        ),
+        id: _firstId,
+      ),
+      throwsA(
+        isA<QueueStageException>().having(
+          (error) => error.code,
+          'code',
+          'storage_full',
+        ),
+      ),
+    );
+
+    expect(await source.readAsBytes(), _pdf);
+    expect(await database.allUploads(), isEmpty);
+    expect(
+      await temporary
+          .list()
+          .map((entity) => path.basename(entity.path))
+          .where((name) => name.startsWith(_firstId))
+          .toList(),
+      isEmpty,
     );
   });
 
@@ -535,6 +572,7 @@ void main() {
         database: first,
         root: Directory(path.join(temporary.path, 'durable-queue')),
         storageProtection: protection,
+        storageCapacity: protection,
       );
       await firstStore.claimShareBatch(_firstId, owner);
       await firstStore.close();
@@ -545,6 +583,7 @@ void main() {
         database: second,
         root: Directory(path.join(temporary.path, 'durable-queue')),
         storageProtection: protection,
+        storageCapacity: protection,
       );
       try {
         expect(await secondStore.shareBatchClaim(_firstId), owner);
@@ -580,8 +619,12 @@ Future<File> _sourceFile(
   return file;
 }
 
-final class _RecordingProtection implements StorageProtection {
+final class _RecordingProtection implements StorageProtection, StorageCapacity {
   String? path;
+  int available = 1 << 60;
+
+  @override
+  Future<int> availableBytes(String absolutePath) async => available;
 
   @override
   Future<void> protectDirectory(String absolutePath) async {

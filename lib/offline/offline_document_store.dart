@@ -76,6 +76,7 @@ final class OfflineDocumentStore extends ChangeNotifier {
   OfflineDocumentStore._({
     required this.root,
     required this._files,
+    required this._storageCapacity,
     required this._now,
     required this._newUuid,
   });
@@ -88,6 +89,7 @@ final class OfflineDocumentStore extends ChangeNotifier {
 
   final Directory root;
   final DocumentFiles _files;
+  final StorageCapacity _storageCapacity;
   final DateTime Function() _now;
   final String Function() _newUuid;
   List<OfflineDocument> _entries = const [];
@@ -105,6 +107,7 @@ final class OfflineDocumentStore extends ChangeNotifier {
     required DocumentFiles files,
     Directory? root,
     StorageProtection storageProtection = const NativeStorageProtection(),
+    StorageCapacity storageCapacity = const NativeStorageCapacity(),
     DateTime Function()? now,
     String Function()? newUuid,
   }) async {
@@ -128,6 +131,7 @@ final class OfflineDocumentStore extends ChangeNotifier {
     final store = OfflineDocumentStore._(
       root: support.absolute,
       files: files,
+      storageCapacity: storageCapacity,
       now: now ?? (() => DateTime.now().toUtc()),
       newUuid: newUuid ?? const Uuid().v4,
     );
@@ -225,6 +229,9 @@ final class OfflineDocumentStore extends ChangeNotifier {
     } on OfflineDocumentException catch (error) {
       _errorMessage = error.message;
       rethrow;
+    } on StorageCapacityException catch (error) {
+      _errorMessage = error.toString();
+      rethrow;
     } on FileSystemException {
       _errorMessage = 'The offline copy could not be saved. Check available device storage and try again.';
       rethrow;
@@ -255,6 +262,11 @@ final class OfflineDocumentStore extends ChangeNotifier {
         'The offline copy identifier is invalid.',
       );
     }
+    await ensureWritableStorage(
+      capacity: _storageCapacity,
+      path: root.path,
+      byteCount: offlineDocumentByteLimit + _maximumManifestBytes,
+    );
     final staging = Directory(path.join(root.path, 'offline-$uuid.part'));
     final committed = Directory(path.join(root.path, 'offline-$uuid'));
     await staging.create();

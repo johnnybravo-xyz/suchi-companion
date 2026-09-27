@@ -167,6 +167,38 @@ enum SuchiShareProviderLoader {
   }
 }
 
+enum SuchiWritableStorage {
+  static let minimumFreeBytes: Int64 = 512 << 20
+
+  static func availableBytes(at directory: URL) throws -> Int64 {
+    let values = try directory.resourceValues(forKeys: [
+      .volumeAvailableCapacityForImportantUsageKey,
+      .volumeAvailableCapacityKey,
+    ])
+    let fallback = values.volumeAvailableCapacity.map(Int64.init)
+    guard
+      let available = values.volumeAvailableCapacityForImportantUsage ?? fallback,
+      available >= 0
+    else {
+      throw SuchiShareStorageError.storageUnavailable
+    }
+    return available
+  }
+
+  static func canWrite(availableBytes: Int64, byteCount: Int64) -> Bool {
+    byteCount >= 0 && availableBytes - byteCount >= minimumFreeBytes
+  }
+
+  static func requireCapacity(at directory: URL, byteCount: Int64) throws {
+    guard canWrite(
+      availableBytes: try availableBytes(at: directory),
+      byteCount: byteCount
+    ) else {
+      throw SuchiShareStorageError.storageUnavailable
+    }
+  }
+}
+
 enum SuchiShareStorage {
   private static let manifestKeys = Set([
     "version",
@@ -254,6 +286,10 @@ enum SuchiShareStorage {
     guard Int64(data.count) <= SuchiShareConstants.maximumManifestBytes else {
       throw SuchiShareStorageError.invalidManifest
     }
+    try SuchiWritableStorage.requireCapacity(
+      at: directory,
+      byteCount: Int64(data.count)
+    )
     let destination = directory.appendingPathComponent("manifest.json")
     let part = directory.appendingPathComponent("manifest.json.part")
     let fileManager = FileManager.default
@@ -516,6 +552,12 @@ enum SuchiShareStorage {
 
     let fileManager = FileManager.default
     let part = destination?.appendingPathExtension("part")
+    if let destination {
+      try SuchiWritableStorage.requireCapacity(
+        at: destination.deletingLastPathComponent(),
+        byteCount: maximumBytes
+      )
+    }
     if let part {
       try? fileManager.removeItem(at: part)
       guard

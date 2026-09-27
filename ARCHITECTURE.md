@@ -272,6 +272,14 @@ payloads, deletes staging/malformed/unknown/corrupt entries and retains only the
 newest valid duplicate. Thumbnails, email HTML and extracted text are never
 persisted there.
 
+All bounded payload writers query the destination volume before opening their
+partial file. Camera and picker/share adapters, queue staging, temporary
+document exports, composed PDFs and offline saves include the prospective write
+in the check and must leave a 512 MiB free-space reserve. A refusal happens
+before publication: native intake keeps its incomplete receipt/source where the
+platform still provides it, queue staging leaves the source untouched, and an
+offline update leaves the previous verified directory current.
+
 `SuchiClient.downloadDocument` reports bytes written to its protected
 temporary file. The store owns account-bound save progress, throttles change
 notifications to whole percentages and clears it on cancellation or an identity

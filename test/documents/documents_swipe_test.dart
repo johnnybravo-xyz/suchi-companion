@@ -353,9 +353,11 @@ final class _Fixture {
     final store = await OfflineDocumentStore.open(
       files: DocumentFiles(
         root: await Directory('${temporary.path}/exports').create(),
+        storageCapacity: const _NoopProtection(),
       ),
       root: Directory('${temporary.path}/offline'),
       storageProtection: const _NoopProtection(),
+      storageCapacity: const _NoopProtection(),
     );
     late _Fixture fixture;
     final session = SessionController(
@@ -495,8 +497,12 @@ final class _MemoryVault implements CredentialVault {
   Future<void> save(StoredCredentials credentials) async {}
 }
 
-final class _NoopProtection implements StorageProtection {
+final class _NoopProtection implements StorageProtection, StorageCapacity {
   const _NoopProtection();
+
+  @override
+  Future<int> availableBytes(String path) async => 1 << 60;
+
   @override
   Future<void> protectDirectory(String path) async {}
 }

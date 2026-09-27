@@ -30,6 +30,7 @@ void main() {
       database: database,
       root: Directory(path.join(temporary.path, 'queue')),
       storageProtection: _NoopProtection(),
+      storageCapacity: _NoopProtection(),
     );
   });
 
@@ -845,7 +846,10 @@ final class _FakeIntake implements ShareIntake {
   }
 }
 
-final class _NoopProtection implements StorageProtection {
+final class _NoopProtection implements StorageProtection, StorageCapacity {
+  @override
+  Future<int> availableBytes(String absolutePath) async => 1 << 60;
+
   @override
   Future<void> protectDirectory(String absolutePath) async {}
 }

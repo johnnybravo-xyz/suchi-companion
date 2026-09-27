@@ -49,6 +49,14 @@ class NativeAdapterInstrumentedTest {
     }
 
     @Test
+    fun writableStoragePreservesReserveAfterWrite() {
+        val reserve = WritableStorage.MINIMUM_FREE_BYTES
+
+        assertTrue(WritableStorage.canWrite(reserve + 1_024, 1_024))
+        assertFalse(WritableStorage.canWrite(reserve + 1_024, 1_025))
+    }
+
+    @Test
     fun nativeResultSerializationPreservesOrderAndCancellation() {
         val completed =
             ScanResultPayload.completed(

@@ -8,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:suchi_mobile/api/api_error.dart';
 import 'package:suchi_mobile/api/suchi_client.dart';
 import 'package:suchi_mobile/detail/document_files.dart';
+import 'package:suchi_mobile/scan/storage_protection.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -18,7 +19,11 @@ void main() {
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('suchi-exports-test-');
-    files = DocumentFiles(root: directory, channel: channel);
+    files = DocumentFiles(
+      root: directory,
+      channel: channel,
+      storageCapacity: _UnlimitedStorage(),
+    );
     calls = [];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
@@ -188,4 +193,9 @@ void main() {
       expect(calls.map((call) => call.method), ['dismiss', 'dismiss', 'open']);
     },
   );
+}
+
+final class _UnlimitedStorage implements StorageCapacity {
+  @override
+  Future<int> availableBytes(String absolutePath) async => 1 << 60;
 }

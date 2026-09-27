@@ -416,16 +416,17 @@ final class ScanCaptureController extends ChangeNotifier {
     }
     final part = File(path.join(directory.path, 'composed.pdf.part'));
     final output = File(path.join(directory.path, 'composed.pdf'));
+    final bytes = await document.save();
+    if (bytes.length > maximumDocumentBytes) {
+      throw const ScannerFailure(
+        code: 'capture_too_large',
+        message: captureLimitMessage,
+        retryable: false,
+      );
+    }
+    await _queue.ensureWritableCapacity(bytes.length);
     final handle = await part.open(mode: FileMode.writeOnly);
     try {
-      final bytes = await document.save();
-      if (bytes.length > maximumDocumentBytes) {
-        throw const ScannerFailure(
-          code: 'capture_too_large',
-          message: captureLimitMessage,
-          retryable: false,
-        );
-      }
       await handle.writeFrom(bytes);
       await handle.flush();
     } finally {

@@ -83,6 +83,7 @@ void main() {
       files: files,
       root: root,
       storageProtection: protection,
+      storageCapacity: protection,
     );
     addTearDown(restored.close);
     final recovered = restored.find(_identity, 91);
@@ -106,6 +107,7 @@ void main() {
       files: files,
       root: root,
       storageProtection: protection,
+      storageCapacity: protection,
     );
     addTearDown(restored.close);
 
@@ -256,6 +258,7 @@ void main() {
         files: files,
         root: root,
         storageProtection: protection,
+        storageCapacity: protection,
       ),
       throwsA(isA<FileSystemException>()),
     );
@@ -505,6 +508,7 @@ void main() {
         files: files,
         root: root,
         storageProtection: protection,
+        storageCapacity: protection,
       );
       addTearDown(restored.close);
 
@@ -529,7 +533,7 @@ final _otherIdentity = AccountIdentity(
 Future<OfflineDocumentStore> _openStore(
   Directory root,
   DocumentFiles files,
-  StorageProtection protection, {
+  _RecordingProtection protection, {
   required List<String> uuids,
   DateTime? now,
 }) {
@@ -538,6 +542,7 @@ Future<OfflineDocumentStore> _openStore(
     files: files,
     root: root,
     storageProtection: protection,
+    storageCapacity: protection,
     now: () => now ?? DateTime.utc(2026, 9, 12, 12),
     newUuid: () {
       if (!remaining.moveNext()) throw StateError('No UUID prepared for test');
@@ -609,8 +614,11 @@ Future<void> _copyDirectory(Directory source, Directory destination) async {
   }
 }
 
-final class _RecordingProtection implements StorageProtection {
+final class _RecordingProtection implements StorageProtection, StorageCapacity {
   final paths = <String>[];
+
+  @override
+  Future<int> availableBytes(String path) async => 1 << 60;
 
   @override
   Future<void> protectDirectory(String path) async => paths.add(path);

@@ -36,11 +36,13 @@ void main() {
     temporary = await Directory.systemTemp.createTemp('suchi-offline-screen-');
     final files = DocumentFiles(
       root: await Directory('${temporary.path}/exports').create(),
+      storageCapacity: const _NoopProtection(),
     );
     store = await OfflineDocumentStore.open(
       files: files,
       root: Directory('${temporary.path}/offline'),
       storageProtection: const _NoopProtection(),
+      storageCapacity: const _NoopProtection(),
       newUuid: () => '00000000-0000-4000-8000-000000000001',
       now: () => DateTime.utc(2026, 9, 12),
     );
@@ -397,8 +399,11 @@ final class _MemoryVault implements CredentialVault {
   Future<void> save(StoredCredentials credentials) async {}
 }
 
-final class _NoopProtection implements StorageProtection {
+final class _NoopProtection implements StorageProtection, StorageCapacity {
   const _NoopProtection();
+
+  @override
+  Future<int> availableBytes(String path) async => 1 << 60;
 
   @override
   Future<void> protectDirectory(String path) async {}

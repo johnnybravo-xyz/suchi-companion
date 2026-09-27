@@ -8,6 +8,9 @@
   overriding a failed load, a deliberate tab choice or a changed account.
 - Round and clip Documents sorting and offline-copy option popups to match
   Scan's long-press mode picker on Android and iOS.
+- Run iOS builds with an explicit environment allowlist, disable Xcode shell
+  environment logging, and fail the native-build canary if inherited secret
+  values reach activity logs or build-data attachments.
 
 - Promote the current Documents scope to its heading, with search and sort
   alongside, document/offline counts below, and **Saved offline** in the scope

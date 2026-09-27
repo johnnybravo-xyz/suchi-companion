@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help deps format check api-check android ios
+.PHONY: help deps format check api-check android ios ios-canary
 
 SERVER_ROOT ?= ../suchi
 
@@ -10,7 +10,8 @@ help:
 	  'check      Check formatting, analyze, and run Flutter tests.' \
 	  'api-check  Compare API fixtures with SERVER_ROOT.' \
 	  'android    Build an Android debug APK.' \
-	  'ios        Build an unsigned iOS Simulator app.'
+	  'ios        Build an unsigned iOS Simulator app with an isolated environment.' \
+	  'ios-canary Prove Xcode logs exclude inherited secret values.'
 
 deps:
 	flutter pub get --enforce-lockfile
@@ -30,4 +31,7 @@ android:
 	flutter build apk --debug
 
 ios:
-	flutter build ios --simulator --no-codesign
+	python3 tool/xcode_build.py
+
+ios-canary:
+	python3 tool/xcode_build.py --canary

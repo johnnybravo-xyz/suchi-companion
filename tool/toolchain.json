@@ -2,13 +2,13 @@
   "schema_version": 1,
   "host": {
     "os": "macOS",
-    "version": "26.5.1",
+    "version": "27.0",
     "architecture": "arm64"
   },
   "shared_tools": {
     "git_version": "2.55.0",
-    "bun_version": "1.3.14",
-    "go_version": "1.27.0",
+    "bun_version": "1.4.2",
+    "go_version": "1.27.1",
     "gnu_make_version": "4.4.1"
   },
   "flutter": {
@@ -30,7 +30,7 @@
   "android": {
     "command_line_tools_version": "22.0",
     "platform_tools_version": "37.0.1",
-    "emulator_version": "37.1.11",
+    "emulator_version": "37.1.11.0",
     "platforms": ["35", "36", "37.0"],
     "build_tools": ["36.0.0"],
     "cmake": ["3.22.1"],
@@ -51,16 +51,16 @@
     "deferred_packages": ["platforms;android-37.0"],
     "dependency_constraints": {
       "flutter_secure_storage": "10.3.1",
-      "reason": "11.0.0 requires compile SDK 37; AGP 9.1.0 is tested through API 36.1"
+      "reason": "11.x requires compile SDK 37; this release builds against API 36 with AGP 9.1.0"
     }
   },
   "ios": {
     "deployment_target": "16.0",
-    "xcode_version": "26.6",
-    "xcode_build": "17F113",
-    "swift_version": "6.3.3",
-    "swift_driver_version": "1.148.6",
-    "simulator_runtimes": ["iOS 26.5"],
+    "xcode_version": "27.0",
+    "xcode_build": "27A266a",
+    "swift_version": "6.4",
+    "swift_driver_version": "1.168.6",
+    "simulator_runtimes": ["iOS 26.5", "iOS 27.0"],
     "cocoapods": "not installed; Swift Package Manager build path verified"
   },
   "server": {

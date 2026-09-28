@@ -35,24 +35,27 @@ sdkmanager \
   'system-images;android-36;google_apis_playstore;arm64-v8a'
 ```
 
-The tested Flutter 3.47.2 build stays on API 36/AGP 9.1.0 even when a newer platform is installed; AGP 9.1.0 is validated only through API 36.1. `flutter_secure_storage` stays on 10.3.1, the newest compatible security line, because 11.0.0 raises its compile SDK to 37. Native share adapters remain in-repository.
+The pinned Flutter 3.47.2 build uses compile/target API 36, AGP 9.1.0 and
+Gradle 9.3.1 even when a newer Android platform is installed.
+`flutter_secure_storage` stays on the compatible 10.3.1 security line because
+11.x requires compile SDK 37. Native share adapters remain in-repository.
 
 Dependency reviews follow Suchi's `../suchi/hack/pin-bumper.sh`: previous stable
 release (N−1), no downgrades, and compatible parent constraints. Flutter and Dart
 move together. The installed Flutter SDK's
-`packages/flutter_tools/lib/src/android/gradle_utils.dart` still records Gradle
-9.3.1 and AGP 9.1.0 as its tested/full-Kotlin-support boundary; do not independently
-advance this pair to upstream AGP 9.3/Gradle 9.7 without validating Flutter's build
-integration. SDK-selected test packages and dependency-constrained analyzer,
+`packages/flutter_tools/lib/src/android/gradle_utils.dart` records Gradle 9.3.1,
+AGP 9.1.0 and Kotlin 2.4.0 as this Flutter release's template versions. Do not
+advance that set independently of Flutter without validating its build integration.
+SDK-selected test packages and dependency-constrained analyzer,
 archive, and CLI utility versions stay with their owners; do not add overrides
 just to raise transitive version numbers.
 
-Install full Xcode 26.6 or later from the App Store, select it with
-`xcode-select`, run first-launch setup, and install iOS runtimes. Command Line
-Tools alone cannot build the iOS target. The iOS deployment floor is explicitly
-16.0 for the iPhone app, share extension and native tests; do not silently
-inherit a higher Xcode-recommended target. Xcode 27.0/iOS 26.5 simulator was
-exercised, but does not establish iOS 16 or physical-device behavior.
+Install full Xcode 27.0 from the App Store, select it with `xcode-select`, run
+first-launch setup, and install the recorded simulator runtimes. Command Line
+Tools alone cannot build the iOS target. The deployment floor is explicitly
+iOS 16.0 for the iPhone app, share extension and native tests; do not silently
+inherit a higher Xcode-recommended target. Xcode 27.0 with the iOS 26.5 simulator
+was exercised, but that does not establish iOS 16 or physical-device behavior.
 
 ## Verify the host
 

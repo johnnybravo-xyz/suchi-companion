@@ -61,7 +61,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   OfflineDocumentStore? _copyStore;
   int? _copyDocumentId;
   bool _copySaving = false;
-  String _copyProgressLabel = 'Saving offline copy…';
   int _copyToken = 0;
   int _removalSessionGeneration = 0;
   final _scroll = ScrollController();
@@ -207,7 +206,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       _copyClient = client;
       _copyStore = store;
       _copyDocumentId = summary.id;
-      _copyProgressLabel = 'Loading document…';
     });
     try {
       // List summaries are not authoritative: classification and file size can
@@ -242,9 +240,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       }
       final updating = store.find(identity, document.id) != null;
       setState(() {
-        _copyProgressLabel = updating
-            ? 'Updating offline copy…'
-            : 'Saving offline copy…';
         _copySaving = true;
       });
       await store.save(
@@ -879,56 +874,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                   DocumentListMode.detailed => 10,
                 },
               ),
-              child:
-                  widget.offlineDocuments == null ||
-                      (!_offlineSelected &&
-                          (widget.client == null ||
-                              widget.session.state != SessionState.signedIn))
-                  ? SuchiCard(
-                      child: IndexRow(
-                        document: document,
-                        mode: widget.listMode,
-                        client: _offlineSelected ? null : widget.client,
-                        cache: widget.cache,
-                        onTap: () => _openSummary(document),
-                        onUnauthorized: widget.session.expire,
-                      ),
-                    )
-                  : _OfflineSwipeRow(
-                      enabled:
-                          _copyDocumentId == null &&
-                          !widget.offlineDocuments!.busy,
-                      actionLabel: _offlineSelected
-                          ? null
-                          : hasOfflineCopy
-                          ? 'Update offline copy'
-                          : 'Make available offline',
-                      compactActionLabel: _offlineSelected
-                          ? null
-                          : hasOfflineCopy
-                          ? 'Update offline'
-                          : 'Save offline',
-                      progressLabel: _copyDocumentId == document.id
-                          ? _copyProgressLabel
-                          : null,
-                      onAction: _offlineSelected
-                          ? null
-                          : () => _makeAvailableOffline(document),
-                      onRemove: hasOfflineCopy
-                          ? () => _removeOfflineCopy(document)
-                          : null,
-                      onCancel: () => setState(_cancelCopy),
-                      child: SuchiCard(
-                        child: IndexRow(
-                          document: document,
-                          mode: widget.listMode,
-                          client: _offlineSelected ? null : widget.client,
-                          cache: widget.cache,
-                          onTap: () => _openSummary(document),
-                          onUnauthorized: widget.session.expire,
-                        ),
-                      ),
-                    ),
+              child: _documentRow(document, hasOfflineCopy: hasOfflineCopy),
             );
           }
           if (_loadingMore) {
@@ -964,44 +910,101 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       ),
     );
   }
+
+  Widget _documentRow(
+    DocumentSummary document, {
+    required bool hasOfflineCopy,
+  }) {
+    final row = IndexRow(
+      document: document,
+      mode: widget.listMode,
+      client: _offlineSelected ? null : widget.client,
+      cache: widget.cache,
+      onTap: () => _openSummary(document),
+      onUnauthorized: widget.session.expire,
+    );
+    final store = widget.offlineDocuments;
+    if (store == null ||
+        (!_offlineSelected &&
+            (widget.client == null ||
+                widget.session.state != SessionState.signedIn))) {
+      return SuchiCard(child: row);
+    }
+    final enabled = _copyDocumentId == null && !store.busy;
+    if (_offlineSelected) {
+      return _OfflineRemovalSwipeRow(
+        enabled: enabled,
+        onRemove: hasOfflineCopy ? () => _removeOfflineCopy(document) : null,
+        child: SuchiCard(child: row),
+      );
+    }
+    return SuchiCard(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Dismissible(
+          key: ValueKey('document-offline-${document.id}'),
+          direction: !enabled
+              ? DismissDirection.none
+              : hasOfflineCopy
+              ? DismissDirection.horizontal
+              : DismissDirection.startToEnd,
+          confirmDismiss: (direction) async {
+            if (direction == DismissDirection.startToEnd) {
+              await _makeAvailableOffline(document);
+            } else if (hasOfflineCopy) {
+              await _removeOfflineCopy(document);
+            }
+            return false;
+          },
+          background: _DocumentSwipeAction(
+            alignment: Alignment.centerLeft,
+            color: SuchiColors.of(context).success,
+            icon: Icons.download_for_offline_outlined,
+            label: hasOfflineCopy ? 'Update offline' : 'Save offline',
+          ),
+          secondaryBackground: hasOfflineCopy
+              ? _DocumentSwipeAction(
+                  alignment: Alignment.centerRight,
+                  color: SuchiColors.of(context).danger,
+                  icon: Icons.delete_outline,
+                  label: 'Remove offline',
+                )
+              : null,
+          child: row,
+        ),
+      ),
+    );
+  }
 }
 
-/// Reveals save/update to the right or confirmed local removal to the left.
-class _OfflineSwipeRow extends StatefulWidget {
-  const _OfflineSwipeRow({
+/// Keeps a tappable removal action available in the offline-only library.
+class _OfflineRemovalSwipeRow extends StatefulWidget {
+  const _OfflineRemovalSwipeRow({
     required this.enabled,
-    required this.actionLabel,
-    required this.compactActionLabel,
-    required this.progressLabel,
-    required this.onAction,
     required this.onRemove,
-    required this.onCancel,
     required this.child,
   });
 
   final bool enabled;
-  final String? actionLabel;
-  final String? compactActionLabel;
-  final String? progressLabel;
-  final VoidCallback? onAction;
   final VoidCallback? onRemove;
-  final VoidCallback onCancel;
   final Widget child;
 
   @override
-  State<_OfflineSwipeRow> createState() => _OfflineSwipeRowState();
+  State<_OfflineRemovalSwipeRow> createState() =>
+      _OfflineRemovalSwipeRowState();
 }
 
-class _OfflineSwipeRowState extends State<_OfflineSwipeRow> {
+class _OfflineRemovalSwipeRowState extends State<_OfflineRemovalSwipeRow> {
   static const _actionWidth = 184.0;
+  static const _commitFraction = 0.5;
   double _exposed = 0;
+  double _dragDistance = 0;
   bool _dragging = false;
 
   @override
-  void didUpdateWidget(covariant _OfflineSwipeRow oldWidget) {
+  void didUpdateWidget(covariant _OfflineRemovalSwipeRow oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if ((_exposed < 0 && (!widget.enabled || widget.onRemove == null)) ||
-        (_exposed > 0 && widget.onAction == null)) {
+    if (!widget.enabled || widget.onRemove == null) {
       _exposed = 0;
     }
   }
@@ -1010,9 +1013,6 @@ class _OfflineSwipeRowState extends State<_OfflineSwipeRow> {
   Widget build(BuildContext context) {
     final colors = SuchiColors.of(context);
     final compactLabel = MediaQuery.textScalerOf(context).scale(14) >= 21;
-    final visibleLabel = compactLabel
-        ? widget.compactActionLabel
-        : widget.actionLabel;
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = _actionWidth.clamp(0.0, constraints.maxWidth).toDouble();
@@ -1020,110 +1020,36 @@ class _OfflineSwipeRowState extends State<_OfflineSwipeRow> {
           borderRadius: BorderRadius.circular(17),
           child: Stack(
             children: [
-              if (widget.onAction != null)
-                Positioned(
-                  top: 0,
-                  bottom: 0,
-                  left: 0,
-                  width: width,
-                  child: IgnorePointer(
-                    ignoring: _exposed <= 0,
-                    child: ExcludeSemantics(
-                      excluding: _exposed <= 0,
-                      child: ColoredBox(
-                        color: colors.success,
-                        child: widget.progressLabel != null
-                            ? Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox.square(
-                                    dimension: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: colors.onAccent,
-                                      semanticsLabel: widget.progressLabel!,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Flexible(
-                                    child: Text(
-                                      widget.progressLabel!,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(color: colors.onAccent),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Cancel offline copy',
-                                    color: colors.onAccent,
-                                    onPressed: widget.onCancel,
-                                    icon: const Icon(Icons.close, size: 18),
-                                  ),
-                                ],
-                              )
-                            : SizedBox.expand(
-                                child: TextButton.icon(
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: colors.onAccent,
-                                    disabledForegroundColor: colors.onAccent
-                                        .withValues(alpha: 0.7),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                    ),
-                                    minimumSize: Size.zero,
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  onPressed: widget.enabled
-                                      ? _startAction
-                                      : null,
-                                  icon: const Icon(
-                                    Icons.download_for_offline_outlined,
-                                  ),
-                                  label: Text(
-                                    visibleLabel!,
-                                    textAlign: TextAlign.center,
-                                    maxLines: 2,
-                                  ),
-                                ),
-                              ),
-                      ),
-                    ),
-                  ),
-                ),
               if (widget.onRemove != null)
-                Positioned(
-                  top: 0,
-                  bottom: 0,
-                  right: 0,
-                  width: width,
+                Positioned.fill(
                   child: IgnorePointer(
                     ignoring: _exposed >= 0,
                     child: ExcludeSemantics(
                       excluding: _exposed >= 0,
                       child: ColoredBox(
                         color: colors.danger,
-                        child: SizedBox.expand(
-                          child: TextButton.icon(
-                            style: TextButton.styleFrom(
-                              foregroundColor: colors.onAccent,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: SizedBox(
+                            width: width,
+                            child: TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: colors.onAccent,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            onPressed: widget.enabled ? _startRemove : null,
-                            icon: const Icon(Icons.delete_outline),
-                            label: Text(
-                              compactLabel
-                                  ? 'Remove offline'
-                                  : 'Remove offline copy',
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
+                              onPressed: widget.enabled ? _startRemove : null,
+                              icon: const Icon(Icons.delete_outline),
+                              label: Text(
+                                compactLabel
+                                    ? 'Remove offline'
+                                    : 'Remove offline copy',
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                              ),
                             ),
                           ),
                         ),
@@ -1143,48 +1069,39 @@ class _OfflineSwipeRowState extends State<_OfflineSwipeRow> {
                     : SuchiMotion.standard(context),
                 curve: Curves.easeOutCubic,
                 child: Semantics(
-                  customSemanticsActions:
-                      widget.enabled && widget.progressLabel == null
+                  customSemanticsActions: widget.enabled
                       ? {
-                          if (widget.onAction != null)
-                            CustomSemanticsAction(label: widget.actionLabel!):
-                                _startAction,
-                          if (widget.onRemove != null)
-                            const CustomSemanticsAction(
-                              label: 'Remove offline copy',
-                            ): _startRemove,
+                          const CustomSemanticsAction(
+                            label: 'Remove offline copy',
+                          ): _startRemove,
                         }
                       : const {},
                   child: GestureDetector(
                     behavior: HitTestBehavior.deferToChild,
-                    onHorizontalDragStart: (_) =>
-                        setState(() => _dragging = true),
+                    onHorizontalDragStart: (_) => setState(() {
+                      _dragging = true;
+                      _dragDistance = 0;
+                    }),
                     onHorizontalDragUpdate: (details) => setState(() {
+                      _dragDistance += details.delta.dx;
                       _exposed = (_exposed + details.delta.dx)
                           .clamp(
                             widget.enabled && widget.onRemove != null
-                                ? -width
+                                ? -constraints.maxWidth
                                 : 0.0,
-                            widget.onAction != null ? width : 0.0,
+                            0.0,
                           )
                           .toDouble();
                     }),
-                    onHorizontalDragEnd: (details) => setState(() {
-                      _dragging = false;
-                      final velocity = details.primaryVelocity ?? 0;
-                      _exposed = _exposed > 0
-                          ? (_exposed > width / 3 || velocity > 300 ? width : 0)
-                          : (_exposed < -width / 3 || velocity < -300
-                                ? -width
-                                : 0);
-                    }),
+                    onHorizontalDragEnd: (details) => _finishDrag(
+                      details,
+                      actionWidth: width,
+                      rowWidth: constraints.maxWidth,
+                    ),
                     onHorizontalDragCancel: () => setState(() {
                       _dragging = false;
-                      _exposed = _exposed > width / 2
-                          ? width
-                          : _exposed < -width / 2
-                          ? -width
-                          : 0;
+                      _dragDistance = 0;
+                      _exposed = _exposed < -width / 2 ? -width : 0;
                     }),
                     child: widget.child,
                   ),
@@ -1197,13 +1114,82 @@ class _OfflineSwipeRowState extends State<_OfflineSwipeRow> {
     );
   }
 
-  void _startAction() {
-    setState(() => _exposed = 0);
-    widget.onAction?.call();
-  }
-
   void _startRemove() {
     setState(() => _exposed = 0);
     widget.onRemove?.call();
   }
+
+  void _finishDrag(
+    DragEndDetails details, {
+    required double actionWidth,
+    required double rowWidth,
+  }) {
+    final distance = _dragDistance;
+    final commitDistance = rowWidth * _commitFraction;
+    final completeRemove =
+        widget.enabled &&
+        widget.onRemove != null &&
+        distance <= -commitDistance;
+    if (completeRemove) {
+      setState(() {
+        _dragging = false;
+        _dragDistance = 0;
+        _exposed = 0;
+      });
+      widget.onRemove!.call();
+      return;
+    }
+
+    setState(() {
+      _dragging = false;
+      _dragDistance = 0;
+      final velocity = details.primaryVelocity ?? 0;
+      _exposed = _exposed < -actionWidth / 3 || velocity < -300
+          ? -actionWidth
+          : 0;
+    });
+  }
+}
+
+class _DocumentSwipeAction extends StatelessWidget {
+  const _DocumentSwipeAction({
+    required this.alignment,
+    required this.color,
+    required this.icon,
+    required this.label,
+  });
+
+  final Alignment alignment;
+  final Color color;
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: color,
+    child: Align(
+      alignment: alignment,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: SuchiColors.of(context).onAccent),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: SuchiColors.of(context).onAccent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

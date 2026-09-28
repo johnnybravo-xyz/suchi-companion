@@ -338,9 +338,10 @@ scope in the same picker as all documents and categories. Its inline,
 account-scoped count toggles between saved copies and All documents when a
 client is available. The offline library sorts manifest-backed rows without HTTP
 and opens the local payload even when a client is available.
-Swiping right on an online row exposes Make/Update; swiping left on a saved
-row (including the local-only library) exposes confirmed removal without
-contacting the server.
+Online document rows use Inbox-style full swipes: right saves or updates the
+offline copy and left opens confirmed removal when a copy exists. The offline
+library also accepts a full left swipe, but keeps its removal action exposed
+after a partial left swipe so it can be tapped without contacting the server.
 
 More’s **Privacy & storage** sheet is the signed-in storage-management boundary.
 It reads account, orphaned and device-wide offline totals from

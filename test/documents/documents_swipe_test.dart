@@ -25,7 +25,7 @@ void main() {
   tearDown(() async => fixture.close());
 
   testWidgets(
-    'right swipe saves or updates; left swipe does nothing without a copy',
+    'full right swipe saves or updates; left swipe does nothing without a copy',
     (tester) async {
       _phoneViewport(tester);
       final opened = <int>[];
@@ -33,29 +33,18 @@ void main() {
       final rowY = tester.getCenter(find.text('Receipt')).dy;
       await tester.tap(find.text('Receipt'));
       expect(opened, [91]);
-      final action = find.text('Make available offline').hitTestable();
-      expect(action, findsNothing);
-      await tester.drag(find.text('Receipt'), const Offset(-220, 0));
+      await tester.drag(find.text('Receipt'), const Offset(-500, 0));
       await tester.pumpAndSettle();
-      expect(action, findsNothing);
       expect(fixture.detailRequests, 0);
       expect(fixture.downloadRequests, 0);
-      await tester.drag(find.text('Receipt'), const Offset(220, 0));
+      await tester.drag(find.text('Receipt'), const Offset(110, 0));
       await tester.pumpAndSettle();
-      expect(action, findsOneWidget);
-      final swipeAction = find.widgetWithText(
-        TextButton,
-        'Make available offline',
-      );
-      expect(tester.getSize(swipeAction).width, greaterThanOrEqualTo(48));
-      expect(tester.getSize(swipeAction).height, greaterThanOrEqualTo(48));
       expect(fixture.detailRequests, 0);
       expect(fixture.downloadRequests, 0);
       await tester.tapAt(Offset(340, rowY));
       expect(opened, [91, 91]);
-      await tester.tap(action);
+      await tester.drag(find.text('Receipt'), const Offset(500, 0));
       await tester.pump(const Duration(milliseconds: 300));
-      expect(action, findsNothing);
       await _waitForCopy(tester, fixture, downloads: 1);
       final entry = fixture.store.find(fixture.session.identity, 91);
       expect(entry?.document.title, 'Authoritative receipt');
@@ -65,13 +54,9 @@ void main() {
       );
       expect(fixture.detailRequests, 1);
       expect(fixture.downloadRequests, 1);
-      expect(find.text('Update offline copy').hitTestable(), findsNothing);
-      await tester.drag(find.text('Receipt'), const Offset(220, 0));
-      await tester.pumpAndSettle();
-      expect(find.text('Update offline copy').hitTestable(), findsOneWidget);
-      await tester.tap(find.text('Update offline copy'));
+      expect(find.text('Update offline').hitTestable(), findsNothing);
+      await tester.drag(find.text('Receipt'), const Offset(500, 0));
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('Update offline copy').hitTestable(), findsNothing);
       await _waitForCopy(tester, fixture, downloads: 2);
       expect(fixture.store.entriesFor(fixture.session.identity), hasLength(1));
       expect(fixture.detailRequests, 2);
@@ -134,21 +119,15 @@ void main() {
   ) async {
     _phoneViewport(tester);
     await fixture.show(tester);
-    await tester.drag(find.text('Receipt'), const Offset(-220, 0));
+    await tester.drag(find.text('Receipt'), const Offset(-500, 0));
     await tester.pumpAndSettle();
-    expect(find.text('Remove offline copy').hitTestable(), findsNothing);
-
-    await tester.drag(find.text('Receipt'), const Offset(220, 0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Make available offline'));
+    await tester.drag(find.text('Receipt'), const Offset(500, 0));
     await _waitForCopy(tester, fixture, downloads: 1);
     final saved = fixture.store.find(fixture.session.identity, 91)!;
     final detailRequests = fixture.detailRequests;
     final downloadRequests = fixture.downloadRequests;
 
-    await tester.drag(find.text('Receipt'), const Offset(-220, 0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Remove offline copy').hitTestable());
+    await tester.drag(find.text('Receipt'), const Offset(-500, 0));
     await tester.pumpAndSettle();
     expect(find.text('Remove offline copy?'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
@@ -160,14 +139,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(find.text('Authoritative receipt'), const Offset(220, 0));
     await tester.pumpAndSettle();
-    expect(find.text('Update offline copy').hitTestable(), findsNothing);
+    expect(find.text('Remove offline copy').hitTestable(), findsNothing);
     await tester.drag(
       find.text('Authoritative receipt'),
       const Offset(-220, 0),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Remove offline copy').hitTestable());
-    await tester.pumpAndSettle();
+    expect(find.text('Remove offline copy?'), findsOneWidget);
     await tester.tap(find.text('Remove', skipOffstage: false));
     await tester.pumpAndSettle();
     await _waitForRemoval(tester, fixture);
@@ -183,16 +161,12 @@ void main() {
   ) async {
     _phoneViewport(tester);
     await fixture.show(tester);
-    await tester.drag(find.text('Receipt'), const Offset(220, 0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Make available offline'));
+    await tester.drag(find.text('Receipt'), const Offset(500, 0));
     await _waitForCopy(tester, fixture, downloads: 1);
     final oldIdentity = fixture.session.identity!;
     final saved = fixture.store.find(oldIdentity, 91)!;
 
-    await tester.drag(find.text('Receipt'), const Offset(-220, 0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Remove offline copy').hitTestable());
+    await tester.drag(find.text('Receipt'), const Offset(-500, 0));
     await tester.pumpAndSettle();
     expect(find.text('Remove offline copy?'), findsOneWidget);
     expect(await fixture.session.signOut(), isTrue);
@@ -208,22 +182,20 @@ void main() {
     expect(fixture.store.entriesFor(fixture.session.identity), hasLength(1));
   });
 
-  testWidgets('offline action remains tappable with large phone text', (
+  testWidgets('offline removal remains tappable with large phone text', (
     tester,
   ) async {
     _phoneViewport(tester);
     await fixture.show(tester, textScaler: const TextScaler.linear(2));
-    await tester.drag(find.text('Receipt'), const Offset(220, 0));
-    await tester.pumpAndSettle();
-    final action = find.text('Save offline').hitTestable();
-    expect(action, findsOneWidget);
-    expect(fixture.detailRequests, 0);
-    await tester.tap(action);
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(action, findsNothing);
+    await tester.drag(find.text('Receipt'), const Offset(500, 0));
     await _waitForCopy(tester, fixture, downloads: 1);
     expect(fixture.store.entriesFor(fixture.session.identity), hasLength(1));
-    await tester.drag(find.text('Receipt'), const Offset(-220, 0));
+    await tester.tap(find.widgetWithText(TextButton, '1 saved offline'));
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.text('Authoritative receipt'),
+      const Offset(-110, 0),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Remove offline').hitTestable(), findsOneWidget);
     await tester.tap(find.text('Remove offline'));
@@ -239,9 +211,7 @@ void main() {
   ) async {
     fixture.sensitivity = 'confidential';
     await fixture.show(tester);
-    await tester.drag(find.text('Receipt'), const Offset(220, 0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Make available offline'));
+    await tester.drag(find.text('Receipt'), const Offset(500, 0));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Keep sensitive document offline?'), findsOneWidget);
@@ -258,17 +228,15 @@ void main() {
   ) async {
     fixture.failDownload = true;
     await fixture.show(tester);
-    await tester.drag(find.text('Receipt'), const Offset(220, 0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Make available offline'));
+    await tester.drag(find.text('Receipt'), const Offset(500, 0));
     await _waitForCopy(tester, fixture, downloads: 1);
     await tester.pumpAndSettle();
-    expect(find.text('Make available offline').hitTestable(), findsNothing);
+    expect(find.text('Save offline').hitTestable(), findsNothing);
     expect(fixture.detailRequests, 1);
     expect(fixture.downloadRequests, 1);
     expect(fixture.store.entriesFor(fixture.session.identity), isEmpty);
     expect(find.text('Document is available offline.'), findsNothing);
-    expect(find.text('Make available offline'), findsOneWidget);
+    expect(find.text('Save offline'), findsOneWidget);
   });
 
   testWidgets(
@@ -278,10 +246,9 @@ void main() {
       fixture.delayedDetail = detail;
       await fixture.show(tester);
       final oldIdentity = fixture.session.identity!;
-      await tester.drag(find.text('Receipt'), const Offset(220, 0));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Make available offline'));
+      await tester.drag(find.text('Receipt'), const Offset(500, 0));
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
       expect(fixture.detailRequests, 1);
       expect(await fixture.session.signOut(), isTrue);
       await tester.pump();

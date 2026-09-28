@@ -1,470 +1,228 @@
 # Suchi Companion architecture
 
-Suchi Companion captures documents and reads a user-owned server archive. Flutter
-owns the shared Android/iOS interface; native adapters handle scanning, device
-storage protection and platform sharing. Suchi operates no ads, crash-reporting
-or document-relay service. Android's Google Play services ML Kit dependencies
-separately collect documented diagnostics and usage analytics. Companion
-v0.1.0 pins one exact compatible server revision.
+Suchi Companion is a Flutter client for capturing documents and using a
+self-hosted Suchi archive. Flutter owns the shared Android and iOS interface.
+Native adapters own camera/scanner integration, protected platform storage,
+sharing, and file viewing.
 
-Companion v0.1.0 uses `page.suchi.companion` on Android and iOS;
-its iOS Runner and Share Extension share `group.page.suchi.companion`.
-This is a fresh install without migration from the old development identity.
-All five Flutter/native channels use `page.suchi.companion/` with the
-`pairing`, `documents`, `scan`, `share` and `storage` suffixes.
-The iOS distribution targets iPhone only with iOS 26.0 as its floor. Android
-targets API 36 with API 31 as its floor; its activity remains resizable for
-large-screen sideloading, without claiming a tablet-specific interface.
+The application ID is `page.suchi.companion` on Android and iOS. The iOS Runner
+and Share Extension share `group.page.suchi.companion`. Platform channels use
+the `page.suchi.companion/` prefix with `pairing`, `documents`, `scan`, `share`,
+and `storage` suffixes. Android targets API 36 with API 31 as its minimum. iOS
+targets iPhone with iOS 26.0 as its minimum.
 
 ## Ownership
 
-| Concern | Entry point |
-| --- | --- |
-| Startup, disposal and dependency wiring | `lib/main.dart`, `lib/app/app_services.dart` |
-| Navigation and archive refresh | `lib/shell/shell.dart` |
-| Origin verification and credential lifetime | `lib/auth/session_controller.dart`, `server_origin.dart`, `credential_vault.dart` |
-| QR and pasted pairing links | `lib/auth/pairing_link.dart`, `pair_screen.dart`; Android/iOS `PairingChannel` adapters |
-| HTTP requests, bounds and wire validation | `lib/api/suchi_client.dart`, `api_models.dart`, `api_error.dart` |
-| Capture and durable queue | `lib/scan/scan_capture_controller.dart`, `scan_queue_store.dart`, `upload_coordinator.dart` |
-| Native share and explicit Files/Photos intake | `lib/share/`, `ScanQueueScreen`, Android `ShareChannel`, iOS `ShareChannel`/Share Extension and `ios/Shared/` |
-| Archive browsing, filing and retrieval | `lib/documents/`, `lib/inbox/`, `lib/search/`, `lib/detail/` |
-| Server-backed Saved Views | `lib/search/saved_views.dart`, `lib/api/api_models.dart`, owned by the shell |
-| Account-scoped offline documents | `lib/offline/offline_document_store.dart`, Documents/detail surfaces, native document channels |
-| Common presentation | `lib/widgets/suchi_widgets.dart`, `lib/theme/suchi_theme.dart` |
+| Concern                               | Owner                                                                                       |
+| ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Startup, dependency lifetime, cleanup | `lib/main.dart`, `lib/app/app_services.dart`                                                |
+| Navigation and archive refresh        | `lib/shell/shell.dart`                                                                      |
+| Origin validation and sessions        | `lib/auth/session_controller.dart`, `server_origin.dart`, `credential_vault.dart`           |
+| Pairing links and native QR input     | `lib/auth/pairing_link.dart`, `pair_screen.dart`, native `PairingChannel` adapters          |
+| HTTP contracts and response bounds    | `lib/api/suchi_client.dart`, `api_models.dart`, `api_error.dart`                            |
+| Capture, queueing, and upload         | `lib/scan/scan_capture_controller.dart`, `scan_queue_store.dart`, `upload_coordinator.dart` |
+| Share and picker intake               | `lib/share/`, `ScanQueueScreen`, native `ShareChannel` adapters, `ios/Shared/`              |
+| Archive screens and document detail   | `lib/documents/`, `lib/inbox/`, `lib/search/`, `lib/detail/`, `lib/trash/`                  |
+| Saved Views                           | `lib/search/saved_views.dart`, shell-owned `SavedViewController`                            |
+| Offline documents                     | `lib/offline/offline_document_store.dart` and native document channels                      |
+| Settings and presentation             | `lib/more/`, `lib/widgets/suchi_widgets.dart`, `lib/theme/suchi_theme.dart`                 |
 
-Screens keep their own loading, pagination and error state. The shell owns the
-small refresh revision used after a document changes. Detail reports successful
-edits, filing, Trash and Undo through an explicit callback; Trash restoration
-uses the same refresh path. Returning from viewing a document does not advance
-the revision, so the existing Documents and Inbox state retains scroll position,
-loaded pages, category and sort. Refresh callbacks ignore a changed session
-client or a disposed shell. There is no general client cache or second
-state-management framework.
+Screens own their loading, paging, error, and selection state. The shell passes
+explicit revision counters after successful mutations. Opening and closing a
+document does not refresh lists, which preserves loaded pages, scope, sorting,
+and scroll position. Async callbacks verify their client, account identity, and
+widget lifetime before publishing state.
 
-Inbox reports its first authenticated load outcome to the shell. The shell
-selects Documents only for a successful empty result while its initial tab,
-client and account identity are unchanged. First-load failures, manual
-navigation and identity transitions consume or disarm the one-shot decision;
-later retries never change tabs.
+`AppSettingsController` stores device-wide appearance, document-row density,
+and capture mode in Drift. `SuchiColors` supplies the shared light/dark palette,
+and motion helpers honor reduced-motion settings. More owns focused settings,
+account, privacy, and About sheets and closes account-bearing sheets when the
+identity changes.
 
-`AppSettingsController` stores device-wide appearance, document view and capture
-preferences in the existing Drift settings table, independently of archive identity. The root
-observes the saved theme without replacing its navigator. `SuchiColors` is the
-shared light/dark ThemeExtension; motion helpers respect reduced-motion settings.
-The shared popup menu theme gives Documents sorting, detail's offline-copy
-options and Scan's long-press mode picker the same rounded surface and padding;
-each menu clips its contents to that shape.
-More owns its settings sheets and removes account-bearing sheets on identity
-transitions.
-Documents and Inbox keep stable screen keys and receive an explicit refresh
-revision. View changes rebuild rows in place, without invalidating loaded pages.
+## Trust and account boundary
 
-The shell owns the account-bound `SavedViewController`, which lists, creates and
-deletes Views through `/api/saved_views/`; no View copy is persisted on-device.
-The controller keeps the last successful server list across transient failures
-and discards late reads or mutations after an identity transition. Opening a
-View sends a revisioned request from Search to the existing Documents screen.
-Documents applies the complete typed filter and its ordering as one scope;
-choosing a JD category clears that scope. Unknown or malformed future filters
-remain visible and fail closed before any document request.
+Pairing calls `/api/handshake` without credentials and verifies the resulting
+mobile token with `/api/whoami`. An explicit `mobile_contracts` response must
+include `suchi-companion-v1`. Product identity, required mobile scopes, user ID,
+and filing-system ID are validated before credentials are stored. App and server
+release numbers do not define wire compatibility.
 
-`lib/trash/trash_screen.dart` uses the existing paginated document list and
-restore API. More opens it through the shell, and successful restoration bumps
-the archive refresh revision. Retention and restore permission remain server
-decisions. The screen clears its rows on an account transition and ignores
-late reads or restore results from the previous identity.
+`ServerOrigin` requires HTTPS in profile and release builds. Debug builds may
+use localhost or private-LAN HTTP. Redirects are refused, and credentials are
+never sent until the unauthenticated origin check succeeds. Platform secure
+storage contains the token and a bounded verified user snapshot; passwords and
+pairing codes are never persisted.
 
-The detail screen opens `document_edit_screen.dart` for title, language and
-existing-tag changes; Details owns sensitivity changes and conceals sensitive
-previews immediately. The editor loads the server tag catalog by bounded pages
-and submits staged tag IDs through `/api/documents/bulk_edit`, checking the
-per-document result even on HTTP 200. Tag creation is not an editor operation.
-Successful edits reload authoritative detail; after a partial failure the editor
-reconciles server state before retrying, without replaying completed writes.
-Reads and writes stop after an account transition. Documents sorting resets
-pagination and invalidates older page responses while retaining the selected
-filing category.
+An account identity is the normalized origin, server user ID, and filing-system
+ID. Capture, imports, queued uploads, downloads, offline files, Saved Views, and
+in-memory readers bind to this tuple. Identity changes invalidate async work and
+prevent files or results from being adopted by another account.
 
-## Account and network boundary
+A verified snapshot permits `SessionState.offline` only for network and timeout
+failures. Authentication rejection, redirects, invalid origins, malformed
+responses, or missing scopes fail closed. Offline mode provides Documents,
+Scan, and More without constructing an authenticated API client. Inbox, Search,
+and Trash return after **Retry** completes a fresh anonymous handshake and
+authenticated identity check. Connectivity alone never starts uploads.
 
-Pairing checks `/api/handshake` without credentials, then verifies a scoped
-token with `/api/whoami`. The client requires the Suchi product and accepts an
-explicit `mobile_contracts` list only when it contains `suchi-companion-v1`.
-An absent declaration proceeds to the existing token scope/system checks;
-an explicit incompatible list does not send credentials. Server and app release
-numbers do not gate compatibility. The client accepts only supported origins
-and refuses redirects. Password exchange obtains a mobile token; the app stores
-the token in platform secure storage, never a password or a browser credential.
+Sign-out pauses account work, quarantines verified offline directories, and then
+deletes the credential. A credential-deletion failure rolls the quarantine back
+and restores the session. A cleanup failure after credential deletion keeps the
+data inaccessible and exposes it only through confirmed storage cleanup.
+Queued uploads are never deleted as a side effect of sign-out.
 
-After a successful `/api/whoami`, secure storage also records the bounded,
-validated `UserSelf` snapshot needed to identify offline data. Restoration may
-enter `SessionState.offline` only when that snapshot has both mobile scopes and
-the anonymous handshake or authenticated whoami fails with network/timeout.
-Authentication rejection, redirects, malformed responses, invalid origins and
-legacy credentials without a snapshot never unlock offline data. **Retry**
-repeats the anonymous handshake before constructing a token-bearing client.
+### Pairing inputs
 
-`AppServices` owns one production `NetworkMonitor` shared by uploads and
-Documents. Known loss of connectivity, or a Documents network/timeout failure,
-selects the account's Offline collection. Connectivity returning does not
-implicitly switch back. A restored offline session builds a local-only shell
-with Documents, Scan and More, without a `SuchiClient` or category store; Inbox,
-Search and Trash remain unavailable. Scan uses the existing native capture,
-protected queue and original account snapshot, not an unauthenticated upload
-path. Network recovery alone never starts uploads: **Retry** repeats the
-anonymous handshake and whoami first, then a same-account queue may resume and
-the full navigation returns. Sign-out cancels account-bound work, renames that
-account's verified offline directories into protected quarantine, and only then
-deletes the secure credential. Credential-deletion failure rolls those renames
-back and restores the prior signed-in/offline state. After credential deletion,
-sign-out remains complete even when quarantine deletion fails; those directories
-stay unavailable as documents and become explicit storage-manager cleanup.
-Restoring a pre-existing credential retries rollback after an interrupted
-pre-deletion sign-out. Expiry never silently removes offline or queued data.
+`PairingLink.parse` accepts only
+`suchi://pair?v=1&server=<encoded-origin>&code=<one-time-code>`. It rejects
+unexpected or repeated parameters, outer userinfo, ports, paths, and fragments,
+then applies the standard origin policy. The user confirms the normalized server
+and an editable device name before token exchange.
 
-`ServerOrigin` permits localhost/private-LAN HTTP only in debug builds. Profile
-and release pairing, manual entry and stored-credential restoration require
-HTTPS before any token-bearing request. The first unauthenticated handshake
-precedes credential exchange; redirect responses are refused.
+Android uses Google Play services Code Scanner with auto-zoom and install-time
+`barcode_ui` delivery. iOS uses AVFoundation. QR contents are returned as text;
+native adapters do not open URLs or handle account credentials. Device-name
+lookup is time-bounded and introduces no hardware identifier or local cache.
+Paste reads the clipboard only after an explicit user action. Manual pairing
+stays available when camera, scanner, device-name, or clipboard access fails.
 
-The `page.suchi.companion/pairing` method channel's `scan` operation returns a QR
-string or null on cancellation. Android uses the Google Play services code
-scanner with auto-zoom; its manifest requests install-time `barcode_ui` delivery,
-and the adapter verifies or installs the module before opening the scanner so
-sideloaded builds do not fail their first scan. Missing-module delivery contacts
-Google Play services after the user requests a scan. iOS uses AVFoundation.
-Google documents auto-zoom collection of a generated scanning-session ID, zoom
-changes and predicted barcode bounding-box coordinates. Google says QR image
-processing occurs on-device and it does not store the image or result. Neither
-adapter opens URLs or handles account credentials. The channel also exposes
-`deviceName` without opening the scanner:
-Android reads `Settings.Global.DEVICE_NAME` with `Build.MODEL` fallback;
-iOS uses `UIDevice.current.name`, which may return a generic name without Apple's
-user-assigned-device-name entitlement; no entitlement is added.
-Name discovery is bounded to two seconds, ignores results after a session
-transition, and falls back to an editable platform label. The confirmation form
-owns the transient name and validates it before connecting. No hardware IDs or
-device-name cache are introduced. Camera denial or an unavailable scanner leaves Paste pairing link
-and manual pairing available. Clipboard reads occur only after the user chooses
-Paste pairing link, and text entry remains available if clipboard access fails.
+## Capture, import, and upload
 
-`PairingLink.parse` accepts only the version-1
-`suchi://pair?v=1&server=<encoded-origin>&code=<one-time-code>` contract. It
-rejects unexpected or repeated parameters, nonempty paths, userinfo, ports and
-fragments in the outer URL, and applies the ordinary server-origin policy.
-The user confirms the normalized server address before any pairing request.
-`SessionController.pairWithLink` then performs the unauthenticated handshake,
-posts the code to `/api/mobile/pairing/exchange`, verifies the returned token
-with whoami and saves it in secure storage. Codes are never persisted or sent
-in HTTP request URLs. The server enforces their five-minute, single-use lifetime.
-Late scan, device-name lookup or token-exchange responses cannot replace a
-changed session. Link pairing always probes the selected origin, then sends the
-current exchange shape with both `code` and `device_name`. The server saves the confirmed name on the paired token,
-which the web account settings already render. The name is sent only to the
-confirmed server and is not saved with credentials.
+The Scan dock starts the saved Scanner or Photo mode. Long press opens the mode
+picker without starting capture. Native capture writes protected local files,
+then Dart validates and stages them in the SQLite-backed queue before
+acknowledging handoff.
 
-An account identity includes the normalized origin, server user ID, and bound
-filing-system ID. Capture and share import snapshot it before staging. Uploads cannot adopt a different
-account during a retry. Unassigned captures require explicit assignment;
-foreign-account queue entries remain durable but hidden from the current user.
-Session transitions pause uploads and invalidate retained memory state. API
-authorization still happens on every request at the server.
-
-The queue database schema and recovery manifest both start at version 1 for the
-current unreleased format. There is no schema migration path. Opening any other
-version fails with an explicit reset/reinstall message and leaves queue files
-untouched.
-The queue directory is protected and excluded from backup before its database is
-opened. SQLite state and sidecars therefore stay under the same boundary as
-payloads, OCR text and recovery manifests instead of the default Documents
-directory. Startup checks that former Documents location before opening the new
-database; finding an older database stops recovery without changing either
-location.
-
-## Capture and processing
-
-The dock starts capture in the saved mode on tap; long press anchors a
-Scanner/Photo picker immediately above it. Selection persists the preference
-before capture, with stale-session and unresolved-capture guards in the shell.
-More changes the same preference through its existing settings bottom sheet,
-without capture. The activity strip's View action still opens only the queue.
-`AppSettingsController` persists `capture_mode` as a device preference.
-The capture channel accepts `mode: scanner|photo` (missing means scanner).
-iOS Photo uses the native still-camera picker without editing. Android Photo
-uses a camera intent with one full-size output URI through a separate,
-non-exported `PhotoCaptureProvider`, scoped to `suchi-photo-capture/`.
-Its temporary read/write grants are revoked on return. Successful captures are
-copied into the existing native capture store before temporary output is
-removed. If the process stops while the camera owns `pending.jpg`, the next
-activity resume runs after result delivery: it validates a bounded JPEG and
-copies it into a manifested capture directory, removes empty/invalid output,
-and retains a valid photo when storage prevents recovery. Restored activity
-results have no account assignment until explicitly resolved. Neither mode
-writes to the user's photo library. The existing pipeline wraps photo pages as
-PDFs and owns account binding, OCR, receipts, recovery and uploads.
-
-Native scanning first writes protected local files. Dart validates and stages
-them in the SQLite-backed queue before acknowledging native handoff. Android
-copies platform-scanner provider results and full-size Photo output into the
+Android document scanning uses Google Play services ML Kit for page capture,
+edge detection, perspective correction, rotation, filters, and review. Android
+copies scanner content-provider results and full-size camera output into the
 protected capture store on a dedicated serial I/O thread before replying to
-Dart, then uses server OCR fallback; iOS can attach validated Vision text. The
-Server OCR only setting omits device-recognized text from new upload attempts.
+Dart. iOS uses VisionKit for document scanning and the system still-camera
+picker for Photo. Neither platform writes captures to the user's photo library.
+Photo pages enter the shared PDF, OCR, recovery, and upload pipeline.
 
-The native scanner is also the image-quality boundary. Android uses Google Play
-services' ML Kit full scanner mode for automatic capture and edge detection,
-perspective and rotation correction, filters, lighting cleanup and document
-cleaning. Google documents collection across its Android ML Kit features of
-device and app information, identifiers, performance and API-configuration
-metrics, and feature event and error data for diagnostics and usage analytics.
-The document scanner's model, processing logic and UI are delivered by Google
-Play services. iOS uses VisionKit's document camera and retains its reviewed
-page images. Dart does not crop or enhance those results again; it only combines
-returned pages when a native PDF is absent. "Flattening" here means correcting
-the perspective of a planar or mildly wrinkled sheet. Strong book-spine
-curvature and pixels hidden by severe glare require a reviewed retake and are
-not reconstructed.
+Android Photo uses a non-exported `PhotoCaptureProvider` and a single full-size
+output URI. URI grants are revoked on return. A valid interrupted photo can be
+recovered on activity resume; empty, invalid, linked, oversized, or out-of-root
+files are refused. Capture receipts hash resolved directories and commit
+atomically with queue staging.
 
-Camera receipt IDs hash the resolved capture directory, so native paths and
-restart recovery agree across Apple system-directory aliases. Every receipt
-input must be a regular, non-symlink file in that same resolved directory;
-native manifest recovery retains its root-containment checks. Receipts still
-commit atomically with queue staging before native files are discarded.
+Files, Photos, Android sharing, and the iOS Share Extension use one inspected
+import boundary per platform. An in-app picker records its UUIDv4 batch ID,
+creation time, and account identity before native UI opens. Native adapters
+allow at most 20 PDF or image items, require positive byte counts, cap each item
+at 64 MiB, and request no broad photo or storage permission. Each receipt becomes
+durable before native bytes are discarded. Unsupported items are reported.
+Claims without native data expire after 24 hours; a retained native batch keeps
+its assigned owner.
 
-Share import is single-flight and starts after the first app frame. OS share
-batches use the account captured at lookup. In-app Files/Photos pickers first
-allocate a UUIDv4 in Dart and persist its original account identity in the
-queue database's existing `AppSettings` table; only then can the native picker
-open. `page.suchi.companion/share` handles `pick` with `{source: files|photos,
-batch_id: UUIDv4}`, returning the same ID after protected staging or null on
-cancel. Native adapters enforce 20 items, a positive byte count and 64 MiB per
-item, with no broad photo/storage permission. Android routes OS sharing and
-both pickers through one inspected copy path; Apple does the same for Files,
-Photos and the Share Extension. Zero-byte inputs become rejected indices
-without a retained payload, and Dart rejects any nonpositive native item size.
-Picker ownership records include their creation time.
-The first pending pass removes claims at least 24 hours old only when no native
-batch with that ID exists. Android timestamps its matching picker-launch marker
-and applies the same bound during channel construction. A retained native batch
-keeps its original owner regardless of age. Claimed batches stage only for that
-owner, remain hidden from other accounts, and remove their claim only after
-each receipt is durable and native files are discarded. Corrupt claims fail
-closed; unsupported items are reported, never silently counted as filed.
-Each pass exposes checking/staging phases and commits receipts before discard.
-Empty follow-up checks retain meaningful attention notices; dismissal clears
-presentation only. Service shutdown awaits import completion before closing
-the queue.
+`ScanQueueStore` is the sole durable upload path. Its database, journals,
+payloads, OCR text, and recovery manifests share a protected, backup-excluded
+directory. Schema and recovery manifest version mismatches fail explicitly and
+leave files untouched. Unassigned files require explicit assignment, and
+foreign-account rows stay durable but hidden.
 
-The Runner and Share Extension each embed their own `PrivacyInfo.xcprivacy`.
-Both declare the disk-capacity check used to preserve the free-space reserve;
-Runner additionally declares app-container file timestamp access used by
-Flutter. Release validation uses the archived products, not project membership
-alone, because Apple aggregates manifests from each executable and bundled SDK.
+`UploadCoordinator` sends durable idempotency keys and distinguishes byte
+transfer, server acceptance, processing, filing, duplication, and failure.
+Network loss pauses work. Failed items stay until the user retries or discards
+them. Successful history and deduplication receipts are limited to the newest
+20 and 30 days. The shell observes account-scoped completion transitions to
+refresh archive lists without treating historical results as new activity.
 
-The upload coordinator uses durable idempotency keys and polls server work to
-distinguish accepted bytes from finished processing. It respects connectivity,
-account binding and explicit retry. Successful queue history and completed
-share/capture deduplication receipts are pruned after 30 days and capped at the
-newest 20 records of each kind. Reconciliation applies the same bounds on cold
-start. Failed uploads and processing failures stay until resolved.
-The existing queue is the sole durable upload path. Background execution remains
-subject to platform scheduling limits.
+## Archive and document state
 
-The shell retains one queue subscription for activity and completion transitions,
-scoped to the current identity. Initial historical successes do not refresh the
-archive; new filed/duplicate transitions refresh both retained lists. The strip
-uses payload bytes only during transfer, then shows acceptance/processing without
-a fabricated percentage. Its View action selects Scan without invoking capture.
+Inbox, Documents, Search, Saved Views, and Trash use server-authoritative
+metadata and permissions. List requests do not download document bodies.
+Documents sorting resets paging while retaining its filing scope. Saved Views
+are fetched from the server and applied as complete typed filters; malformed or
+unsupported filters remain visible but fail before a document request.
 
-Scan owns one account-bound split-picker route. Accepted rows use the shell's
-existing document route; local-only rows never expose staging paths. Durable
-split child IDs restrict selection, and `SuchiClient.splitDocuments` shares
-bounded pagination/completeness validation with the upload coordinator.
-Account transitions immediately conceal and remove only the owned picker.
+Inbox uses full horizontal gestures for File and Trash. Online Documents rows
+use the same gesture model: a full right swipe saves or updates the offline
+copy, and a full left swipe opens confirmed removal when a copy exists. Rows
+without an offline copy do not accept a left action.
 
-## Reading and privacy
+**Offline documents** is a Documents scope backed entirely by verified local
+manifests. A full left swipe opens removal confirmation. A partial left swipe
+keeps a tappable Remove action visible. Offline rows never contact the server
+to open or remove a local copy.
 
-The server remains authoritative for document state, ACLs, filing and Trash
-retention. List/detail calls avoid downloading extracted content unnecessarily.
-Thumbnails remain in bounded memory and sensitive previews require a reveal
-decision. When the app becomes inactive, Flutter removes the live content from
-the semantics and pointer trees, then blurs and lightly tints it without storing
-a separate last-screen image. iOS `SceneDelegate` adds a native material blur
-before the switcher snapshot. Android 12+ also blurs the Flutter window and
-tints its Recents card; older Android can capture
-before pause callbacks, so `MainActivity` keeps `FLAG_SECURE` set there and
-Recents uses an empty system card instead. This also disables screenshots and
-screen recording on Android 8–11. Native covers and blur effects are removed
-on resume. Native exports use scoped requests and protected local files;
-viewers and share targets receive file handles, not server credentials.
+Document detail loads metadata first. Opening, sharing, extracted-text reading,
+and email previewing are separate bounded requests. Editing title, language,
+filing, sensitivity, or tags reloads authoritative detail and verifies each
+bulk-edit result. Tag creation is not a mobile operation. Sensitivity changes
+conceal revealed content before the next frame.
 
-`OfflineDocumentStore` owns `suchi-offline-documents` under protected,
+`message/rfc822` previews receive bounded authenticated HTML from Dart and load
+it into a credential-free WebView. JavaScript, navigation, forms, frames, and
+remote resources are disabled by a restrictive CSP. Email HTML stays in memory
+and is cleared on Hide, backgrounding, memory pressure, disposal, or identity
+change.
+
+`lib/detail/document_text_screen.dart` fetches extracted text only after the
+reader opens. It shares the API's 8 MiB JSON limit and pages at 12,000 UTF-16
+units without splitting surrogate pairs. Text is rendered literally and kept
+only in memory. Sensitive metadata and server-side reclassification require
+explicit confirmation.
+
+## Offline files and storage
+
+`OfflineDocumentStore` owns `suchi-offline-documents` in protected,
 backup-excluded application support. Each committed `offline-<UUID>/` contains
-exactly one full payload and a bounded, versioned `manifest.json` with canonical
-origin, user ID, filing-system ID, complete remote metadata, payload filename,
-response MIME type, byte count, SHA-256 digest and save time. Sign-out reserves
-`quarantine-offline-<UUID>/`; these verified directories remain protected but
-are never exposed as documents. The remote `original_blob` is retained solely
-for freshness comparison; it is never treated as the downloaded payload digest.
-Downloads use the full `/download` endpoint, are account-bound, cancellable and
-capped at 64 MiB. Payload and manifest are staged and flushed before the
-directory rename publishes them; a failed update leaves the previous verified
-copy intact. There is no aggregate app-defined offline quota; available device
-capacity and the 512 MiB reserve bound the collection. Startup follows no links,
-rehashes committed and quarantined
-payloads, retains valid quarantine for rollback or explicit cleanup, deletes
-staging/malformed/unknown/corrupt entries and retains only the newest valid
-committed duplicate. Thumbnails, email HTML and extracted text are never
-persisted there.
+one payload and a bounded versioned manifest with account identity, remote
+metadata, response MIME type, filename, byte count, SHA-256 digest, and save
+time. Startup follows no links, rehashes payloads, discards malformed entries,
+and selects one verified copy per document.
 
-All bounded payload writers query the destination volume before opening their
-partial file. Camera and picker/share adapters, queue staging, temporary
-document exports, composed PDFs and offline saves include the prospective write
-in the check and must leave a 512 MiB free-space reserve. A refusal happens
-before publication: native intake keeps its incomplete receipt/source where the
-platform still provides it, queue staging leaves the source untouched, and an
-offline update leaves the previous verified directory current.
+Downloads are account-bound, cancellable, and capped at 64 MiB. Payload and
+manifest are flushed in staging before an atomic directory rename publishes the
+copy. A failed update leaves the committed copy intact. The app defines no
+aggregate offline quota. Camera, picker/share, queue, PDF composition, export,
+and offline writers reserve 512 MiB of free space before publication.
 
-`SuchiClient.downloadDocument` reports bytes written to its protected
-temporary file. The store owns account-bound save progress, throttles change
-notifications to whole percentages and clears it on cancellation or an identity
-transition. Document detail renders progress beside its Cancel control; the
-shell's existing upload activity area renders a persistent bar for Documents
-swipe saves. Receipt of the final byte enters an indeterminate finishing state
-until validation and the atomic commit publish the copy. Stale-account callbacks
-cannot restore a cleared indicator or publish a copy.
+Temporary document exports live under protected application support, are capped
+at 64 MiB, and are removed on failure, cancellation, sign-out, startup, or after
+24 hours. Native document channels accept only regular non-linked files at the
+expected depth beneath export or committed offline roots. Android shares
+read-only FileProvider URIs; iOS uses Quick Look and the share sheet. Recipient
+apps may keep their own copies.
 
-Documents owns the only saved-copy library entry point. **Saved offline** is a
-scope in the same picker as all documents and categories. Its inline,
-account-scoped count toggles between saved copies and All documents when a
-client is available. The offline library sorts manifest-backed rows without HTTP
-and opens the local payload even when a client is available.
-Online document rows use Inbox-style full swipes: right saves or updates the
-offline copy and left opens confirmed removal when a copy exists. The offline
-library also accepts a full left swipe, but keeps its removal action exposed
-after a partial left swipe so it can be tapped without contacting the server.
+**Privacy & storage** reports account, quarantined, device-wide offline, queue,
+and free-space totals. Offline cleanup requires confirmation. Queue items remain
+individually managed in Scan. The pairing screen exposes confirmed offline-copy
+cleanup when no account can open More.
 
-More’s **Privacy & storage** sheet is the signed-in storage-management boundary.
-It reads account, orphaned and device-wide offline totals from
-`OfflineDocumentStore`, actual payload/OCR bytes from `ScanQueueStore`, and
-available capacity through the native storage channel. Current-account cleanup
-and cleanup for signed-out, expired or unfinished-sign-out data require separate
-confirmation; queue rows are reported there but remain individually resolved in
-Scan. When no account can enter More, the signed-out/expired pairing screen
-exposes only confirmed removal of all remaining offline copies; it never removes
-queued uploads.
+## Privacy, platform, and public links
 
-Actions collapse when tapped. Saving fetches current detail, asks
-consent if classification is newly sensitive, and rejects results after an
-identity change. Network/timeout detail failures may fall back only to the
-matching account manifest in read-only mode; authorization and malformed
-responses cannot. Detail compares `original_blob` for Update and places
-fresh/stale status plus update/remove options in the preview caption. Sensitive
-retention and local handoff require confirmation. More retains retry, not a
-second document library.
+Sensitive previews, text, offline retention, and local handoff require explicit
+reveal or confirmation. Thumbnails are memory-bounded. Extracted text, email
+HTML, and sensitive previews do not enter persistent caches.
 
-Document detail owns a preview-first workspace. The preview card couples the
-openable page with friendly type, exact byte size and saved-copy status. Its
-action row places the account-scoped Save offline control left of right-aligned
-Open until a copy exists; Share, Edit and Trash remain route actions.
-Responsive reader/filing actions lead into an always-visible metadata card.
-Its sender is the first `sender` correspondent, falling back to the first
-correspondent. Missing fields render explicitly rather than being inferred.
-Provenance displays added time and first source label/kind; the validated
-`original_blob` stays internal to offline freshness checks and manifests.
-Ordinary preview states may fade; sensitive concealment replaces
-the whole animation subtree and evicts revealed bytes before the next frame. A
-failed metadata refresh retains clearly labelled stale information with Retry.
+When inactive, Flutter removes live content from pointer and semantics trees and
+adds a blurred tinted privacy surface. iOS adds a native material cover before
+the app-switcher snapshot. Android 12+ blurs the window and tints Recents.
+Android 8–11 uses `FLAG_SECURE`, which also disables screenshots and recording,
+because the system may snapshot before pause callbacks.
 
-The server's metadata PATCH and bulk edit transactions clear only classifier-owned
-`needs-review` tags after a write. The edit screen reconciles a server-cleared
-marker before retrying partial saves, rather than re-adding it as a manual tag.
+The Runner and Share Extension embed `PrivacyInfo.xcprivacy`. Both declare disk
+capacity checks for the free-space reserve; Runner also declares app-container
+timestamp access. Android disclosures cover Google Play services ML Kit
+diagnostics, usage analytics, identifiers, and pairing auto-zoom data. Suchi
+operates no ads, crash-reporting service, or document relay.
 
-`message/rfc822` previews use a separate bounded `text/html; charset=utf-8`
-request. Dart authenticates that request, injects a restrictive CSP at the start
-of the server-generated head, then loads the result into a credential-free
-WebView with JavaScript and navigation disabled. The WebView receives no base
-URL, headers or cookies and cannot fetch network resources. Email HTML remains
-in memory only; Hide, account transitions, backgrounding, memory pressure and
-disposal replace the page and clear WebView cache and local storage. Opening or
-sharing still uses the protected native file handoff, with `message/rfc822`
-saved as `.eml`.
-
-`lib/detail/document_text_screen.dart` is an explicit, memory-only reader.
-Ordinary `document()` reads and `DocumentDetail` continue to require
-`include_content=0`. Only entering the reader calls `documentText()` with
-`include_content=1`; it validates the document ID, content and sensitivity
-without expanding the metadata model. The response shares the existing 8 MiB
-JSON-byte cap. Reader pages bound text layout to 12,000 UTF-16 units while
-preserving surrogate pairs. Text is rendered literally, not as HTML.
-
-Sensitive metadata requires confirmation before fetching text. A response that
-reports newly sensitive content requires confirmation before display. Account
-changes, backgrounding, memory pressure and disposal clear retained reader text
-and invalidate pending responses. Returning to the app never reloads it
-automatically. No text cache or disk copy is added; text the user explicitly
-copies belongs to the system clipboard and can outlive the reader.
-
-`lib/detail/document_files.dart` streams one document at a time into a protected
-`suchi-document-exports` directory under application support. The
-`page.suchi.companion/documents` native channel opens or shares only a regular,
-non-linked payload at the exact expected depth under either temporary exports
-or `suchi-offline-documents`. For saved copies it also requires a committed
-`offline-<UUIDv4>/document-<id>.<extension>` path, never a staging directory
-or manifest. Links, nested paths and files over 64 MiB are refused. Android
-exposes both roots through read-only FileProvider URI grants; iOS uses Quick
-Look and its share sheet. Temporary downloads are bounded to 64 MiB; failure
-or cancellation removes partials. Sign-out and cold startup clear export
-copies, and later exports prune copies older than 24 hours. Another app may
-retain a shared copy outside Suchi Companion's control.
-
-More's **Explore Suchi** action opens the fixed public HTTPS
-`https://suchi.page` address, never the paired origin or credentials; it
-remains available when the paired server is offline. **Privacy & storage**
-describes device-local behavior. A public privacy policy with a monitored
-contact remains an owner-controlled store-release dependency, not a server
-operator's policy; the in-app explanation does not replace it.
-
-More's **About** sheet reads the installed version and build through
-`package_info_plus` and links only to fixed public HTTPS source, privacy,
-support and mobile-security targets. **Open-source licenses** uses Flutter's
-generated dependency registry. `app/app_licenses.dart` adds the full bundled
-Schibsted Grotesk and Spline Sans Mono OFL texts from packaged assets, so font
-notices remain available offline.
+About displays the installed version, application license, dependency notices,
+bundled font licenses, and one fixed external URL: `https://suchi.page/`. It
+does not embed repository, privacy, security, support, or email destinations.
+**Privacy & storage** owns the in-app privacy explanation.
 
 ## Verification
 
-`make check` covers Dart formatting, analysis and Flutter behavior tests. Tests
-remain beside the relevant feature under `test/`. Mirrored JSON transcripts
-and their checksum manifest are checked with `make api-check`; this compares
-fixtures, so verify real server behavior separately before pinning a revision.
-
-For pairing changes, run `flutter test test/auth test/api/api_contract_test.dart`.
-These tests cover URL refusal, origin confirmation, handshake/exchange ordering,
-camera and clipboard fallback, native-name fallback/editing/timeouts, current
-request validation, expired codes and late results. Widget tests
-exercise the production pairing screen at 200% text on both target platforms;
-the separate visual fixtures do not establish real camera behavior.
-
-For document navigation, run `flutter test test/shell/document_navigation_test.dart`.
-The production shell regressions cover repeated back navigation through loaded
-pages, category and sort retention, errors/retry, refused edits, successful
-mutations, stale-account reads and 200% text on Android/iOS layouts.
-
-For offline retention, run `flutter test test/offline`, plus
-`test/auth/session_controller_test.dart` and
-`test/auth/credential_vault_test.dart`.
-These cover atomic discovery and cleanup, account isolation, cancellation, size
-bounds, verified-snapshot restoration,
-anonymous retry ordering, network selection, read-only detail fallback and
-sensitive confirmation. Native adapter tests additionally enforce both allowed
-roots, exact depth, link refusal and the 64 MiB limit.
-
-For explicit text reads, run `flutter test test/detail test/api/api_contract_test.dart`.
-The reader regressions cover metadata-only navigation, sensitivity changes,
-consent, errors/retry, empty text, identity/lifecycle transitions, response
-bounds, Unicode paging and 200% text on Android/iOS layouts.
-
-`make android` and `make ios` check native integration builds. Platform-channel
-tests and simulator runs validate adapters, not physical camera acquisition,
-real share recipients or signed distribution. Physical-device and signed-release
-evidence follows the private record requirements in [RELEASE.md](RELEASE.md).
+- `make check` runs formatting, static analysis, and Flutter tests.
+- `make api-check SERVER_ROOT=/path/to/suchi` verifies mirrored fixtures against
+  the exact server revision in `tool/toolchain.json`.
+- `make android` and `make ios` validate native integration builds.
+- Tests live beside their feature under `test/`; native adapter tests cover path,
+  link, depth, size, and manifest validation.
+- Simulator and mock tests do not establish physical scanner, camera, picker,
+  share, lifecycle, or signed-distribution behavior. Those gates require the
+  device evidence listed in [RELEASE.md](RELEASE.md).

@@ -82,6 +82,11 @@ lint/build, iOS simulator build, and inherited-secret canary gates on pushes to
 physical devices, store consoles, and external services remain separate gates
 because a hosted source workflow cannot establish them.
 
+The archived Trust Gate Go and Dart engines are not companion dependencies and
+must not be copied into source or bundled into an app artifact. The companion
+uses the server's existing authorization and review contracts; it does not carry
+a second trust or approval engine.
+
 `design/scanner-feasibility.json` is the structured scanner evidence record. Its
 release gate must remain false until the required physical matrix and signed
 artifact checks have actually passed.

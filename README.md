@@ -220,14 +220,11 @@ request.
 
 **More → Explore Suchi** opens the public `https://suchi.page` site in the
 browser, separate from the paired server and without credentials.
-**Privacy & storage** explains device-local behavior in the app. A public
-privacy policy and an owner-designated monitored privacy contact remain
-separate requirements before store submission; the in-app explanation does
-not replace them.
-**More → About** shows the installed version and build, the intended public
-source repository, complete generated dependency and bundled-font license
-notices, and fixed privacy, support and mobile-security links. Those public
-targets must resolve before release; an in-app link is not deployment evidence.
+**Privacy & storage** explains device-local behavior in the app and opens the
+deployed public privacy policy. **More → About** shows the installed version and
+build, the public source repository, complete generated dependency and
+bundled-font license notices, and fixed links to the deployed privacy, support
+and mobile-security pages.
 
 On Android, the document and pairing QR scanners are Google Play services ML
 Kit features. Suchi operates no ads, crash-reporting or document-relay service,
@@ -245,18 +242,16 @@ The compatible server tag, exact revision, API version, and contract are recorde
 in [`tool/toolchain.json`](tool/toolchain.json). The mirrored response fixtures
 in `test/fixtures/api/v1` keep the two implementations on the same wire contract.
 
-The first release target and every mandatory release gate are maintained in
-[RELEASE.md](RELEASE.md). That runbook covers signed physical-device checks,
-public policies and contacts, the reviewer server, store declarations,
-corresponding source, licensing approval, and coordinated publication. This
-README describes shipped behavior; it is not a store-readiness checklist.
+The maintained release process and mandatory gates are in
+[RELEASE.md](RELEASE.md). It covers signed physical-device checks, public
+policies and contacts, the reviewer server, store declarations, corresponding
+source, licensing approval and coordinated publication. This README describes
+shipped behavior rather than duplicating that checklist.
 
-For server vulnerabilities, use the private GitHub Security Advisory form named
-in the [server security policy](https://github.com/johnnybravo-xyz/suchi/blob/main/SECURITY.md);
-public issues must not carry
-tokens or document data. That server route is **not** a designated monitored
-mobile-security contact. The owner must name one before releasing the
-companion; do not send mobile reports to a guessed address.
+For vulnerability reporting, follow the public
+[security guidance](https://suchi.page/security/) and use the private GitHub
+Security Advisory form named there. Public issues must not carry tokens or
+document data.
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for pinned tools and project checks.
 

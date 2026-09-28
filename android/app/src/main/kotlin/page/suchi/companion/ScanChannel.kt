@@ -24,6 +24,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.UUID
+import java.util.concurrent.Executors
 
 class PhotoCaptureProvider : FileProvider()
 
@@ -71,6 +72,16 @@ internal object ScanResultPayload {
         }
 }
 
+private sealed interface CaptureRetention {
+    data class Success(val payload: Map<String, Any?>) : CaptureRetention
+
+    data class Failure(
+        val code: String,
+        val message: String,
+        val retryable: Boolean,
+    ) : CaptureRetention
+}
+
 class ScanChannel(private val activity: FlutterActivity) {
     private companion object {
         const val CHANNEL_NAME = "page.suchi.companion/scan"
@@ -92,7 +103,11 @@ class ScanChannel(private val activity: FlutterActivity) {
                 .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
                 .build(),
         )
+    private val executor = Executors.newSingleThreadExecutor()
     private var pendingCapture: MethodChannel.Result? = null
+    private var retainingCapture = false
+    private var closed = false
+    private var channel: MethodChannel? = null
     // A fixed private output survives activity recreation; only a successful camera result is retained.
     private val photoFile get() = File(activity.filesDir, "suchi-photo-capture/pending.jpg")
     private fun photoUri() = FileProvider.getUriForFile(
@@ -100,8 +115,17 @@ class ScanChannel(private val activity: FlutterActivity) {
     )
 
     fun register(engine: FlutterEngine) {
-        MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL_NAME)
-            .setMethodCallHandler(::onMethodCall)
+        channel = MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL_NAME).also {
+            it.setMethodCallHandler(::onMethodCall)
+        }
+    }
+
+    fun close() {
+        closed = true
+        pendingCapture = null
+        channel?.setMethodCallHandler(null)
+        channel = null
+        executor.shutdown()
     }
 
     fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
@@ -145,7 +169,7 @@ class ScanChannel(private val activity: FlutterActivity) {
             result?.error("invalid_native_result", "The document scanner returned no result.", null)
             return true
         }
-        retainCapture(
+        retainScannerCapture(
             scan.pages.orEmpty().map { it.imageUri },
             scan.pdf?.uri,
             maxOf(scan.pages.orEmpty().size, scan.pdf?.pageCount ?: 0),
@@ -155,23 +179,26 @@ class ScanChannel(private val activity: FlutterActivity) {
     }
 
     fun onResume() {
-        if (pendingCapture == null && photoFile.exists()) {
+        if (pendingCapture == null && !retainingCapture && photoFile.exists()) {
             retainPendingPhoto(null)
         }
     }
 
     private fun retainPendingPhoto(result: MethodChannel.Result?) {
-        if (!isRecoverablePhoto(photoFile)) {
-            photoFile.delete()
-            result?.error(
-                "capture_failed",
-                "The camera returned an invalid photo. Try again.",
-                mapOf("retryable" to true),
-            )
-            return
-        }
-        if (retainCapture(listOf(photoFile.toUri()), null, 1, result)) {
-            photoFile.delete()
+        retainInBackground(result) {
+            if (!isRecoverablePhoto(photoFile)) {
+                photoFile.delete()
+                return@retainInBackground CaptureRetention.Failure(
+                    code = "capture_failed",
+                    message = "The camera returned an invalid photo. Try again.",
+                    retryable = true,
+                )
+            }
+            val retention = retainCapture(listOf(photoFile.toUri()), null, 1)
+            if (retention is CaptureRetention.Success) {
+                photoFile.delete()
+            }
+            retention
         }
     }
 
@@ -244,7 +271,7 @@ class ScanChannel(private val activity: FlutterActivity) {
     }
 
     private fun capture(result: MethodChannel.Result) {
-        if (pendingCapture != null) {
+        if (pendingCapture != null || retainingCapture) {
             result.error("scan_busy", "A document scan is already active.", null)
             return
         }
@@ -277,7 +304,7 @@ class ScanChannel(private val activity: FlutterActivity) {
     }
 
     private fun capturePhoto(result: MethodChannel.Result) {
-        if (pendingCapture != null) {
+        if (pendingCapture != null || retainingCapture) {
             result.error("scan_busy", "A capture is already active.", null)
             return
         }
@@ -320,12 +347,42 @@ class ScanChannel(private val activity: FlutterActivity) {
             false
         }
 
-    private fun retainCapture(
+    private fun retainScannerCapture(
         pageUris: List<Uri>,
         pdfUri: Uri?,
         pageCount: Int,
         result: MethodChannel.Result?,
-    ): Boolean {
+    ) {
+        retainInBackground(result) { retainCapture(pageUris, pdfUri, pageCount) }
+    }
+
+    private fun retainInBackground(
+        result: MethodChannel.Result?,
+        operation: () -> CaptureRetention,
+    ) {
+        retainingCapture = true
+        executor.execute {
+            val retention = try {
+                operation()
+            } catch (_: Exception) {
+                CaptureRetention.Failure(
+                    code = "storage_unavailable",
+                    message = "Captured files could not be retained.",
+                    retryable = true,
+                )
+            }
+            activity.runOnUiThread {
+                retainingCapture = false
+                if (!closed) deliverRetention(result, retention)
+            }
+        }
+    }
+
+    private fun retainCapture(
+        pageUris: List<Uri>,
+        pdfUri: Uri?,
+        pageCount: Int,
+    ): CaptureRetention {
         val root = File(activity.filesDir, STORE_NAME)
         val captureDirectory = File(root, UUID.randomUUID().toString())
         try {
@@ -363,30 +420,39 @@ class ScanChannel(private val activity: FlutterActivity) {
                 throw IOException("capture contained no pages")
             }
             writeManifest(captureDirectory, pageCount, pageFiles, pdfFile)
-            result?.success(
+            return CaptureRetention.Success(
                 ScanResultPayload.completed(
                     pdfPath = pdfFile?.absolutePath,
                     pageCount = pageCount,
                     pagePaths = pageFiles.map(File::getAbsolutePath),
                 ),
             )
-            return true
         } catch (_: IntakeLimitExceededException) {
             captureDirectory.deleteRecursively()
-            result?.error(
-                "capture_too_large",
-                NativeIntakeLimits.CAPTURE_LIMIT_MESSAGE,
-                mapOf("retryable" to false),
+            return CaptureRetention.Failure(
+                code = "capture_too_large",
+                message = NativeIntakeLimits.CAPTURE_LIMIT_MESSAGE,
+                retryable = false,
             )
-            return false
         } catch (_: Exception) {
             captureDirectory.deleteRecursively()
-            result?.error(
-                "storage_unavailable",
-                "Captured files could not be retained.",
-                mapOf("retryable" to true),
+            return CaptureRetention.Failure(
+                code = "storage_unavailable",
+                message = "Captured files could not be retained.",
+                retryable = true,
             )
-            return false
+        }
+    }
+
+    private fun deliverRetention(result: MethodChannel.Result?, retention: CaptureRetention) {
+        when (retention) {
+            is CaptureRetention.Success -> result?.success(retention.payload)
+            is CaptureRetention.Failure ->
+                result?.error(
+                    retention.code,
+                    retention.message,
+                    mapOf("retryable" to retention.retryable),
+                )
         }
     }
 

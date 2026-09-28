@@ -135,7 +135,13 @@ class NativeAdapterInstrumentedTest {
             }
             bitmap.recycle()
 
-            ScanChannel(activity).onResume()
+            val recovered = ScanChannel(activity)
+            try {
+                recovered.onResume()
+                waitUntil { !pending.exists() && captureRoot.listFiles().orEmpty().any(File::isDirectory) }
+            } finally {
+                recovered.close()
+            }
 
             assertFalse(pending.exists())
             val capture = requireNotNull(captureRoot.listFiles()).single { it.isDirectory }
@@ -145,7 +151,13 @@ class NativeAdapterInstrumentedTest {
 
             captureRoot.deleteRecursively()
             assertTrue(pending.createNewFile())
-            ScanChannel(activity).onResume()
+            val invalid = ScanChannel(activity)
+            try {
+                invalid.onResume()
+                waitUntil { !pending.exists() }
+            } finally {
+                invalid.close()
+            }
             assertFalse(pending.exists())
             assertFalse(captureRoot.exists())
         } finally {

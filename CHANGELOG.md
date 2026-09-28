@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Copy Android document-scanner content-provider results and full-size Photo
+  output into protected app storage on a dedicated I/O thread so retention
+  cannot block the main thread.
 - Prepare Android's Google code-scanner module at install time and wait for
   missing-module delivery before opening the camera, including sideloaded builds.
 - Pin the compatible server tag, exact revision and API contract in release

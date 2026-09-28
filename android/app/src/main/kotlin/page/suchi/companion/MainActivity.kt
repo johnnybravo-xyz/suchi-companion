@@ -109,6 +109,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        scanChannel?.close()
         scanChannel = null
         shareChannel?.close()
         shareChannel = null

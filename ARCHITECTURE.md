@@ -205,9 +205,10 @@ PDFs and owns account binding, OCR, receipts, recovery and uploads.
 
 Native scanning first writes protected local files. Dart validates and stages
 them in the SQLite-backed queue before acknowledging native handoff. Android
-uses the platform scanner and server OCR fallback; iOS can attach validated
-Vision text. The Server OCR only setting omits device-recognized text from
-new upload attempts.
+copies platform-scanner provider results and full-size Photo output into the
+protected capture store on a dedicated serial I/O thread before replying to
+Dart, then uses server OCR fallback; iOS can attach validated Vision text. The
+Server OCR only setting omits device-recognized text from new upload attempts.
 
 The native scanner is also the image-quality boundary. Android uses Google Play
 services' ML Kit full scanner mode for automatic capture and edge detection,

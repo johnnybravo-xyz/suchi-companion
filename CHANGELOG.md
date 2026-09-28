@@ -33,9 +33,10 @@
 - Set the first-release floors to Android API 35 and iOS 26.0 while retaining
   Android target API 36. iOS distributes to iPhone only; Android remains
   resizable for large screens without claiming a tablet-specific interface.
-- Regenerate Android legacy, adaptive and monochrome launcher icons plus the
-  opaque iPhone and App Store catalog from committed canonical vectors. Remove
-  iPad-only icon slots and validate generated icon dimensions and alpha modes.
+- Match the web app's checklist mark across Android legacy, adaptive and
+  monochrome launcher icons plus the opaque iPhone and App Store catalog.
+  Generate every raster from committed canonical vectors, remove iPad-only
+  slots and validate dimensions and alpha modes.
 - Persist the downloaded offline representation's MIME type, byte count and
   SHA-256 digest independently from remote source metadata. Rehash copies on
   startup and use payload metadata for filenames, previews and native handoff,

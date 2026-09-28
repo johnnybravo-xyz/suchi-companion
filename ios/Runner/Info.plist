@@ -26,6 +26,11 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<false/>
+	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Suchi Companion scans documents, takes photos for your archive, and reads pairing QR codes.</string>
 	<key>NSLocalNetworkUsageDescription</key>

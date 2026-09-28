@@ -23,6 +23,8 @@
 - Run iOS builds with an explicit environment allowlist, disable Xcode shell
   environment logging, and fail the native-build canary if inherited secret
   values reach activity logs or build-data attachments.
+- Use one Runner property list for every iOS configuration. The packaged value
+  keeps local HTTP disabled by default and enables it only in Debug builds.
 - Set the first-release floors to Android API 26 and iOS 16 while retaining
   Android target API 36. iOS distributes to iPhone only; Android remains
   resizable for large screens without claiming a tablet-specific interface.

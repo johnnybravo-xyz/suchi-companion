@@ -33,10 +33,10 @@
 - Set the first-release floors to Android API 31 and iOS 26.0 while retaining
   Android target API 36. iOS distributes to iPhone only; Android remains
   resizable for large screens without claiming a tablet-specific interface.
-- Keep the existing opaque iPhone and App Store checklist icon. Use the
-  four-strike Companion mark, with its third strike blue, for Android legacy,
-  adaptive and monochrome launcher icons. Commit the source vectors and
-  generated rasters, remove iPad-only slots and preserve platform safe areas.
+- Use the four-strike Companion mark, with its third strike blue, for Android
+  legacy, adaptive and monochrome launcher icons plus the opaque iPhone and App
+  Store catalog. Commit the source vectors and generated rasters, remove
+  iPad-only slots and preserve platform safe areas.
 - Persist the downloaded offline representation's MIME type, byte count and
   SHA-256 digest independently from remote source metadata. Rehash copies on
   startup and use payload metadata for filenames, previews and native handoff,

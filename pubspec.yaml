@@ -51,12 +51,12 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/brand/suchi-tile.png
-  image_path_android: assets/brand/suchi-mark.png
+  image_path: assets/brand/suchi-mark.png
+  image_path_android: assets/brand/suchi-mark-android.png
   adaptive_icon_background: '#FAFAF8'
-  adaptive_icon_foreground: assets/brand/suchi-mark.png
+  adaptive_icon_foreground: assets/brand/suchi-mark-android.png
   adaptive_icon_foreground_inset: 20
-  adaptive_icon_monochrome: assets/brand/suchi-mark-monochrome.png
+  adaptive_icon_monochrome: assets/brand/suchi-mark-android-monochrome.png
   background_color_ios: '#FAFAF8'
   remove_alpha_ios: true
   min_sdk_android: 31

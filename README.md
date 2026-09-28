@@ -259,3 +259,16 @@ mobile-security contact. The owner must name one before releasing the
 companion; do not send mobile reports to a guessed address.
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for pinned tools and project checks.
+
+## License
+
+Copyright (c) 2026 Ritesh Shrivastav. Suchi Companion is available under two
+licenses:
+
+- **[GNU Affero General Public License v3.0](LICENSE)** — free for everyone.
+- **Commercial license** — for distributors who cannot accept the AGPL terms.
+  Write to contact@suchi.page.
+
+Third-party components, bundled fonts and their terms are recorded in
+[NOTICE](NOTICE) and exposed in the app under **More → About → Open-source
+licenses**.

@@ -26,9 +26,9 @@ check.
 | Rollout | Manual, coordinated 100% release after all mandatory gates pass |
 
 `tool/toolchain.json` is the machine-readable authority for the compatible server
-revision, API version, and pinned build tools. The exact tagged mobile source must
-be public at <https://github.com/johnnybravo-xyz/suchi-mobile> before distributing
-its binaries.
+tag, exact revision, API version, and pinned build tools. The exact tagged mobile
+source must be public at <https://github.com/johnnybravo-xyz/suchi-mobile> before
+distributing its binaries.
 
 ## Release order and evidence
 
@@ -75,6 +75,12 @@ Before tagging, also require all of the following in CI or the named native tool
   secrets, debug credentials, personal data, stale identifiers, local absolute
   paths, or unrelated APKs;
 - no unresolved data-loss or security defect and no failed mandatory gate.
+
+GitHub Actions repeats the source, pinned API-fixture, Android debug
+lint/build, iOS simulator build, and inherited-secret canary gates on pushes to
+`main`, pull requests, and manual dispatch. Signed artifacts, emulators,
+physical devices, store consoles, and external services remain separate gates
+because a hosted source workflow cannot establish them.
 
 `design/scanner-feasibility.json` is the structured scanner evidence record. Its
 release gate must remain false until the required physical matrix and signed

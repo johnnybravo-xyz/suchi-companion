@@ -33,7 +33,7 @@ check: icons-check
 	flutter test
 
 api-check:
-	dart run tool/sync_api_fixtures.dart --check --server-root "$(SERVER_ROOT)"
+	python3 tool/sync_api_fixtures.py --check --server-root "$(SERVER_ROOT)"
 
 android:
 	flutter build apk --debug

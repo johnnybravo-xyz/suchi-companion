@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Pin the compatible server tag, exact revision and API contract in release
+  metadata, and verify mirrored API fixtures with standalone Python before
+  Flutter setup.
+- Run pinned Flutter, API-contract, Android lint/build, iOS isolated-build, and
+  Xcode secret-canary gates on every main push and pull request.
 - Raise subdued text, semantic status colors and control outlines to WCAG AA
   contrast in light and dark themes, including actions on the camera surface.
 - Keep document selectors and swipe actions at least 48 by 48 logical pixels

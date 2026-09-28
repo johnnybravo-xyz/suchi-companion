@@ -241,9 +241,9 @@ disclosure](https://developers.google.com/ml-kit/android-data-disclosure) and
 [Google code scanner
 guide](https://developers.google.com/ml-kit/vision/barcode-scanning/code-scanner).
 
-The exact compatible server revision and API version are recorded in
-[`tool/toolchain.json`](tool/toolchain.json). The mirrored response fixtures in
-`test/fixtures/api/v1` keep the two implementations on the same wire contract.
+The compatible server tag, exact revision, API version, and contract are recorded
+in [`tool/toolchain.json`](tool/toolchain.json). The mirrored response fixtures
+in `test/fixtures/api/v1` keep the two implementations on the same wire contract.
 
 The first release target and every mandatory release gate are maintained in
 [RELEASE.md](RELEASE.md). That runbook covers signed physical-device checks,

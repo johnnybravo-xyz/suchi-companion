@@ -23,6 +23,7 @@ ALLOWED_PARENT_VARIABLES = (
     "LOGNAME",
     "LANG",
     "LC_ALL",
+    "FLUTTER_ROOT",
     "DEVELOPER_DIR",
 )
 SENSITIVE_VARIABLE = re.compile(
@@ -38,8 +39,14 @@ def isolated_environment(parent: dict[str, str]) -> dict[str, str]:
         for name in ALLOWED_PARENT_VARIABLES
         if parent.get(name)
     }
+    tool_path = TOOL_PATH
+    if flutter_root := parent.get("FLUTTER_ROOT"):
+        flutter_bin = Path(flutter_root).resolve() / "bin"
+        if not (flutter_bin / "flutter").is_file():
+            raise SystemExit(f"FLUTTER_ROOT does not contain bin/flutter: {flutter_root}")
+        tool_path = f"{flutter_bin}:{tool_path}"
     environment.update(
-        PATH=TOOL_PATH,
+        PATH=tool_path,
         CI="true",
         GIT_TERMINAL_PROMPT="0",
     )

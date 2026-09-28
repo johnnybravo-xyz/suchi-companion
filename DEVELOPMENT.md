@@ -94,7 +94,7 @@ rules. The v0.1.0 release candidate pins an exact compatible server revision.
 
 ```sh
 flutter pub get
-dart run tool/sync_api_fixtures.dart --check --server-root ../suchi
+python3 tool/sync_api_fixtures.py --check --server-root ../suchi
 dart format --output=none --set-exit-if-changed .
 flutter analyze --fatal-infos
 flutter test

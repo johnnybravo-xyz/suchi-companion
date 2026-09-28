@@ -15,8 +15,7 @@
 !/lib/
 !/lib/**
 
-# Design tooling
-/node_modules/
+# Generated design evidence
 /design/screenshots/
 /test/goldens/
 

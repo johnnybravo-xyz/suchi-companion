@@ -33,10 +33,10 @@
 - Set the first-release floors to Android API 31 and iOS 26.0 while retaining
   Android target API 36. iOS distributes to iPhone only; Android remains
   resizable for large screens without claiming a tablet-specific interface.
-- Match the web app's checklist mark across Android legacy, adaptive and
-  monochrome launcher icons plus the opaque iPhone and App Store catalog.
-  Generate every raster from committed canonical vectors, remove iPad-only
-  slots and validate dimensions and alpha modes.
+- Keep the existing opaque iPhone and App Store checklist icon. Use the
+  four-strike Companion mark, with its third strike blue, for Android legacy,
+  adaptive and monochrome launcher icons. Commit the source vectors and
+  generated rasters, remove iPad-only slots and preserve platform safe areas.
 - Persist the downloaded offline representation's MIME type, byte count and
   SHA-256 digest independently from remote source metadata. Rehash copies on
   startup and use payload metadata for filenames, previews and native handoff,
@@ -68,9 +68,10 @@
   **← All documents** when returning from saved copies is available.
   Documents' search action now focuses Search's input; ordinary tab selection
   does not.
-- Match Android's launch mark to the iPhone's compact visual scale and keep the
-  complete rounded silhouette inside Android 12 splash and circular launcher
-  icon safe areas.
+- Restore Android's compact launcher scale and keep the complete rounded
+  silhouette inside Android 12 splash and circular launcher icon safe areas.
+  Use the four-strike mark on both native launch screens so the Flutter first
+  frame no longer swaps from the obsolete drawer mark.
 - Prepare free `0.1.0+1` release artifacts without payments, purchases,
   upgrades or Saved View entitlement gates, with corresponding source in the
   public companion repository.

@@ -83,12 +83,10 @@ A simulator build is a smoke test. Scanner, share-extension, signing, and releas
 Run `make deps` for the locked dependencies, then `make check`. Use
 `make api-check SERVER_ROOT=/path/to/suchi-checkout` against the exact server
 revision recorded in `tool/toolchain.json`. The check compares the selected
-checkout's wire fixtures with the companion's mirrored copies. `make icons`
-regenerates the committed Android and iPhone icon sets from the canonical SVG
-sources on macOS; `make check` rejects stale dimensions, alpha-bearing iOS
-outputs, divergent monochrome geometry and iPad-only catalog slots.
-`make android` and `make ios` build debug Android and unsigned iOS Simulator
-artifacts; neither publishes the app. `make` lists these targets.
+checkout's wire fixtures with the companion's mirrored copies. `make check`
+checks formatting, analyzer diagnostics and Flutter tests. `make android` and
+`make ios` build debug Android and unsigned iOS Simulator artifacts; neither
+publishes the app. `make` lists these targets.
 
 Read [ARCHITECTURE.md](ARCHITECTURE.md) before changing feature boundaries and
 [AGENTS.md](AGENTS.md) for the repository's implementation and verification

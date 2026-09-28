@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/brand/suchi-tile.svg" alt="Suchi Companion" width="112">
+  <img src="assets/brand/suchi-mark.svg" alt="Suchi Companion" width="112">
 </p>
 
 <h1 align="center">Suchi Companion</h1>

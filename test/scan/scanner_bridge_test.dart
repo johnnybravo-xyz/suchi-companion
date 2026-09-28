@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:suchi_mobile/scan/scanner_bridge.dart';
+import 'package:suchi_companion/scan/scanner_bridge.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

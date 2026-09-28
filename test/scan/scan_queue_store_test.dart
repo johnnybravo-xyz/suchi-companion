@@ -6,11 +6,11 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
-import 'package:suchi_mobile/auth/account_identity.dart';
-import 'package:suchi_mobile/scan/intake_limits.dart';
-import 'package:suchi_mobile/scan/scan_database.dart';
-import 'package:suchi_mobile/scan/scan_queue_store.dart';
-import 'package:suchi_mobile/scan/storage_protection.dart';
+import 'package:suchi_companion/auth/account_identity.dart';
+import 'package:suchi_companion/scan/intake_limits.dart';
+import 'package:suchi_companion/scan/scan_database.dart';
+import 'package:suchi_companion/scan/scan_queue_store.dart';
+import 'package:suchi_companion/scan/storage_protection.dart';
 
 const _firstId = '11111111-1111-4111-8111-111111111111';
 const _secondId = '22222222-2222-4222-8222-222222222222';

@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:suchi_mobile/app/app_licenses.dart';
-import 'package:suchi_mobile/more/about_sheet.dart';
-import 'package:suchi_mobile/theme/suchi_theme.dart';
+import 'package:suchi_companion/app/app_licenses.dart';
+import 'package:suchi_companion/more/about_sheet.dart';
+import 'package:suchi_companion/theme/suchi_theme.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -77,7 +77,7 @@ void main() {
       await tester.pump();
     }
     expect(launched, [
-      'https://github.com/johnnybravo-xyz/suchi-mobile',
+      'https://github.com/johnnybravo-xyz/suchi-companion',
       'https://suchi.page/privacy/',
       'https://suchi.page/support/',
       'https://suchi.page/security/',

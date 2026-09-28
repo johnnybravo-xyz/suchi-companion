@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:suchi_mobile/scan/storage_protection.dart';
+import 'package:suchi_companion/scan/storage_protection.dart';
 
 void main() {
   test('write preserves the 512 MiB free-space reserve', () async {

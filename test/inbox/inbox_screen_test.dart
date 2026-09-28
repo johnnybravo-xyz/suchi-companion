@@ -5,14 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:suchi_mobile/api/suchi_client.dart';
-import 'package:suchi_mobile/auth/credential_vault.dart';
-import 'package:suchi_mobile/auth/session_controller.dart';
-import 'package:suchi_mobile/documents/document_list_mode.dart';
-import 'package:suchi_mobile/documents/jd_category_store.dart';
-import 'package:suchi_mobile/documents/thumbnail_cache.dart';
-import 'package:suchi_mobile/inbox/inbox_screen.dart';
-import 'package:suchi_mobile/theme/suchi_theme.dart';
+import 'package:suchi_companion/api/suchi_client.dart';
+import 'package:suchi_companion/auth/credential_vault.dart';
+import 'package:suchi_companion/auth/session_controller.dart';
+import 'package:suchi_companion/documents/document_list_mode.dart';
+import 'package:suchi_companion/documents/jd_category_store.dart';
+import 'package:suchi_companion/documents/thumbnail_cache.dart';
+import 'package:suchi_companion/inbox/inbox_screen.dart';
+import 'package:suchi_companion/theme/suchi_theme.dart';
 
 const _token =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';

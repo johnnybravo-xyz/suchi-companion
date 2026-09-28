@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:suchi_mobile/api/suchi_client.dart';
-import 'package:suchi_mobile/auth/credential_vault.dart';
-import 'package:suchi_mobile/auth/session_controller.dart';
-import 'package:suchi_mobile/detail/document_text_screen.dart';
-import 'package:suchi_mobile/theme/suchi_theme.dart';
+import 'package:suchi_companion/api/suchi_client.dart';
+import 'package:suchi_companion/auth/credential_vault.dart';
+import 'package:suchi_companion/auth/session_controller.dart';
+import 'package:suchi_companion/detail/document_text_screen.dart';
+import 'package:suchi_companion/theme/suchi_theme.dart';
 
 void main() {
   testWidgets(

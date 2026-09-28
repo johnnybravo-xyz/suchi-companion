@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:suchi_mobile/main.dart';
-import 'package:suchi_mobile/more/more_screen.dart';
-import 'package:suchi_mobile/shell/shell.dart';
-import 'package:suchi_mobile/theme/suchi_theme.dart';
+import 'package:suchi_companion/main.dart';
+import 'package:suchi_companion/more/more_screen.dart';
+import 'package:suchi_companion/shell/shell.dart';
+import 'package:suchi_companion/theme/suchi_theme.dart';
 
 import '../support/mobile_app_harness.dart';
 

@@ -91,7 +91,7 @@
   extension. Suchi remains the server/web product name. Replace the unpublished
   development-only app ID with `page.suchi.companion` on Android and iOS;
   the iOS extension and Runner use `group.page.suchi.companion`. This is a
-  fresh install without migration or aliases. The Dart package `suchi_mobile`,
+  fresh install without migration or aliases. The Dart package `suchi_companion`,
   pairing links and logical private-storage keys remain unchanged.
 - Require the current server identity and pairing contracts. Account, queue,
   capture, share, search and Saved View boundaries now include the token's
@@ -160,8 +160,8 @@
 - Compact pairing and Search introductions without changing trust or query flows.
 - Synchronize Saved Views through the paired Suchi server on Android and iOS.
   Named queries can be created, opened as an exact Documents scope and deleted;
-  flat legacy and snapshot filters are preserved, while unsupported future
-  filters remain visible and fail closed without a partial document request.
+  flat legacy and snapshot filters are preserved, while unsupported filter
+  shapes remain visible and fail closed without a partial document request.
 - Keep selected full documents in protected, backup-excluded, account-scoped
   storage. Atomic retention, restart reconciliation and 64 MiB bounds protect
   verified files without persisting previews or extracted text. Native viewers

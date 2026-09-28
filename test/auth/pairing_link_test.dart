@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:suchi_mobile/auth/pairing_link.dart';
+import 'package:suchi_companion/auth/pairing_link.dart';
 
 const _code =
     'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';

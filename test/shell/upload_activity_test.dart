@@ -8,17 +8,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:suchi_mobile/api/api_models.dart';
-import 'package:suchi_mobile/api/suchi_client.dart';
-import 'package:suchi_mobile/auth/account_identity.dart';
-import 'package:suchi_mobile/main.dart';
-import 'package:suchi_mobile/scan/network_monitor.dart';
-import 'package:suchi_mobile/scan/scan_database.dart';
-import 'package:suchi_mobile/scan/scan_queue_screen.dart';
-import 'package:suchi_mobile/scan/scan_queue_store.dart';
-import 'package:suchi_mobile/scan/scanner_bridge.dart';
-import 'package:suchi_mobile/share/share_bridge.dart';
-import 'package:suchi_mobile/shell/shell.dart';
+import 'package:suchi_companion/api/api_models.dart';
+import 'package:suchi_companion/api/suchi_client.dart';
+import 'package:suchi_companion/auth/account_identity.dart';
+import 'package:suchi_companion/main.dart';
+import 'package:suchi_companion/scan/network_monitor.dart';
+import 'package:suchi_companion/scan/scan_database.dart';
+import 'package:suchi_companion/scan/scan_queue_screen.dart';
+import 'package:suchi_companion/scan/scan_queue_store.dart';
+import 'package:suchi_companion/scan/scanner_bridge.dart';
+import 'package:suchi_companion/share/share_bridge.dart';
+import 'package:suchi_companion/shell/shell.dart';
 
 import '../support/mobile_app_harness.dart';
 

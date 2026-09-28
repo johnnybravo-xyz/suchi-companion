@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:suchi_mobile/main.dart';
-import 'package:suchi_mobile/scan/scanner_bridge.dart';
-import 'package:suchi_mobile/share/share_bridge.dart';
-import 'package:suchi_mobile/shell/shell.dart';
-import 'package:suchi_mobile/theme/suchi_theme.dart';
+import 'package:suchi_companion/main.dart';
+import 'package:suchi_companion/scan/scanner_bridge.dart';
+import 'package:suchi_companion/share/share_bridge.dart';
+import 'package:suchi_companion/shell/shell.dart';
+import 'package:suchi_companion/theme/suchi_theme.dart';
 
 import '../support/mobile_app_harness.dart';
 

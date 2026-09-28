@@ -4,14 +4,14 @@ import 'dart:io';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
-import 'package:suchi_mobile/auth/account_identity.dart';
-import 'package:suchi_mobile/scan/intake_limits.dart';
-import 'package:suchi_mobile/scan/scan_capture_controller.dart';
-import 'package:suchi_mobile/scan/scan_database.dart';
-import 'package:suchi_mobile/scan/native_capture_store.dart';
-import 'package:suchi_mobile/scan/scan_queue_store.dart';
-import 'package:suchi_mobile/scan/scanner_bridge.dart';
-import 'package:suchi_mobile/scan/storage_protection.dart';
+import 'package:suchi_companion/auth/account_identity.dart';
+import 'package:suchi_companion/scan/intake_limits.dart';
+import 'package:suchi_companion/scan/scan_capture_controller.dart';
+import 'package:suchi_companion/scan/scan_database.dart';
+import 'package:suchi_companion/scan/native_capture_store.dart';
+import 'package:suchi_companion/scan/scan_queue_store.dart';
+import 'package:suchi_companion/scan/scanner_bridge.dart';
+import 'package:suchi_companion/scan/storage_protection.dart';
 
 final _origin = Uri.parse('https://suchi.example.com');
 final _png = base64Decode(

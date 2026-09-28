@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:suchi_mobile/theme/suchi_theme.dart';
+import 'package:suchi_companion/theme/suchi_theme.dart';
 
 void main() {
   test('semantic text colors meet WCAG AA across app surfaces', () {

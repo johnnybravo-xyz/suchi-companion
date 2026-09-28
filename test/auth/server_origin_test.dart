@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:suchi_mobile/auth/server_origin.dart';
+import 'package:suchi_companion/auth/server_origin.dart';
 
 void main() {
   group('ServerOrigin', () {

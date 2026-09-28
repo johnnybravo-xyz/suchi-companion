@@ -1,10 +1,10 @@
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:suchi_mobile/documents/document_list_mode.dart';
-import 'package:suchi_mobile/more/app_settings_controller.dart';
-import 'package:suchi_mobile/scan/scan_database.dart';
-import 'package:suchi_mobile/scan/scanner_bridge.dart';
+import 'package:suchi_companion/documents/document_list_mode.dart';
+import 'package:suchi_companion/more/app_settings_controller.dart';
+import 'package:suchi_companion/scan/scan_database.dart';
+import 'package:suchi_companion/scan/scanner_bridge.dart';
 
 void main() {
   late ScanDatabase database;

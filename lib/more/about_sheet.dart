@@ -4,7 +4,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../widgets/suchi_widgets.dart';
 
-final _sourceUri = Uri.parse('https://github.com/johnnybravo-xyz/suchi-mobile');
+final _sourceUri = Uri.parse(
+  'https://github.com/johnnybravo-xyz/suchi-companion',
+);
 final _privacyUri = Uri.parse('https://suchi.page/privacy/');
 final _supportUri = Uri.parse('https://suchi.page/support/');
 final _securityUri = Uri.parse('https://suchi.page/security/');

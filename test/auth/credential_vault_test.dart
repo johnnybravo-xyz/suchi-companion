@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:suchi_mobile/api/api_models.dart';
-import 'package:suchi_mobile/auth/credential_vault.dart';
+import 'package:suchi_companion/api/api_models.dart';
+import 'package:suchi_companion/auth/credential_vault.dart';
 
 const _key = 'suchi.mobile.credentials.v1';
 const _token =

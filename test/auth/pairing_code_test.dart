@@ -5,10 +5,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:suchi_mobile/api/suchi_client.dart';
-import 'package:suchi_mobile/auth/credential_vault.dart';
-import 'package:suchi_mobile/auth/pairing_link.dart';
-import 'package:suchi_mobile/auth/session_controller.dart';
+import 'package:suchi_companion/api/suchi_client.dart';
+import 'package:suchi_companion/auth/credential_vault.dart';
+import 'package:suchi_companion/auth/pairing_link.dart';
+import 'package:suchi_companion/auth/session_controller.dart';
 
 const _code =
     'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';

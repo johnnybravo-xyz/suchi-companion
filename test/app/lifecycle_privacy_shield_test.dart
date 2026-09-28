@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:suchi_mobile/app/lifecycle_privacy_shield.dart';
+import 'package:suchi_companion/app/lifecycle_privacy_shield.dart';
 
 void main() {
   testWidgets('conceals app content whenever the app is inactive', (

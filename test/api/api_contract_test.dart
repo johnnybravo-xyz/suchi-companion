@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:suchi_mobile/api/api_error.dart';
-import 'package:suchi_mobile/api/api_models.dart';
-import 'package:suchi_mobile/api/suchi_client.dart';
+import 'package:suchi_companion/api/api_error.dart';
+import 'package:suchi_companion/api/api_models.dart';
+import 'package:suchi_companion/api/suchi_client.dart';
 
 const _token =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';

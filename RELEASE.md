@@ -27,7 +27,7 @@ check.
 
 `tool/toolchain.json` is the machine-readable authority for the compatible server
 tag, exact revision, API version, and pinned build tools. The exact tagged mobile
-source must be public at <https://github.com/johnnybravo-xyz/suchi-mobile> before
+source must be public at <https://github.com/johnnybravo-xyz/suchi-companion> before
 distributing its binaries.
 
 ## Release order and evidence

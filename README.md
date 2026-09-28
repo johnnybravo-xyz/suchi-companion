@@ -8,7 +8,7 @@ The Android/iOS app and share surfaces use **Suchi Companion** under the new
 `page.suchi.companion` app ID; iOS Runner and Share Extension share only
 `group.page.suchi.companion`. This v0.1.0 identity starts with empty local data,
 not an update or migration from the old development identity. The repository
-and Dart package remain `suchi-mobile` and `suchi_mobile`; `suchi://pair` stays.
+and Dart package remain `suchi-companion` and `suchi_companion`; `suchi://pair` stays.
 
 The first tap on the raised centre camera button opens Scanner directly.
 Later taps use your last-picked mode. Touch and hold the button for a light
@@ -215,7 +215,7 @@ sensitive previews remain hidden.
 Saved Views are synchronized with the paired Suchi server. Save the current
 query, open a View as the active Documents scope, or delete it from either
 platform. The app accepts the pinned server's flat and snapshot filter shapes;
-unsupported future filters stay visible but never issue a partial document
+unsupported filter shapes stay visible but never issue a partial document
 request.
 
 **More → Explore Suchi** opens the public `https://suchi.page` site in the

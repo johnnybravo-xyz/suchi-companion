@@ -5,12 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:intl/intl.dart';
-import 'package:suchi_mobile/api/api_models.dart';
-import 'package:suchi_mobile/api/suchi_client.dart';
-import 'package:suchi_mobile/documents/document_list_mode.dart';
-import 'package:suchi_mobile/documents/thumbnail_cache.dart';
-import 'package:suchi_mobile/theme/suchi_theme.dart';
-import 'package:suchi_mobile/widgets/suchi_widgets.dart';
+import 'package:suchi_companion/api/api_models.dart';
+import 'package:suchi_companion/api/suchi_client.dart';
+import 'package:suchi_companion/documents/document_list_mode.dart';
+import 'package:suchi_companion/documents/thumbnail_cache.dart';
+import 'package:suchi_companion/theme/suchi_theme.dart';
+import 'package:suchi_companion/widgets/suchi_widgets.dart';
 
 void main() {
   testWidgets(

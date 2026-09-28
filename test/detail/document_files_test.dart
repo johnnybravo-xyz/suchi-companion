@@ -5,10 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:suchi_mobile/api/api_error.dart';
-import 'package:suchi_mobile/api/suchi_client.dart';
-import 'package:suchi_mobile/detail/document_files.dart';
-import 'package:suchi_mobile/scan/storage_protection.dart';
+import 'package:suchi_companion/api/api_error.dart';
+import 'package:suchi_companion/api/suchi_client.dart';
+import 'package:suchi_companion/detail/document_files.dart';
+import 'package:suchi_companion/scan/storage_protection.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

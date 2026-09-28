@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
-import 'package:suchi_mobile/scan/scan_database.dart';
+import 'package:suchi_companion/scan/scan_database.dart';
 
 void main() {
   test('creates the unreleased queue schema at version one', () async {

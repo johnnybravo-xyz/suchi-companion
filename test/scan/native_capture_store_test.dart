@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
-import 'package:suchi_mobile/scan/native_capture_store.dart';
+import 'package:suchi_companion/scan/native_capture_store.dart';
 
 void main() {
   late Directory temporary;

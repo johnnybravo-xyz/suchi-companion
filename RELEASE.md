@@ -68,7 +68,7 @@ Before tagging, also require all of the following in CI or the named native tool
 - formatting, analyzer, Flutter tests, Drift validation, icon validation,
   dependency/license inventory, API fixture compatibility, and secret scans;
 - Android lint/build plus native tests, with emulator or device coverage at APIs
-  26 and 36;
+  31 and 36;
 - iOS native tests on the oldest supported iOS version and the current version;
 - release archive and bundle checks described below;
 - a clean source archive containing the required generated/native files and no
@@ -87,9 +87,13 @@ must not be copied into source or bundled into an app artifact. The companion
 uses the server's existing authorization and review contracts; it does not carry
 a second trust or approval engine.
 
-`design/scanner-feasibility.json` is the structured scanner evidence record. Its
-release gate must remain false until the required physical matrix and signed
-artifact checks have actually passed.
+Keep the scanner evidence record with the private release evidence. It must name
+the mobile commit, signed-artifact SHA-256 and certificate fingerprint, server
+commit and immutable image digest, device model and OS/API version, test time,
+tester, each scenario and its observed result, failures, fixes and reruns. Mark
+the scanner gate passed only after the signed artifact completes the physical
+matrix below; source inspection, emulator results and adapter tests are supporting
+evidence, not substitutes.
 
 ## Functional and physical-device gates
 
@@ -100,7 +104,9 @@ Cover:
 - QR and pasted-link pairing, device naming, token revocation, account switching,
   offline re-verification, and sign-out recovery;
 - document scanner, Photo mode, Files/iCloud, Photos, cold and warm OS shares,
-  large batches, locked-device/background recovery, retry, and discard;
+  content-provider imports, large and multi-page inputs, cancellation,
+  locked-device/background recovery, retry, discard, queue recovery and account
+  transitions;
 - image and PDF uploads through server processing, filing, search, previews,
   full-file handoff, edits, Trash, and restoration;
 - interrupted, cancelled, corrupted, oversized, type-mismatched, bounded, and
@@ -157,7 +163,7 @@ real deployed pages, not redirects to a generic landing page or placeholder:
 - <https://suchi.page/privacy/>
 - <https://suchi.page/support/>
 - <https://suchi.page/security/>
-- <https://suchi.page/mobile/>
+- <https://suchi.page/> and its `#mobile-showcase` section
 
 Verify monitored `privacy@suchi.page`, `support@suchi.page`, and
 `security@suchi.page` mailboxes end to end. The privacy policy and store answers
@@ -182,6 +188,8 @@ For both stores:
   the signed release build; complete content, privacy/data, rights, encryption,
   target-audience, advertising, and reviewer-access declarations from the final
   dependency and permission inventories;
+- record worldwide availability, free pricing with no ads or purchases, and the
+  confirmed EU Digital Services Act non-trader status in both consoles;
 - use only approved public privacy, support, security, source, and mobile URLs;
 - reassess mutable store rules, account verification, and DSA trader status on
   submission day rather than relying on an old checklist; and

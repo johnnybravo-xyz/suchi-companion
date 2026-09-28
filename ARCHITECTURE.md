@@ -308,7 +308,9 @@ for freshness comparison; it is never treated as the downloaded payload digest.
 Downloads use the full `/download` endpoint, are account-bound, cancellable and
 capped at 64 MiB. Payload and manifest are staged and flushed before the
 directory rename publishes them; a failed update leaves the previous verified
-copy intact. Startup follows no links, rehashes committed and quarantined
+copy intact. There is no aggregate app-defined offline quota; available device
+capacity and the 512 MiB reserve bound the collection. Startup follows no links,
+rehashes committed and quarantined
 payloads, retains valid quarantine for rollback or explicit cleanup, deletes
 staging/malformed/unknown/corrupt entries and retains only the newest valid
 committed duplicate. Thumbnails, email HTML and extracted text are never
@@ -464,4 +466,4 @@ bounds, Unicode paging and 200% text on Android/iOS layouts.
 `make android` and `make ios` check native integration builds. Platform-channel
 tests and simulator runs validate adapters, not physical camera acquisition,
 real share recipients or signed distribution. Physical-device and signed-release
-evidence is tracked in `design/scanner-feasibility.json`.
+evidence follows the private record requirements in [RELEASE.md](RELEASE.md).

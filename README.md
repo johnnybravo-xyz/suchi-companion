@@ -32,8 +32,9 @@ Current source line: **v0.1.0**. The app uses package ID
 
 Camera, picker, share, queue, temporary export and offline writes preserve a
 512 MiB free-space reserve. Individual staged or downloaded files are limited
-to 64 MiB. Queue and offline files are stored in device-protected,
-backup-excluded app storage.
+to 64 MiB. There is no separate aggregate app quota: retained files are bounded
+by available device capacity and the reserve. Queue and offline files are stored
+in device-protected, backup-excluded app storage.
 
 ## Pairing
 

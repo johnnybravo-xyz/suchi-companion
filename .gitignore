@@ -15,8 +15,7 @@
 !/lib/
 !/lib/**
 
-# Generated design evidence
-/design/screenshots/
+# Generated test output
 /test/goldens/
 
 # Android

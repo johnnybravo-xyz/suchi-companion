@@ -58,4 +58,4 @@ flutter_launcher_icons:
   adaptive_icon_monochrome: assets/brand/suchi-tile-monochrome.png
   background_color_ios: '#FAFAF8'
   remove_alpha_ios: true
-  min_sdk_android: 26
+  min_sdk_android: 35

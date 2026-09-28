@@ -27,18 +27,20 @@ sdkmanager --licenses
 sdkmanager \
   'platform-tools' \
   'emulator' \
+  'platforms;android-35' \
   'platforms;android-36' \
   'build-tools;36.0.0' \
   'cmake;3.22.1' \
   'ndk;28.2.13676358' \
-  'system-images;android-26;google_apis;arm64-v8a' \
+  'system-images;android-35;google_apis;arm64-v8a' \
   'system-images;android-36;google_apis_playstore;arm64-v8a'
 ```
 
-The pinned Flutter 3.47.2 build uses compile/target API 36, AGP 9.1.0 and
-Gradle 9.3.1 even when a newer Android platform is installed.
-`flutter_secure_storage` stays on the compatible 10.3.1 security line because
-11.x requires compile SDK 37. Native share adapters remain in-repository.
+The pinned Flutter 3.47.2 build uses API 35 as its minimum and
+compile/target API 36 with AGP 9.1.0 and Gradle 9.3.1 even when a newer Android
+platform is installed. `flutter_secure_storage` stays on the compatible 10.3.1
+security line because 11.x requires compile SDK 37. Native share adapters remain
+in-repository.
 
 Dependency reviews follow Suchi's `../suchi/hack/pin-bumper.sh`: previous stable
 release (N−1), no downgrades, and compatible parent constraints. Flutter and Dart
@@ -53,9 +55,9 @@ just to raise transitive version numbers.
 Install full Xcode 27.0 from the App Store, select it with `xcode-select`, run
 first-launch setup, and install the recorded simulator runtimes. Command Line
 Tools alone cannot build the iOS target. The deployment floor is explicitly
-iOS 16.0 for the iPhone app, share extension and native tests; do not silently
-inherit a higher Xcode-recommended target. Xcode 27.0 with the iOS 26.5 simulator
-was exercised, but that does not establish iOS 16 or physical-device behavior.
+iOS 26.0 for the iPhone app, share extension and native tests. Xcode 27.0 with
+the installed iOS 26.5 and iOS 27.0 simulator runtimes is the supported test
+range.
 
 ## Verify the host
 

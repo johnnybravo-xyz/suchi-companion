@@ -12,8 +12,8 @@ its iOS Runner and Share Extension share `group.page.suchi.companion`.
 This is a fresh install without migration from the old development identity.
 All five Flutter/native channels use `page.suchi.companion/` with the
 `pairing`, `documents`, `scan`, `share` and `storage` suffixes.
-The iOS distribution targets iPhone only with iOS 16 as its floor. Android
-targets API 36 with API 26 as its floor; its activity remains resizable for
+The iOS distribution targets iPhone only with iOS 26.0 as its floor. Android
+targets API 36 with API 35 as its floor; its activity remains resizable for
 large-screen sideloading, without claiming a tablet-specific interface.
 
 ## Ownership
@@ -136,8 +136,8 @@ it does not store the image or result. Neither adapter opens URLs or handles
 account credentials. The channel also exposes `deviceName` without opening the
 scanner:
 Android reads `Settings.Global.DEVICE_NAME` with `Build.MODEL` fallback;
-iOS uses `UIDevice.current.name`. iOS 16+ may return a generic name without
-Apple's user-assigned-device-name entitlement; no entitlement is added.
+iOS uses `UIDevice.current.name`, which may return a generic name without Apple's
+user-assigned-device-name entitlement; no entitlement is added.
 Name discovery is bounded to two seconds, ignores results after a session
 transition, and falls back to an editable platform label. The confirmation form
 owns the transient name and validates it before connecting. No hardware IDs or

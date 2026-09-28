@@ -17,7 +17,7 @@ final class PairingChannel {
         return
       }
       if call.method == "deviceName" {
-        // iOS 16+ may expose only "iPhone"/"iPad"; the pairing UI lets users edit it.
+        // iOS may expose only "iPhone"; the pairing UI lets users edit it.
         result(UIDevice.current.name)
         return
       }

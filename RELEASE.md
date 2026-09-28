@@ -17,10 +17,10 @@ check.
 | --- | --- |
 | Marketing version and source tag | `0.1.0` and signed annotated tag `v0.1.0` |
 | First submitted build | `1`; increment after any submitted-code change |
-| iOS app | iPhone only, iOS 16 minimum, bundle ID `page.suchi.companion` |
+| iOS app | iPhone only, iOS 26.0 minimum, bundle ID `page.suchi.companion` |
 | iOS extension | `page.suchi.companion.ShareExtension` |
 | Shared App Group | `group.page.suchi.companion` on both iOS targets |
-| Android app | API 26 minimum, target API 36, application ID `page.suchi.companion` |
+| Android app | API 35 minimum, target API 36, application ID `page.suchi.companion` |
 | Mobile API | `suchi-companion-v1`, API version `1` |
 | Distribution | Free public app through Apple App Store and Google Play |
 | Rollout | Manual, coordinated 100% release after all mandatory gates pass |
@@ -125,7 +125,7 @@ Build a newly signed AAB with the backed-up upload key. Inspect the AAB and Play
 generated APKs, not an older local artifact. Verify:
 
 - package `page.suchi.companion`, version `0.1.0`, current build number, minimum
-  API 26, target API 36, and only intended permissions/components;
+  API 35, target API 36, and only intended permissions/components;
 - Play App Signing and the registered upload certificate;
 - arm64 libraries and 16 KiB ELF/ZIP alignment on a 16 KiB device or emulator;
 - production HTTPS enforcement, release network policy, launcher icons, notices,
@@ -139,7 +139,7 @@ Archive with the pinned Xcode version and paid distribution team. Inspect the
 archive, exported IPA, entitlements, embedded privacy manifests, generated privacy
 report, and signing identities. Verify:
 
-- iPhone-only distribution; iOS 16 minimum; app, extension, and App Group IDs
+- iPhone-only distribution; iOS 26.0 minimum; app, extension, and App Group IDs
   exactly match the contract above;
 - both targets are provisioned with only required capabilities and the App Group;
 - version/build, icons, permission strings, HTTPS policy, dependency notices,

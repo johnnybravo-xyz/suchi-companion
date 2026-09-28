@@ -370,9 +370,7 @@ final class ScanChannel: NSObject {
     let request = VNRecognizeTextRequest()
     request.recognitionLevel = .accurate
     request.usesLanguageCorrection = true
-    if #available(iOS 16.0, *) {
-      request.automaticallyDetectsLanguage = true
-    }
+    request.automaticallyDetectsLanguage = true
     let handler = VNImageRequestHandler(
       cgImage: cgImage,
       orientation: image.imageOrientation.cgImagePropertyOrientation,

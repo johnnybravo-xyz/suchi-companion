@@ -65,7 +65,7 @@
   },
   "server": {
     "path": "../suchi",
-    "compatible_ref": "a3a57d0a45ccb61e0de23dc2286c43da32746a8e",
+    "compatible_ref": "9644659e8b1362a0d4618498670fac448d5e0ada",
     "compatible_tag": "v0.1.0",
     "api_version": 1,
     "mobile_contract": "suchi-companion-v1"

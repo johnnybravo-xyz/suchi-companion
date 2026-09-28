@@ -4,10 +4,10 @@ Suchi Companion captures documents and reads a user-owned server archive. Flutte
 owns the shared Android/iOS interface; native adapters handle scanning, device
 storage protection and platform sharing. Suchi operates no ads, crash-reporting
 or document-relay service. Android's Google Play services ML Kit dependencies
-separately collect documented diagnostics and usage analytics. The companion is
-still pre-release and pins one exact compatible server revision.
+separately collect documented diagnostics and usage analytics. Companion
+v0.1.0 pins one exact compatible server revision.
 
-The unpublished Companion now uses `page.suchi.companion` on Android and iOS;
+Companion v0.1.0 uses `page.suchi.companion` on Android and iOS;
 its iOS Runner and Share Extension share `group.page.suchi.companion`.
 This is a fresh install without migration from the old development identity.
 All five Flutter/native channels use `page.suchi.companion/` with the

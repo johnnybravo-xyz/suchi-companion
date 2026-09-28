@@ -87,8 +87,7 @@ artifacts; neither publishes the app. `make` lists these targets.
 
 Read [ARCHITECTURE.md](ARCHITECTURE.md) before changing feature boundaries and
 [AGENTS.md](AGENTS.md) for the repository's implementation and verification
-rules. The companion remains pre-release and pins an exact compatible server
-revision.
+rules. The v0.1.0 release candidate pins an exact compatible server revision.
 
 ```sh
 flutter pub get

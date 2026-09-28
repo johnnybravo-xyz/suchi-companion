@@ -65,7 +65,7 @@
 - Match Android's launch mark to the iPhone's compact visual scale and keep the
   complete rounded silhouette inside Android 12 splash and circular launcher
   icon safe areas.
-- Prepare free `1.0.0+1` release candidate without payments, purchases,
+- Prepare free `0.1.0+1` release candidate without payments, purchases,
   upgrades or Saved View entitlement gates. Public store approval and source
   publication remain separate owner decisions.
 - Require HTTPS for all non-debug server origins, including restored tokens.

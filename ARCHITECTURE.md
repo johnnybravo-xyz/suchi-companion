@@ -129,12 +129,15 @@ precedes credential exchange; redirect responses are refused.
 
 The `page.suchi.companion/pairing` method channel's `scan` operation returns a QR
 string or null on cancellation. Android uses the Google Play services code
-scanner with auto-zoom; iOS uses AVFoundation. Google documents auto-zoom
-collection of a generated scanning-session ID, zoom changes and predicted barcode
-bounding-box coordinates. Google says QR image processing occurs on-device and
-it does not store the image or result. Neither adapter opens URLs or handles
-account credentials. The channel also exposes `deviceName` without opening the
-scanner:
+scanner with auto-zoom; its manifest requests install-time `barcode_ui` delivery,
+and the adapter verifies or installs the module before opening the scanner so
+sideloaded builds do not fail their first scan. Missing-module delivery contacts
+Google Play services after the user requests a scan. iOS uses AVFoundation.
+Google documents auto-zoom collection of a generated scanning-session ID, zoom
+changes and predicted barcode bounding-box coordinates. Google says QR image
+processing occurs on-device and it does not store the image or result. Neither
+adapter opens URLs or handles account credentials. The channel also exposes
+`deviceName` without opening the scanner:
 Android reads `Settings.Global.DEVICE_NAME` with `Build.MODEL` fallback;
 iOS uses `UIDevice.current.name`, which may return a generic name without Apple's
 user-assigned-device-name entitlement; no entitlement is added.

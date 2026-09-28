@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Prepare Android's Google code-scanner module at install time and wait for
+  missing-module delivery before opening the camera, including sideloaded builds.
 - Pin the compatible server tag, exact revision and API contract in release
   metadata, and verify mirrored API fixtures with standalone Python before
   Flutter setup.

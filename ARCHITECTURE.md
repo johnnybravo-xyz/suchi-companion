@@ -13,7 +13,7 @@ This is a fresh install without migration from the old development identity.
 All five Flutter/native channels use `page.suchi.companion/` with the
 `pairing`, `documents`, `scan`, `share` and `storage` suffixes.
 The iOS distribution targets iPhone only with iOS 26.0 as its floor. Android
-targets API 36 with API 35 as its floor; its activity remains resizable for
+targets API 36 with API 31 as its floor; its activity remains resizable for
 large-screen sideloading, without claiming a tablet-specific interface.
 
 ## Ownership

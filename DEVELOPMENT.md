@@ -36,9 +36,9 @@ sdkmanager \
   'system-images;android-36;google_apis_playstore;arm64-v8a'
 ```
 
-The pinned Flutter 3.47.2 build uses API 35 as its minimum and
-compile/target API 36 with AGP 9.1.0 and Gradle 9.3.1 even when a newer Android
-platform is installed. `flutter_secure_storage` stays on the compatible 10.3.1
+Suchi builds with API 31 as its minimum and compile/target API 36 with AGP
+9.1.0 and Gradle 9.3.1 even when a newer Android platform is installed.
+`flutter_secure_storage` stays on the compatible 10.3.1
 security line because 11.x requires compile SDK 37. Native share adapters remain
 in-repository.
 

@@ -7,7 +7,7 @@ Use this source-backed worksheet for the `0.1.0+1` artifacts. Recheck the stores
 ## Artifact identity and business model
 
 - iOS bundle: `page.suchi.companion`; Share Extension: `page.suchi.companion.ShareExtension`; App Group: `group.page.suchi.companion`; minimum iOS 26.0.
-- Android package: `page.suchi.companion`; minimum API 35; target API 36.
+- Android package: `page.suchi.companion`; minimum API 31; target API 36.
 - Free app. No advertising, in-app purchases, subscriptions, paid account creation or digital-goods sales.
 - Phone-focused. iOS is iPhone-only; Android is resizable without a tablet-specific claim.
 - Requires a user-selected, self-hosted Suchi server. The publisher does not provide or relay document hosting.

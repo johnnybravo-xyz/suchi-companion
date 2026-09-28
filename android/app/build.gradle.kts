@@ -41,7 +41,7 @@ android {
 
     defaultConfig {
         applicationId = "page.suchi.companion"
-        minSdk = 35
+        minSdk = 31
         targetSdk = 36
         testApplicationId = "page.suchi.companion.test"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

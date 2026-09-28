@@ -20,7 +20,7 @@ check.
 | iOS app | iPhone only, iOS 26.0 minimum, bundle ID `page.suchi.companion` |
 | iOS extension | `page.suchi.companion.ShareExtension` |
 | Shared App Group | `group.page.suchi.companion` on both iOS targets |
-| Android app | API 35 minimum, target API 36, application ID `page.suchi.companion` |
+| Android app | API 31 minimum, target API 36, application ID `page.suchi.companion` |
 | Mobile API | `suchi-companion-v1`, API version `1` |
 | Distribution | Free public app through Apple App Store and Google Play |
 | Rollout | Manual, coordinated 100% release after all mandatory gates pass |
@@ -109,7 +109,7 @@ Cover:
   write path;
 - Dynamic Type/text scaling, screen readers, focus/keyboard behavior, contrast,
   touch targets, destructive confirmations, and the lifecycle privacy shield;
-- app-switcher behavior on iPhone and on Android below and above API 31; and
+- app-switcher behavior on Android API 31 and on a newer Android release; and
 - scanner latency, perspective, rotation, lighting, glare/curvature guidance,
   page review, OCR quality, repeated capture cycles, and interruption recovery.
 
@@ -125,7 +125,7 @@ Build a newly signed AAB with the backed-up upload key. Inspect the AAB and Play
 generated APKs, not an older local artifact. Verify:
 
 - package `page.suchi.companion`, version `0.1.0`, current build number, minimum
-  API 35, target API 36, and only intended permissions/components;
+  API 31, target API 36, and only intended permissions/components;
 - Play App Signing and the registered upload certificate;
 - arm64 libraries and 16 KiB ELF/ZIP alignment on a 16 KiB device or emulator;
 - production HTTPS enforcement, release network policy, launcher icons, notices,

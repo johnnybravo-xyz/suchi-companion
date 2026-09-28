@@ -21,7 +21,9 @@ void main() {
     expect(packages, containsAll(['Schibsted Grotesk', 'Spline Sans Mono']));
   });
 
-  testWidgets('shows build, notices, and fixed public links', (tester) async {
+  testWidgets('shows build, licenses, and only the Suchi website link', (
+    tester,
+  ) async {
     PackageInfo.setMockInitialValues(
       appName: 'Suchi Companion',
       packageName: 'page.suchi.companion',
@@ -44,7 +46,6 @@ void main() {
       () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(launcher, null),
     );
-
     await tester.pumpWidget(
       MaterialApp(
         theme: SuchiTheme.light,
@@ -59,29 +60,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Version 0.1.0 · Build 7'), findsOneWidget);
-    expect(find.text('Source code'), findsOneWidget);
+    expect(find.text('Source code'), findsNothing);
     expect(find.text('Open-source licenses'), findsOneWidget);
-    expect(find.text('Privacy policy'), findsOneWidget);
-    expect(find.text('Support'), findsOneWidget);
-    expect(find.text('Security'), findsOneWidget);
+    expect(find.text('Privacy policy'), findsNothing);
+    expect(find.text('Support'), findsNothing);
+    expect(find.text('Security'), findsNothing);
 
-    for (final key in [
-      'about-source',
-      'about-privacy',
-      'about-support',
-      'about-security',
-    ]) {
-      final link = find.byKey(ValueKey(key));
-      await tester.scrollUntilVisible(link, 250);
-      await tester.tap(link);
-      await tester.pump();
-    }
-    expect(launched, [
-      'https://github.com/johnnybravo-xyz/suchi-companion',
-      'https://suchi.page/privacy/',
-      'https://suchi.page/support/',
-      'https://suchi.page/security/',
-    ]);
+    final website = find.byKey(const ValueKey('about-website'));
+    await tester.scrollUntilVisible(website, 250);
+    await tester.tap(website);
+    await tester.pump();
+    expect(launched, ['https://suchi.page/']);
 
     final licenses = find.byKey(const ValueKey('about-licenses'));
     await tester.scrollUntilVisible(licenses, -250);

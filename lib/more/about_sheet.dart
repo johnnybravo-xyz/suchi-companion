@@ -4,12 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../widgets/suchi_widgets.dart';
 
-final _sourceUri = Uri.parse(
-  'https://github.com/johnnybravo-xyz/suchi-companion',
-);
-final _privacyUri = Uri.parse('https://suchi.page/privacy/');
-final _supportUri = Uri.parse('https://suchi.page/support/');
-final _securityUri = Uri.parse('https://suchi.page/security/');
+final _websiteUri = Uri.parse('https://suchi.page/');
 
 class AboutSuchiSheet extends StatefulWidget {
   const AboutSuchiSheet({super.key});
@@ -21,16 +16,20 @@ class AboutSuchiSheet extends StatefulWidget {
 class _AboutSuchiSheetState extends State<AboutSuchiSheet> {
   late final Future<PackageInfo> _packageInfo = PackageInfo.fromPlatform();
 
-  Future<void> _open(Uri uri, String label) async {
+  Future<void> _openWebsite() async {
     bool opened;
     try {
-      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      opened = await launchUrl(
+        _websiteUri,
+        mode: LaunchMode.externalApplication,
+      );
     } catch (_) {
       opened = false;
     }
     if (!opened && mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('$label could not be opened.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Suchi website could not be opened.')),
+      );
     }
   }
 
@@ -49,20 +48,6 @@ class _AboutSuchiSheetState extends State<AboutSuchiSheet> {
           'GNU Affero General Public License v3.0 or a commercial license.',
     );
   }
-
-  Widget _externalLink({
-    required Key key,
-    required IconData icon,
-    required String title,
-    required Uri uri,
-  }) => ListTile(
-    key: key,
-    leading: Icon(icon),
-    title: Text(title),
-    subtitle: Text(uri.toString()),
-    trailing: const Icon(Icons.open_in_new),
-    onTap: () => _open(uri, title),
-  );
 
   @override
   Widget build(BuildContext context) => FutureBuilder<PackageInfo>(
@@ -93,7 +78,7 @@ class _AboutSuchiSheetState extends State<AboutSuchiSheet> {
             ),
           ),
           const SizedBox(height: 24),
-          const SectionLabel('Source and licenses'),
+          const SectionLabel('Licenses'),
           const SizedBox(height: 8),
           const Text(
             'Suchi Companion is available under the GNU Affero General Public '
@@ -101,12 +86,6 @@ class _AboutSuchiSheetState extends State<AboutSuchiSheet> {
             'cannot accept it.',
           ),
           const SizedBox(height: 8),
-          _externalLink(
-            key: const ValueKey('about-source'),
-            icon: Icons.code,
-            title: 'Source code',
-            uri: _sourceUri,
-          ),
           ListTile(
             key: const ValueKey('about-licenses'),
             leading: const Icon(Icons.description_outlined),
@@ -116,25 +95,15 @@ class _AboutSuchiSheetState extends State<AboutSuchiSheet> {
             onTap: () => _showLicenses(info),
           ),
           const SizedBox(height: 16),
-          const SectionLabel('Help and policies'),
+          const SectionLabel('Website'),
           const SizedBox(height: 8),
-          _externalLink(
-            key: const ValueKey('about-privacy'),
-            icon: Icons.privacy_tip_outlined,
-            title: 'Privacy policy',
-            uri: _privacyUri,
-          ),
-          _externalLink(
-            key: const ValueKey('about-support'),
-            icon: Icons.help_outline,
-            title: 'Support',
-            uri: _supportUri,
-          ),
-          _externalLink(
-            key: const ValueKey('about-security'),
-            icon: Icons.security_outlined,
-            title: 'Security',
-            uri: _securityUri,
+          ListTile(
+            key: const ValueKey('about-website'),
+            leading: const Icon(Icons.language_outlined),
+            title: const Text('suchi.page'),
+            subtitle: const Text('Privacy, support, security, and source'),
+            trailing: const Icon(Icons.open_in_new),
+            onTap: _openWebsite,
           ),
         ],
       );

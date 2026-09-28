@@ -34,8 +34,6 @@ class MoreScreen extends StatefulWidget {
 }
 
 class _MoreScreenState extends State<MoreScreen> {
-  static final _website = Uri.parse('https://suchi.page');
-
   bool _savingTheme = false;
   bool _savingOcr = false;
   bool _choosingCaptureMode = false;
@@ -62,20 +60,6 @@ class _MoreScreenState extends State<MoreScreen> {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('The Suchi web app could not be opened.')),
-      );
-    }
-  }
-
-  Future<void> _openWebsite(BuildContext context) async {
-    bool opened;
-    try {
-      opened = await launchUrl(_website, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      opened = false;
-    }
-    if (!opened && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('The Suchi website could not be opened.')),
       );
     }
   }
@@ -660,14 +644,6 @@ class _MoreScreenState extends State<MoreScreen> {
                       title: const Text('Privacy & storage'),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: _showPrivacyDetails,
-                    ),
-                    Divider(height: 1, thickness: 1, color: colors.line),
-                    ListTile(
-                      leading: const Icon(Icons.open_in_browser_outlined),
-                      title: const Text('Explore Suchi'),
-                      subtitle: const Text('suchi.page'),
-                      trailing: const Icon(Icons.open_in_new),
-                      onTap: () => _openWebsite(context),
                     ),
                     Divider(height: 1, thickness: 1, color: colors.line),
                     ListTile(

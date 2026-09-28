@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -95,27 +94,9 @@ void main() {
     await temporary.delete(recursive: true);
   });
 
-  testWidgets('offline More offers retry and opens the public website', (
-    tester,
-  ) async {
+  testWidgets('offline More offers retry and storage cleanup', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    const launcher = MethodChannel('plugins.flutter.io/url_launcher');
-    final launched = <String>[];
-    var opens = true;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(launcher, (call) async {
-          if (call.method != 'launch') return null;
-          final arguments = call.arguments as Map<Object?, Object?>;
-          launched.add(arguments['url'] as String);
-          expect(arguments['headers'], isEmpty);
-          expect(arguments['useWebView'], false);
-          return opens;
-        });
-    addTearDown(
-      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(launcher, null),
-    );
     await tester.pumpWidget(
       MaterialApp(
         theme: SuchiTheme.light,
@@ -216,17 +197,7 @@ void main() {
     await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
     expect(find.text('Privacy policy'), findsNothing);
-    await tester.scrollUntilVisible(find.text('Explore Suchi'), 300);
-    await tester.tap(find.text('Explore Suchi'));
-    await tester.pumpAndSettle();
-    expect(launched, ['https://suchi.page']);
-
-    opens = false;
-    await tester.tap(find.text('Explore Suchi'));
-    await tester.pumpAndSettle();
-    expect(find.text('The Suchi website could not be opened.'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
+    expect(find.text('Explore Suchi'), findsNothing);
 
     await tester.scrollUntilVisible(find.text('Sign out'), 300);
     await tester.tap(find.text('Sign out'));

@@ -245,14 +245,11 @@ The exact compatible server revision and API version are recorded in
 [`tool/toolchain.json`](tool/toolchain.json). The mirrored response fixtures in
 `test/fixtures/api/v1` keep the two implementations on the same wire contract.
 
-The first release candidate is `1.0.0+1`, not a published store version. Signed
-physical-device capture/share checks, public privacy/support/security contacts,
-a stable HTTPS reviewer server/account, store declarations and asset rights
-remain release gates. The source is AGPL-3.0; public corresponding-source
-delivery and Apple store EULA compatibility need owner/license-counsel approval
-before any binary distribution. The intended public mobile source location is
-`https://github.com/johnnybravo-xyz/suchi-mobile`; it must be published before
-release. The current Forgejo remote remains private.
+The first release target and every mandatory release gate are maintained in
+[RELEASE.md](RELEASE.md). That runbook covers signed physical-device checks,
+public policies and contacts, the reviewer server, store declarations,
+corresponding source, licensing approval, and coordinated publication. This
+README describes shipped behavior; it is not a store-readiness checklist.
 
 For server vulnerabilities, use the private GitHub Security Advisory form named
 in the [server security policy](https://github.com/johnnybravo-xyz/suchi/blob/main/SECURITY.md);

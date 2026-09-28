@@ -101,86 +101,10 @@ flutter build apk --debug
 
 Large-text behavior is covered by each feature's widget tests.
 
-## First release candidate: `1.0.0+1`
+## Release gates
 
-The iOS distribution is iPhone-only. Android remains resizable and installable
-on supported large-screen devices, but the first release is phone-focused and
-does not claim a tablet-specific interface.
-
-This is an **unpublished**, free build. Do not sign, upload, or change store
-metadata as part of ordinary development. The Flutter debug APK and unsigned
-iOS Simulator build are diagnostic artifacts, not store packages. An unsigned
-iOS Simulator app lacks the Keychain application identity: Security framework
-returns `-34018` and the app correctly refuses to read credentials. Do not
-disable secure storage to make that artifact appear paired; provision the app
-and extension properly for an actual signed-device check.
-
-Run `make api-check SERVER_ROOT=../suchi` against the pinned server commit,
-exercise handshake, pairing, upload and search with disposable accounts, then
-`make check`. Focused Dart checks include `test/auth`, `test/share`, `test/scan`,
-`test/shell` and `test/search`; native adapters need `RunnerTests` on iOS and
-connected Android instrumentation tests. Capture a fresh debug and a signed
-release-like build separately. A locally installed iOS Release-configuration app
-can still use an Apple Development profile; it is not an App Store distribution
-signature. A disposable Android release-mode emulator key is not a backed-up
-Play upload key or evidence of store readiness. Only debug permits
-private-LAN/localhost HTTP; release must refuse it before any saved token is
-used. Check merged packaged manifests rather than inferring permissions or ATS
-from source files.
-
-Verify the app-switcher snapshot on a physical iPhone and on Android both below
-and above API 31. Android 8–11 keeps `FLAG_SECURE` while the activity is open:
-Recents gets a blank system card, and screenshots/screen recording are unavailable
-there. Android 12+ and iOS use blurred live content, not a persisted last-screen
-image. A signed build alone does not prove the switcher transition.
-
-The owner must supply and verify these gates **before** claiming store readiness:
-
-- Verify the paid Apple team can register the new
-  `page.suchi.companion` Runner and `page.suchi.companion.ShareExtension`
-  bundle IDs and attach `group.page.suchi.companion` to both. Provision both
-  targets and exercise a physically signed iOS 16+ build. A Personal Team
-  cannot provision Suchi Personal's unchanged CloudKit capability; resolve
-  paid-team access rather than changing Personal's identity or entitlements.
-  Test document scanner, Files/iCloud, Photos, cold/warm share extension,
-  large batches, account switching and locked-device/background recovery.
-  An unsigned simulator cannot prove them.
-- Build a newly signed Android App Bundle with the intended upload key, inspect
-  target API 36, merged permissions, 64-bit libraries, 16 KiB ELF/ZIP alignment
-  and bundle-delivered APKs on a 16 KiB emulator. Existing generated release
-  packages predating the HTTPS manifest change are stale; never submit them.
-  Test native camera, file/photo picker fallback and OS shares across API 26–36.
-- Provide a stable HTTPS reviewer server and a non-expiring disposable reviewer
-  account with sample documents and the needed scopes. Give reviewer pairing,
-  Files/Photos, search and sign-out instructions privately in the App Store and
-  Play Console; never commit credentials or use a private real archive.
-- Designate monitored privacy, support and **mobile-specific security** routes,
-  approve the website's `/privacy/` disclosure and deploy it so the public
-  HTTPS URL serves that page rather than the old landing fallback. The paired
-  self-hosted server's operator controls its own logs, integrations, deletion,
-  Trash and backups. The mobile client keeps device-bound tokens, per-account
-  saved searches and protected queue payloads; temporary export copies may
-  leave the app at a user's explicit share action. Verify platform SDK and
-  processor disclosures rather than selecting “no data collected” by default.
-  Android ML Kit processors are not a “no data collected” dependency: Google
-  documents device and app information, identifiers, performance and
-  configuration metrics, feature event/error data, and the pairing code
-  scanner's auto-zoom session, zoom and predicted bounding-box data. Reconcile
-  the final dependencies against
-  <https://developers.google.com/ml-kit/android-data-disclosure> when completing
-  Play Data safety.
-- In the store consoles, approve App Store privacy labels and EULA, Play Data
-  safety, advertising/target-audience/content-rating answers and reviewer
-  access. Do not link download badges until actual approved URLs exist. If a
-  new personal Play developer account needs production access, complete its
-  closed-test requirement with the owner.
-- Audit artwork/trademark rights and dependency notices; obtain
-  owner/license-counsel approval for AGPL-3.0 corresponding-source delivery and
-  Apple's standard-versus-custom EULA before any distribution. Publish the
-  selected `https://github.com/johnnybravo-xyz/suchi-mobile` source location and
-  keep its corresponding source available with released binaries. The current
-  private Forgejo remote is not that location.
-
-Document the signed physical-device matrix, reviewer credentials exchange and
-store decisions outside this repository's public source; no simulator or local
-mock makes those gates pass.
+Use [RELEASE.md](RELEASE.md) as the single maintained release runbook. It owns
+the version/package contract, automated and physical-device gates, signed
+artifact inspection, public services, reviewer environment, store preparation,
+stop conditions, and publication order. Do not reproduce a second checklist in
+development notes.

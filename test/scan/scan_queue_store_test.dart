@@ -660,6 +660,9 @@ void main() {
   test(
     'claim is durable, account-bound, and corrupt owner fails closed',
     () async {
+      await store.close();
+      await database.close();
+
       final owner = AccountIdentity(origin: _origin, userId: 7, systemId: 1);
       final disk = File(path.join(temporary.path, 'claims.sqlite'));
       final first = ScanDatabase(NativeDatabase(disk));

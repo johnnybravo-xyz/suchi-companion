@@ -22,17 +22,25 @@ Capture to your Suchi archive
 
 ## Apple keywords
 
-scanner,documents,archive,offline,self-hosted,PDF,OCR,filing,search,privacy
+scanner,documents,archive,offline,PDF,OCR,filing,search,privacy
 
 ## Google Play short description
 
-Capture, file, search and read documents in your self-hosted Suchi archive.
+Capture, file, search and read documents in your Suchi archive.
+
+## Google Play promotional assets
+
+- **Feature graphic:** `store/google-play/en-US/feature-graphic.png` (1024 × 500, 24-bit PNG without transparency; SHA-256 `1e3d05dde63a3f92f7d789541b936cf923ab90e919119f063acd21af1c9c6ddf`)
+- **Preview video master:** `store/google-play/en-US/preview-video.mp4` (1920 × 1080, 31 seconds, H.264 video with AAC audio; SHA-256 `3a974fca2c2718d86f1030525c47d91b1b3935a3e5c9c6afc57a0fa8b38007ae`)
+- **Preview video URL:** <https://www.youtube.com/watch?v=Vm7Tim1-Ksc> (unlisted on `@johnnybravo-xyz`, with embedding enabled)
+
+The feature graphic is uploaded directly to Google Play. Google Play accepts the preview video only through a direct public or unlisted YouTube URL, so the MP4 remains the source master and must not be bundled into the Android app.
 
 ## Full description
 
-Suchi Companion connects your phone to a Suchi document archive that you or your chosen operator runs.
+Suchi Companion connects your phone to a Suchi document archive.
 
-Capture paper with the native document scanner, keep an uncropped photo when that is the better record, or import PDFs and images from your phone. Uploads enter a protected, account-bound queue and remain recoverable when a transfer is interrupted.
+Capture images with the native document scanner, keep an uncropped photo when that is the better record, or import PDFs and images from your phone. Uploads enter a protected, account-bound queue and remain recoverable when a transfer is interrupted.
 
 Work with your archive from the phone:
 

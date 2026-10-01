@@ -152,8 +152,9 @@ report, and signing identities. Verify:
   export-compliance answers, and absence of debug/test configuration;
 - inherited secret canaries are absent from Xcode activity logs and build
   receipts; and
-- the signed app passes the physical matrix before TestFlight external review and
-  App Store submission.
+- upload the regular App Store Connect build, install Apple's processed build
+  through internal TestFlight, and pass the signed physical matrix before App
+  Store submission. External TestFlight is optional and omitted for v0.1.0.
 
 ## Public service and reviewer gates
 
@@ -196,9 +197,11 @@ For both stores:
 - retain console decisions, tester feedback, pre-launch reports, and resulting
   change records in the private release evidence.
 
-For Apple, register the app, Share Extension, and App Group; upload to TestFlight
-internal testing; obtain external TestFlight review; then submit the accepted
-physical-device build for manual App Store release. Hold release until Google
+For Apple, register the app, Share Extension, and App Group; upload a regular
+App Store Connect build, not a TestFlight Internal Only build; install the
+processed build through internal TestFlight; rerun the signed physical-device
+matrix; then submit that same build for production App Review with manual
+release. External TestFlight is omitted for v0.1.0. Hold release until Google
 production readiness.
 
 For Google, complete developer and physical-device verification, register the

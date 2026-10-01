@@ -767,30 +767,329 @@ final class PostIngestTask {
   final int? nextRunAt;
 }
 
+enum DocumentChangeField { title, category, tag }
+
+final class DocumentChangeApprovalTask {
+  const DocumentChangeApprovalTask({
+    required this.id,
+    required this.runId,
+    required this.approvalId,
+    required this.documentId,
+    required this.documentTitle,
+    required this.field,
+    required this.status,
+    required this.currentValue,
+    required this.proposedValue,
+    required this.score,
+    required this.reason,
+    required this.source,
+    required this.threshold,
+    required this.deadlineAt,
+    required this.sourceCurrent,
+    required this.reviewConflict,
+    required this.evidenceSources,
+  });
+
+  static DocumentChangeApprovalTask? maybeFromJson(Object? value) {
+    if (value is! Map<String, dynamic> ||
+        value['approval_name'] != 'document-change') {
+      return null;
+    }
+    final rawVars = value['vars'];
+    if (rawVars is! Map<String, dynamic>) return null;
+    final field = switch (rawVars['field']) {
+      'title' => DocumentChangeField.title,
+      'jd_category' => DocumentChangeField.category,
+      'tag' => DocumentChangeField.tag,
+      _ => null,
+    };
+    if (field == null) return null;
+
+    final choices = _stringList(value, 'choices');
+    if (choices.length != 2 ||
+        !choices.contains('apply') ||
+        !choices.contains('reject')) {
+      throw const ApiFormatException(
+        'document change approval choices must be apply and reject',
+      );
+    }
+    final status = _string(value, 'status');
+    if (status != 'open' && status != 'claimed') {
+      throw const ApiFormatException(
+        'document change approval status must be open or claimed',
+      );
+    }
+    if (_string(value, 'state_key') != 'review') {
+      throw const ApiFormatException(
+        'document change approval state must be review',
+      );
+    }
+    final reason = _string(rawVars, 'reason');
+    if (reason != 'review_first' && reason != 'low_confidence') {
+      throw const ApiFormatException(
+        'document change approval reason is unsupported',
+      );
+    }
+    if (_string(rawVars, 'policy_version') != 'review-first-v1') {
+      throw const ApiFormatException(
+        'document change approval policy is unsupported',
+      );
+    }
+    final score = _number(rawVars, 'confidence');
+    if (score < 0 || score > 1) {
+      throw const ApiFormatException(
+        'document change approval confidence must be between 0 and 1',
+      );
+    }
+    final source = _optionalString(rawVars, 'source');
+    if (source != null &&
+        source != 'archive' &&
+        source != 'llm' &&
+        source != 'language-detector') {
+      throw const ApiFormatException(
+        'document change approval source is unsupported',
+      );
+    }
+    final threshold = _optionalNumber(rawVars, 'threshold');
+    if (threshold != null && (threshold < 0 || threshold > 1)) {
+      throw const ApiFormatException(
+        'document change approval threshold must be between 0 and 1',
+      );
+    }
+    final rawSources = _list(rawVars, 'sources');
+    if (rawSources.length > 16) {
+      throw const ApiFormatException(
+        'document change approval has too many evidence sources',
+      );
+    }
+    final evidenceSources = rawSources
+        .map((value) {
+          final sourceJson = _object(
+            value,
+            'document change approval evidence source',
+          );
+          _positiveInteger(sourceJson, 'document_id');
+          return _nonEmptyString(sourceJson, 'title');
+        })
+        .toList(growable: false);
+    _nonEmptyString(value, 'assignee');
+    _nonEmptyString(value, 'prompt');
+    _nonNegativeInteger(value, 'created_at');
+
+    return DocumentChangeApprovalTask(
+      id: _positiveInteger(value, 'id'),
+      runId: _positiveInteger(value, 'run_id'),
+      approvalId: _positiveInteger(value, 'approval_id'),
+      documentId: _positiveInteger(value, 'doc_id'),
+      documentTitle: _nonEmptyString(value, 'doc_title'),
+      field: field,
+      status: status,
+      currentValue: _string(rawVars, 'current_value'),
+      proposedValue: _nonEmptyString(rawVars, 'proposed_value'),
+      score: score,
+      reason: reason,
+      source: source,
+      threshold: threshold,
+      deadlineAt: _optionalNonNegativeInteger(value, 'deadline_at'),
+      sourceCurrent: _boolean(rawVars, 'source_current'),
+      reviewConflict: _boolean(rawVars, 'review_conflict'),
+      evidenceSources: List.unmodifiable(evidenceSources),
+    );
+  }
+
+  final int id;
+  final int runId;
+  final int approvalId;
+  final int documentId;
+  final String documentTitle;
+  final DocumentChangeField field;
+  final String status;
+  final String currentValue;
+  final String proposedValue;
+  final double score;
+  final String reason;
+  final String? source;
+  final double? threshold;
+  final int? deadlineAt;
+  final bool sourceCurrent;
+  final bool reviewConflict;
+  final List<String> evidenceSources;
+}
+
+final class PendingDateReview {
+  const PendingDateReview({
+    required this.id,
+    required this.documentId,
+    required this.documentTitle,
+    required this.role,
+    required this.date,
+    required this.dateValue,
+    required this.precision,
+    required this.score,
+    required this.reason,
+    required this.extractor,
+    required this.rawText,
+    required this.evidenceText,
+    required this.evidenceStart,
+  });
+
+  factory PendingDateReview.fromJson(Object? value) {
+    final json = _object(value, 'pending date review');
+    if (_string(json, 'type') != 'date' ||
+        _string(json, 'status') != 'pending') {
+      throw const ApiFormatException(
+        'pending date review has an unsupported type or status',
+      );
+    }
+    const roles = {
+      'issued',
+      'due',
+      'start',
+      'end',
+      'expiry',
+      'renewal',
+      'service',
+      'other',
+    };
+    final role = _string(json, 'role');
+    if (!roles.contains(role)) {
+      throw const ApiFormatException('pending date review role is unsupported');
+    }
+    final dateJson = _object(json['value'], 'pending date value');
+    final dateValue = _string(dateJson, 'date');
+    final precision = _string(dateJson, 'precision');
+    if (precision != 'day' && precision != 'month' && precision != 'year') {
+      throw const ApiFormatException(
+        'pending date review precision is unsupported',
+      );
+    }
+    final date = _canonicalDate(dateValue);
+    if ((precision == 'month' && date.day != 1) ||
+        (precision == 'year' && (date.month != 1 || date.day != 1))) {
+      throw const ApiFormatException(
+        'pending date review does not match its precision',
+      );
+    }
+    if (_string(json, 'sort_value') != dateValue) {
+      throw const ApiFormatException(
+        'pending date review sort value is inconsistent',
+      );
+    }
+    final score = _number(json, 'confidence');
+    if (score < 0 || score > 1) {
+      throw const ApiFormatException(
+        'pending date confidence must be between 0 and 1',
+      );
+    }
+    final reason = _string(json, 'reason');
+    if (reason != 'important_fact' && reason != 'low_confidence') {
+      throw const ApiFormatException(
+        'pending date review reason is unsupported',
+      );
+    }
+    if (_string(json, 'policy_version') != 'review-first-v1' ||
+        !_boolean(json, 'source_current')) {
+      throw const ApiFormatException(
+        'pending date review source is not current',
+      );
+    }
+    _nonEmptyString(json, 'extractor');
+    _positiveInteger(json, 'extraction_version');
+    _nonNegativeInteger(json, 'created_at');
+    _nonNegativeInteger(json, 'updated_at');
+    _optionalString(json, 'document_sensitivity');
+    _boolean(json, 'document_has_thumbnail');
+
+    return PendingDateReview(
+      id: _positiveInteger(json, 'id'),
+      documentId: _positiveInteger(json, 'document_id'),
+      documentTitle: _nonEmptyString(json, 'document_title'),
+      role: role,
+      date: date,
+      dateValue: dateValue,
+      precision: precision,
+      score: score,
+      reason: reason,
+      extractor: _nonEmptyString(json, 'extractor'),
+      rawText: _optionalString(json, 'raw_text') ?? '',
+      evidenceText: _string(json, 'evidence_text'),
+      evidenceStart: _optionalNonNegativeInteger(json, 'evidence_start'),
+    );
+  }
+
+  final int id;
+  final int documentId;
+  final String documentTitle;
+  final String role;
+  final DateTime date;
+  final String dateValue;
+  final String precision;
+  final double score;
+  final String reason;
+  final String extractor;
+  final String rawText;
+  final String evidenceText;
+  final int? evidenceStart;
+}
+
+final class ReviewMutationResult {
+  const ReviewMutationResult({
+    required this.id,
+    required this.ok,
+    required this.code,
+  });
+
+  factory ReviewMutationResult.fromJson(Object? value) {
+    final json = _object(value, 'review mutation result');
+    final ok = _boolean(json, 'ok');
+    final code = _optionalString(json, 'code');
+    if ((ok && code != null) || (!ok && (code == null || code.isEmpty))) {
+      throw const ApiFormatException('review mutation result is inconsistent');
+    }
+    return ReviewMutationResult(
+      id: _positiveInteger(json, 'id'),
+      ok: ok,
+      code: code,
+    );
+  }
+
+  final int id;
+  final bool ok;
+  final String? code;
+}
+
 final class TasksResponse {
-  const TasksResponse({required this.counts, required this.results});
+  const TasksResponse({
+    required this.results,
+    required this.documentChangeApprovals,
+  });
 
   factory TasksResponse.fromJson(Object? value) {
     final json = _object(value, 'tasks response');
     final rawCounts = _object(json['counts'], 'task counts');
-    final counts = <String, int>{};
     for (final entry in rawCounts.entries) {
       if (entry.value is! int || (entry.value as int) < 0) {
         throw ApiFormatException('task count ${entry.key} is invalid');
       }
-      counts[entry.key] = entry.value as int;
+    }
+    final approvals = <DocumentChangeApprovalTask>[];
+    if (json.containsKey('approval_tasks')) {
+      for (final value in _list(json, 'approval_tasks')) {
+        final approval = DocumentChangeApprovalTask.maybeFromJson(value);
+        if (approval != null) approvals.add(approval);
+      }
     }
     return TasksResponse(
-      counts: Map.unmodifiable(counts),
       results: _list(
         json,
         'results',
       ).map(PostIngestTask.fromJson).toList(growable: false),
+      documentChangeApprovals: List.unmodifiable(approvals),
     );
   }
 
-  final Map<String, int> counts;
   final List<PostIngestTask> results;
+  final List<DocumentChangeApprovalTask> documentChangeApprovals;
 }
 
 Object? decodeJsonBody(String body) {
@@ -850,6 +1149,14 @@ bool? _optionalBoolean(Map<String, Object?> json, String key) {
   return value;
 }
 
+bool _boolean(Map<String, Object?> json, String key) {
+  final value = json[key];
+  if (value is! bool) {
+    throw ApiFormatException('$key must be a boolean');
+  }
+  return value;
+}
+
 int _integer(Map<String, Object?> json, String key) {
   final value = json[key];
   if (value is! int) {
@@ -894,6 +1201,35 @@ double _number(Map<String, Object?> json, String key) {
     throw ApiFormatException('$key must be a finite number');
   }
   return value.toDouble();
+}
+
+double? _optionalNumber(Map<String, Object?> json, String key) {
+  final value = json[key];
+  if (value == null) return null;
+  if (value is! num || !value.isFinite) {
+    throw ApiFormatException('$key must be a finite number when present');
+  }
+  return value.toDouble();
+}
+
+DateTime _canonicalDate(String value) {
+  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(value);
+  if (match == null) {
+    throw const ApiFormatException(
+      'pending date review date must use YYYY-MM-DD',
+    );
+  }
+  final year = int.parse(match.group(1)!);
+  final month = int.parse(match.group(2)!);
+  final day = int.parse(match.group(3)!);
+  final date = DateTime.utc(year, month, day);
+  if (year == 0 ||
+      date.year != year ||
+      date.month != month ||
+      date.day != day) {
+    throw const ApiFormatException('pending date review date is invalid');
+  }
+  return date;
 }
 
 List<String> _stringList(Map<String, Object?> json, String key) {

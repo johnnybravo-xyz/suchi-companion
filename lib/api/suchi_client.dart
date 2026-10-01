@@ -43,6 +43,8 @@ final class DocumentDownload {
   final String sha256;
 }
 
+enum ReviewDecision { accept, dismiss }
+
 final class SuchiClient {
   SuchiClient({required this.origin, this.token, http.Client? httpClient})
     : assert(origin.path.isEmpty),
@@ -453,6 +455,125 @@ final class SuchiClient {
       timeout: _readTimeout,
     );
     return _parseSuccess(response, TasksResponse.fromJson);
+  }
+
+  Future<List<DocumentChangeApprovalTask>> listDocumentChangeApprovals() async {
+    final response = await _request(
+      'GET',
+      '/api/tasks/',
+      query: const {'include': 'approvals', 'limit': '200'},
+      timeout: _readTimeout,
+    );
+    return _parseSuccess(
+      response,
+      TasksResponse.fromJson,
+    ).documentChangeApprovals;
+  }
+
+  Future<void> resolveDocumentChangeApproval(
+    int id,
+    ReviewDecision decision,
+  ) async {
+    if (id <= 0) {
+      throw const ApiException(
+        kind: ApiFailureKind.rejected,
+        message: 'The approval task is invalid.',
+      );
+    }
+    final response = await _request(
+      'POST',
+      '/api/approvals/tasks/$id/resolve',
+      jsonBody: {
+        'choice': switch (decision) {
+          ReviewDecision.accept => 'apply',
+          ReviewDecision.dismiss => 'reject',
+        },
+      },
+      expectedStatuses: const {204},
+      timeout: _readTimeout,
+    );
+    if (response.body.isNotEmpty) {
+      throw _malformed(
+        response,
+        'Suchi returned content after resolving the document suggestion.',
+      );
+    }
+  }
+
+  Future<List<PendingDateReview>> listPendingDates() async {
+    final response = await _request(
+      'GET',
+      '/api/intelligence/',
+      query: const {
+        'type': 'date',
+        'status': 'pending',
+        'page': '1',
+        'page_size': '500',
+      },
+      timeout: _readTimeout,
+    );
+    return _parseSuccess(
+      response,
+      (value) => PageEnvelope.fromJson(value, PendingDateReview.fromJson),
+    ).results;
+  }
+
+  Future<ReviewMutationResult> resolvePendingDate(
+    int id,
+    ReviewDecision decision,
+  ) async {
+    if (id <= 0) {
+      throw const ApiException(
+        kind: ApiFailureKind.rejected,
+        message: 'The date review is invalid.',
+      );
+    }
+    final response = await _request(
+      'POST',
+      '/api/intelligence/resolve',
+      jsonBody: {
+        'candidate_ids': [id],
+        'decision': switch (decision) {
+          ReviewDecision.accept => 'accepted',
+          ReviewDecision.dismiss => 'rejected',
+        },
+      },
+      timeout: _readTimeout,
+    );
+    final result = _parseSuccess(response, (value) {
+      final json = _asObject(value, 'date review response');
+      final rawResults = json['results'];
+      if (json['total'] != 1 ||
+          json['applied'] is! int ||
+          (json['applied'] as int) < 0 ||
+          (json['applied'] as int) > 1 ||
+          rawResults is! List ||
+          rawResults.length != 1) {
+        throw const ApiFormatException('invalid date review response');
+      }
+      return ReviewMutationResult.fromJson(rawResults.single);
+    });
+    if (result.id != id) {
+      throw _malformed(
+        response,
+        'Suchi returned a different date review result.',
+      );
+    }
+    if (!result.ok) {
+      final code = result.code;
+      throw ApiException(
+        kind: code == 'forbidden'
+            ? ApiFailureKind.forbidden
+            : code == 'conflict' || code == 'stale_source'
+            ? ApiFailureKind.conflict
+            : ApiFailureKind.rejected,
+        message: 'Suchi did not confirm the date review.',
+        statusCode: response.statusCode,
+        code: code,
+        requestId: response.requestId,
+      );
+    }
+    return result;
   }
 
   Future<int> patchDocument(

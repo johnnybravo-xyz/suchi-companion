@@ -42,6 +42,13 @@ void main() {
         statusCode: 201,
       );
       final tasks = TasksResponse.fromJson(_fixture('tasks-processing.json'));
+      final approvals = TasksResponse.fromJson(
+        _fixture('tasks-approvals.json'),
+      );
+      final dates = PageEnvelope.fromJson(
+        _fixture('intelligence-pending-dates.json'),
+        PendingDateReview.fromJson,
+      );
       final error = parseApiError(_fixture('error.json'), 409);
 
       expect(handshake.product, 'suchi');
@@ -58,6 +65,22 @@ void main() {
       expect(created.created, isTrue);
       expect(replayed.idempotentReplay, isTrue);
       expect(tasks.results.single.documentId, 93);
+      expect(tasks.documentChangeApprovals, isEmpty);
+      expect(approvals.documentChangeApprovals, hasLength(3));
+      expect(
+        approvals.documentChangeApprovals.map((approval) => approval.field),
+        [
+          DocumentChangeField.title,
+          DocumentChangeField.tag,
+          DocumentChangeField.category,
+        ],
+      );
+      expect(
+        approvals.documentChangeApprovals.first.proposedValue,
+        contains('March'),
+      );
+      expect(dates.results.single.precision, 'month');
+      expect(dates.results.single.date, DateTime.utc(2027, 3));
       expect(error.code, 'idempotency_conflict');
     });
 
@@ -102,6 +125,259 @@ void main() {
       )..addAll({'split_origin_id': 1, 'split_index': 0});
 
       expect(DocumentSummary.fromJson(document).splitIndex, 0);
+    });
+
+    test('filters unsupported approvals before strict document parsing', () {
+      final value = _fixture('tasks-approvals.json')! as Map<String, dynamic>;
+      final rows = value['approval_tasks']! as List<dynamic>;
+      rows[3] = {'approval_name': 'rescan-proposal'};
+      rows[4] = {
+        'approval_name': 'document-change',
+        'vars': {'field': 'document_type'},
+      };
+      rows[5] = {'approval_name': 'future-workflow'};
+      (value['counts']! as Map<String, dynamic>)['approvals_open'] = 999;
+
+      final tasks = TasksResponse.fromJson(value);
+
+      expect(tasks.documentChangeApprovals, hasLength(3));
+    });
+
+    test('rejects malformed supported document and date rows', () {
+      for (final index in [0, 1, 2]) {
+        final approvals =
+            _fixture('tasks-approvals.json')! as Map<String, dynamic>;
+        final documentChange =
+            (approvals['approval_tasks']! as List<dynamic>)[index]
+                as Map<String, dynamic>;
+        (documentChange['vars']! as Map<String, dynamic>)['confidence'] = 1.1;
+        expect(
+          () => TasksResponse.fromJson(approvals),
+          throwsA(isA<ApiFormatException>()),
+        );
+      }
+
+      final dates =
+          _fixture('intelligence-pending-dates.json')! as Map<String, dynamic>;
+      final date =
+          (dates['results']! as List<dynamic>).single as Map<String, dynamic>;
+      date['source_current'] = false;
+      expect(
+        () => PageEnvelope.fromJson(dates, PendingDateReview.fromJson),
+        throwsA(isA<ApiFormatException>()),
+      );
+    });
+
+    test('accepts every canonical date role and precision', () {
+      const roles = {
+        'issued',
+        'due',
+        'start',
+        'end',
+        'expiry',
+        'renewal',
+        'service',
+        'other',
+      };
+      const values = {
+        'day': '2027-03-17',
+        'month': '2027-03-01',
+        'year': '2027-01-01',
+      };
+      for (final role in roles) {
+        for (final entry in values.entries) {
+          final dates =
+              _fixture('intelligence-pending-dates.json')!
+                  as Map<String, dynamic>;
+          final date =
+              (dates['results']! as List<dynamic>).single
+                  as Map<String, dynamic>;
+          date['role'] = role;
+          date['value'] = {'date': entry.value, 'precision': entry.key};
+          date['sort_value'] = entry.value;
+          expect(
+            PageEnvelope.fromJson(
+              dates,
+              PendingDateReview.fromJson,
+            ).results.single.role,
+            role,
+          );
+        }
+      }
+    });
+  });
+
+  group('approval review contracts', () {
+    test('uses bounded generic feeds and filters supported rows', () async {
+      final requests = <Uri>[];
+      final client = SuchiClient(
+        origin: _origin,
+        token: _token,
+        httpClient: MockClient((request) async {
+          requests.add(request.url);
+          final fixture = switch (request.url.path) {
+            '/api/tasks/' => 'tasks-approvals.json',
+            '/api/intelligence/' => 'intelligence-pending-dates.json',
+            _ => throw StateError('unexpected path ${request.url.path}'),
+          };
+          return http.Response(
+            jsonEncode(_fixture(fixture)),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      final documentChanges = await client.listDocumentChangeApprovals();
+      final dates = await client.listPendingDates();
+
+      expect(documentChanges, hasLength(3));
+      expect(dates, hasLength(1));
+      expect(requests[0].queryParameters, {
+        'include': 'approvals',
+        'limit': '200',
+      });
+      expect(requests[1].queryParameters, {
+        'type': 'date',
+        'status': 'pending',
+        'page': '1',
+        'page_size': '500',
+      });
+    });
+
+    test('maps review decisions to canonical wire literals', () async {
+      final sent = <({String path, Map<String, dynamic> body})>[];
+      final client = SuchiClient(
+        origin: _origin,
+        token: _token,
+        httpClient: MockClient((request) async {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          sent.add((path: request.url.path, body: body));
+          if (request.url.path.startsWith('/api/approvals/tasks/')) {
+            return http.Response('', 204);
+          }
+          final id = (body['candidate_ids']! as List<dynamic>).single as int;
+          return http.Response(
+            jsonEncode({
+              'total': 1,
+              'applied': 1,
+              'results': [
+                {'id': id, 'ok': true},
+              ],
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      await client.resolveDocumentChangeApproval(301, ReviewDecision.accept);
+      await client.resolveDocumentChangeApproval(302, ReviewDecision.dismiss);
+      await client.resolvePendingDate(401, ReviewDecision.accept);
+      await client.resolvePendingDate(402, ReviewDecision.dismiss);
+
+      expect(sent.map((request) => request.path), [
+        '/api/approvals/tasks/301/resolve',
+        '/api/approvals/tasks/302/resolve',
+        '/api/intelligence/resolve',
+        '/api/intelligence/resolve',
+      ]);
+      expect(sent.map((request) => request.body), [
+        <String, dynamic>{'choice': 'apply'},
+        <String, dynamic>{'choice': 'reject'},
+        <String, dynamic>{
+          'candidate_ids': [401],
+          'decision': 'accepted',
+        },
+        <String, dynamic>{
+          'candidate_ids': [402],
+          'decision': 'rejected',
+        },
+      ]);
+    });
+
+    test('enforces distinct confirmed-success contracts', () async {
+      SuchiClient clientReturning(http.Response response) => SuchiClient(
+        origin: _origin,
+        token: _token,
+        httpClient: MockClient((_) async => response),
+      );
+
+      await expectLater(
+        clientReturning(
+          http.Response(
+            '{}',
+            200,
+            headers: {'content-type': 'application/json'},
+          ),
+        ).resolveDocumentChangeApproval(301, ReviewDecision.accept),
+        throwsA(isA<ApiException>()),
+      );
+      await expectLater(
+        clientReturning(
+          http.Response(
+            '{}',
+            204,
+            headers: {'content-type': 'application/json'},
+          ),
+        ).resolveDocumentChangeApproval(301, ReviewDecision.accept),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.kind,
+            'kind',
+            ApiFailureKind.malformedResponse,
+          ),
+        ),
+      );
+      await expectLater(
+        clientReturning(http.Response('', 204))
+            .resolvePendingDate(401, ReviewDecision.accept),
+        throwsA(isA<ApiException>()),
+      );
+      await expectLater(
+        clientReturning(
+          http.Response(
+            jsonEncode({
+              'total': 1,
+              'applied': 0,
+              'results': [
+                {'id': 401, 'ok': false, 'code': 'stale_source'},
+              ],
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          ),
+        ).resolvePendingDate(401, ReviewDecision.accept),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.code,
+            'code',
+            'stale_source',
+          ),
+        ),
+      );
+      await expectLater(
+        clientReturning(
+          http.Response(
+            jsonEncode({
+              'total': 1,
+              'applied': 1,
+              'results': [
+                {'id': 999, 'ok': true},
+              ],
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          ),
+        ).resolvePendingDate(401, ReviewDecision.accept),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.kind,
+            'kind',
+            ApiFailureKind.malformedResponse,
+          ),
+        ),
+      );
     });
   });
 

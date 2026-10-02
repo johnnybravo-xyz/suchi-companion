@@ -47,6 +47,16 @@ enum DocumentExport {
   }
 }
 
+enum DocumentLinkShare {
+  static func validText(_ text: String) -> Bool {
+    return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      && text.utf8.count <= 8 * 1024
+      && !text.unicodeScalars.contains {
+        ($0.value < 0x20 && $0.value != 0x0a) || $0.value == 0x7f
+      }
+  }
+}
+
 final class DocumentChannel: NSObject, QLPreviewControllerDataSource {
   private var channel: FlutterMethodChannel?
   private var previewURL: URL?
@@ -74,6 +84,29 @@ final class DocumentChannel: NSObject, QLPreviewControllerDataSource {
       } else {
         result(nil)
       }
+      return
+    }
+    if call.method == "share_link" {
+      guard
+        let arguments = call.arguments as? [String: Any],
+        let text = arguments["text"] as? String,
+        DocumentLinkShare.validText(text),
+        let presenter = UIApplication.shared.connectedScenes
+          .compactMap({ $0 as? UIWindowScene })
+          .filter({ $0.activationState == .foregroundActive })
+          .flatMap(\.windows).first(where: \.isKeyWindow)?.rootViewController,
+        presenter.presentedViewController == nil
+      else {
+        result(FlutterError(code: "document_busy", message: "Close the current screen before sharing a link.", details: nil))
+        return
+      }
+      let activity = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+      activity.popoverPresentationController?.sourceView = presenter.view
+      activity.popoverPresentationController?.sourceRect = CGRect(
+        x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 1, height: 1
+      )
+      presented = activity
+      presenter.present(activity, animated: true) { result(nil) }
       return
     }
     guard call.method == "open" || call.method == "share" else {

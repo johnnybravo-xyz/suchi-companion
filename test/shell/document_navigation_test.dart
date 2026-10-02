@@ -815,6 +815,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Open JD Index'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Utilities'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Utilities'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Sort documents'));
@@ -861,6 +863,8 @@ void main() {
           await tester.tap(find.text('Documents').last);
           await tester.pumpAndSettle();
           await tester.tap(find.byTooltip('Open JD Index'));
+          await tester.pumpAndSettle();
+          await tester.ensureVisible(find.text('Utilities'));
           await tester.pumpAndSettle();
           await tester.tap(find.text('Utilities'));
           await tester.pumpAndSettle();
@@ -939,6 +943,8 @@ void main() {
       await tester.tap(find.text('Documents').last);
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Open JD Index'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Utilities'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Utilities'));
       await tester.pumpAndSettle();

@@ -180,6 +180,22 @@ class NativeAdapterInstrumentedTest {
     }
 
     @Test
+    fun documentLinkShareCarriesOnlyPlainText() {
+        val text = "March electricity bill — shared with Suchi\nhttps://suchi.example/s/token"
+        val intent = DocumentLinkShare.intent(text)
+
+        assertEquals(Intent.ACTION_SEND, intent.action)
+        assertEquals("text/plain", intent.type)
+        assertEquals(text, intent.getStringExtra(Intent.EXTRA_TEXT))
+        assertFalse(intent.hasExtra(Intent.EXTRA_STREAM))
+        assertNull(intent.clipData)
+        assertEquals(0, intent.flags)
+        assertThrows(IllegalArgumentException::class.java) {
+            DocumentLinkShare.intent("unsafe\u0000text")
+        }
+    }
+
+    @Test
     fun documentHandoffAcceptsOnlyExactExportAndOfflinePayloads() {
         val base = File(targetContext.cacheDir, "document-export-test-${UUID.randomUUID()}")
         val exportRoot = File(base, "suchi-document-exports")

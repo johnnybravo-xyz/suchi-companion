@@ -659,6 +659,111 @@ void main() {
     );
   });
 
+  group('public share links', () {
+    const shareToken =
+        'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+    test('creates a link with the exact bounded request contract', () async {
+      late http.Request observed;
+      final client = SuchiClient(
+        origin: _origin,
+        token: _token,
+        httpClient: MockClient((request) async {
+          observed = request;
+          return http.Response(
+            jsonEncode({
+              'id': 7,
+              'token': shareToken,
+              'public_url': '/s/$shareToken',
+            }),
+            201,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      final link = await client.createShareLink(
+        documentId: 91,
+        label: List.filled(70, '😀').join(),
+        expiresInSeconds: 604800,
+        password: 'open sesame',
+      );
+
+      expect(observed.method, 'POST');
+      expect(observed.url.path, '/api/share_links/');
+      expect(jsonDecode(observed.body), {
+        'doc_ids': [91],
+        'label': List.filled(50, '😀').join(),
+        'expires_in_sec': 604800,
+        'password': 'open sesame',
+      });
+      expect(link.id, 7);
+      expect(link.token, shareToken);
+      expect(
+        link.publicUrl.toString(),
+        'https://suchi.example.com/s/$shareToken',
+      );
+    });
+
+    test('accepts a matching absolute public URL and rejects mismatches', () {
+      final absolute = CreatedShareLink.fromJson({
+        'id': 7,
+        'token': shareToken,
+        'public_url': 'https://public.example/archive/s/$shareToken',
+      }, origin: _origin);
+      expect(
+        absolute.publicUrl.toString(),
+        'https://public.example/archive/s/$shareToken',
+      );
+
+      for (final url in [
+        '/s/${List.filled(64, 'c').join()}',
+        'https://user@public.example/s/$shareToken',
+        'https://public.example/s/$shareToken?secret=1',
+        'share/$shareToken',
+      ]) {
+        expect(
+          () => CreatedShareLink.fromJson({
+            'id': 7,
+            'token': shareToken,
+            'public_url': url,
+          }, origin: _origin),
+          throwsA(isA<ApiFormatException>()),
+        );
+      }
+    });
+
+    test('adds only the active share filter to document lists', () async {
+      late http.Request observed;
+      final client = SuchiClient(
+        origin: _origin,
+        token: _token,
+        httpClient: MockClient((request) async {
+          observed = request;
+          return http.Response(
+            jsonEncode({'count': 0, 'results': <Object>[]}),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      await client.listDocuments(
+        page: 2,
+        pageSize: 30,
+        ordering: '-created_at',
+        activeShareLinks: true,
+      );
+
+      expect(observed.url.queryParameters, {
+        'page': '2',
+        'page_size': '30',
+        'ordering': '-created_at',
+        'share_link': 'active',
+      });
+    });
+  });
+
   group('Saved View filters', () {
     test('preserves every supported flat and snapshot filter', () {
       final flat = SavedViewFilter.fromJsonString(

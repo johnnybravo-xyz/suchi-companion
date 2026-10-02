@@ -86,7 +86,13 @@ void main() {
         if (request.url.path == '/api/documents/') {
           listRequests++;
           if (listFails) throw const SocketException('offline');
-          return _fixture('documents-page.json');
+          return request.url.queryParameters['share_link'] == 'active'
+              ? http.Response(
+                  '{"count":0,"next":null,"previous":null,"results":[]}',
+                  200,
+                  headers: {'content-type': 'application/json'},
+                )
+              : _fixture('documents-page.json');
         }
         if (request.url.path == '/api/jd/categories/') {
           return _fixture('jd-categories.json');
@@ -231,6 +237,53 @@ void main() {
       expect(apiRequests, hasLength(beforeReturn));
     },
   );
+
+  testWidgets('shared documents is the third server-backed scope', (
+    tester,
+  ) async {
+    listFails = false;
+    network.online = true;
+    final categories = JdCategoryStore(
+      client: client,
+      onUnauthorized: session.expire,
+    );
+    addTearDown(categories.dispose);
+    await _pumpDocuments(
+      tester,
+      session: session,
+      client: client,
+      store: store,
+      network: network,
+      categories: categories,
+    );
+
+    await tester.tap(find.byTooltip('Open JD Index'));
+    await tester.pumpAndSettle();
+    final all = find.widgetWithText(ListTile, 'All documents');
+    final offline = find.widgetWithText(ListTile, 'Saved offline');
+    final shared = find.widgetWithText(ListTile, 'Shared documents');
+    expect(tester.getTopLeft(all).dy, lessThan(tester.getTopLeft(offline).dy));
+    expect(
+      tester.getTopLeft(offline).dy,
+      lessThan(tester.getTopLeft(shared).dy),
+    );
+
+    await tester.tap(shared);
+    await tester.pumpAndSettle();
+    expect(apiRequests.last.url.queryParameters['share_link'], 'active');
+    expect(find.text('Shared documents'), findsOneWidget);
+    expect(find.text('No shared documents'), findsOneWidget);
+    expect(
+      find.text('Documents with an active Suchi share link will appear here.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('Open JD Index'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'All documents'));
+    await tester.pumpAndSettle();
+    expect(apiRequests.last.url.queryParameters, isNot(contains('share_link')));
+  });
 
   testWidgets('narrow large-text offline count opens the local copy', (
     tester,

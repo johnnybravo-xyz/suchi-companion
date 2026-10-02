@@ -765,6 +765,153 @@ void main() {
     },
   );
 
+  testWidgets('capable users share a Suchi link from the primary action', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    const channel = MethodChannel('test.suchi/detail-share');
+    final channelCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          channelCalls.add(call);
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+    final user = jsonDecode(_fixture('whoami.json')) as Map<String, dynamic>
+      ..['capabilities'] = ['share_links'];
+    final requests = <http.Request>[];
+    const shareToken =
+        'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    await _openDetail(
+      tester,
+      requests: requests,
+      user: user,
+      fileChannel: channel,
+      textScale: 2,
+      respond: (request) async {
+        if (request.url.path == '/api/share_links/') {
+          return http.Response(
+            jsonEncode({
+              'id': 7,
+              'token': shareToken,
+              'public_url': '/s/$shareToken',
+            }),
+            201,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return null;
+      },
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Share document'));
+    await tester.pumpAndSettle();
+    expect(find.text('Create and share link'), findsOneWidget);
+    expect(find.text('Share original file'), findsOneWidget);
+    expect(find.text('Never expires · No password'), findsOneWidget);
+    expect(find.text('Password (optional)'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Link options'));
+    await tester.pumpAndSettle();
+    final expiry = find.byType(DropdownButtonFormField<int>);
+    await tester.ensureVisible(expiry);
+    expect(tester.getSize(expiry).width, 240);
+    final expiryControl = tester.widget<DropdownButtonFormField<int>>(expiry);
+    expect(expiryControl.decoration.labelText, isNull);
+    expect(tester.takeException(), isNull);
+    await tester.tap(expiry);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('7 days').last);
+    await tester.pumpAndSettle();
+    final password = find.widgetWithText(TextField, 'Password (optional)');
+    await tester.enterText(password, 'family');
+    expect(tester.widget<TextField>(password).obscureText, isTrue);
+    await tester.tap(find.byTooltip('Show password'));
+    await tester.pump();
+    expect(tester.widget<TextField>(password).obscureText, isFalse);
+    expect(find.byTooltip('Hide password'), findsOneWidget);
+    await tester.ensureVisible(find.text('Create and share link'));
+    await tester.tap(find.text('Create and share link'));
+    await tester.pumpAndSettle();
+
+    final create = requests.singleWhere(
+      (request) => request.url.path == '/api/share_links/',
+    );
+    expect(jsonDecode(create.body), {
+      'doc_ids': [91],
+      'label': 'March electricity bill',
+      'expires_in_sec': 604800,
+      'password': 'family',
+    });
+    expect(channelCalls.single.method, 'share_link');
+    expect(channelCalls.single.arguments, {
+      'text':
+          'March electricity bill — shared with Suchi\n'
+          'https://suchi.example.com/s/$shareToken',
+    });
+  });
+
+  testWidgets('late share creation cannot cross an account transition', (
+    tester,
+  ) async {
+    const channel = MethodChannel('test.suchi/detail-share-stale');
+    final channelCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          channelCalls.add(call);
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+    final user = jsonDecode(_fixture('whoami.json')) as Map<String, dynamic>
+      ..['capabilities'] = ['share_links'];
+    final pending = Completer<http.Response>();
+    final requested = Completer<void>();
+    final session = await _openDetail(
+      tester,
+      user: user,
+      fileChannel: channel,
+      respond: (request) {
+        if (request.url.path == '/api/share_links/') {
+          requested.complete();
+          return pending.future;
+        }
+        if (request.url.path == '/api/logout') {
+          return Future.value(http.Response('', 204));
+        }
+        return Future.value(null);
+      },
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Share document'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create and share link'));
+    await requested.future;
+
+    await session.signOut();
+    pending.complete(
+      http.Response(
+        jsonEncode({
+          'id': 7,
+          'token': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          'public_url': '/s/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        }),
+        201,
+        headers: {'content-type': 'application/json'},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(channelCalls, isEmpty);
+  });
   testWidgets('narrow 200% detail keeps the full hierarchy usable', (
     tester,
   ) async {
@@ -860,6 +1007,8 @@ Future<SessionController> _openDetail(
   VoidCallback? onChanged,
   bool disableAnimations = false,
   double textScale = 1,
+  Map<String, dynamic>? user,
+  MethodChannel? fileChannel,
 }) async {
   final document =
       detail ??
@@ -872,7 +1021,7 @@ Future<SessionController> _openDetail(
       case '/api/handshake':
         return _json(_fixture('handshake.json'));
       case '/api/whoami':
-        return _json(_fixture('whoami.json'));
+        return _json(jsonEncode(user ?? jsonDecode(_fixture('whoami.json'))));
       case '/api/jd/categories/':
         return _json(_fixture('jd-categories.json'));
       case '/api/documents/91':
@@ -916,6 +1065,7 @@ Future<SessionController> _openDetail(
       home: DocumentDetailScreen(
         files: DocumentFiles(
           root: directory,
+          channel: fileChannel,
           storageCapacity: _UnlimitedStorage(),
         ),
         documentId: 91,

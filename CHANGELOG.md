@@ -23,6 +23,9 @@ browsing, and offline access to self-hosted Suchi accounts.
 - Open and share full documents under their current title, read extracted text,
   preview email bodies in a sandboxed WebView, and edit titles, filing,
   language, sensitivity, and tags.
+- Create public Suchi links with optional expiry and password protection from
+  document detail, keep original-file sharing available, and browse documents
+  with active links under **Shared documents**.
 - Review pending title, filing-category, tag, and important-date changes from a
   manila card above the Inbox list. Review cards keep changes compact, group
   supporting files under plain-language details, open the reviewed document

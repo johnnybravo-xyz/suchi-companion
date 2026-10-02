@@ -107,6 +107,30 @@ final class DocumentFiles {
     }
   }
 
+  Future<void> shareLink({
+    required String title,
+    required Uri publicUrl,
+  }) async {
+    final normalizedTitle = title.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final visibleTitle = normalizedTitle.isEmpty ? 'Document' : normalizedTitle;
+    final message = '$visibleTitle — shared with Suchi\n$publicUrl';
+    if (_operation != null) {
+      throw PlatformException(
+        code: 'document_busy',
+        message: 'Another document is already being prepared.',
+      );
+    }
+    final operation = _channel.invokeMethod<void>('share_link', {
+      'text': message,
+    });
+    _operation = operation;
+    try {
+      await operation;
+    } finally {
+      _operation = null;
+    }
+  }
+
   Future<void> _handoff({
     required SuchiClient client,
     required int documentId,

@@ -108,7 +108,8 @@ Cover:
   locked-device/background recovery, retry, discard, queue recovery and account
   transitions;
 - image and PDF uploads through server processing, filing, search, previews,
-  full-file handoff, edits, Trash, and restoration;
+  public-link creation and unauthenticated recipient access, original-file
+  handoff, edits, Trash, and restoration;
 - interrupted, cancelled, corrupted, oversized, type-mismatched, bounded, and
   low-storage downloads while preserving the last verified offline copy;
 - the 512 MiB free-space reserve and recoverable queue behavior for every mobile

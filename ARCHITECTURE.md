@@ -148,11 +148,14 @@ manifests. A full left swipe opens removal confirmation. A partial left swipe
 keeps a tappable Remove action visible. Offline rows never contact the server
 to open or remove a local copy.
 
-Document detail loads metadata first. Opening, sharing, extracted-text reading,
-and email previewing are separate bounded requests. Editing title, language,
-filing, sensitivity, or tags reloads authoritative detail and verifies each
-bulk-edit result. Tag creation is not a mobile operation. Sensitivity changes
-conceal revealed content before the next frame.
+Document detail loads metadata first. Opening, original-file sharing, public-link
+creation, extracted-text reading, and email previewing are separate bounded
+requests. Public-link sharing is available only to admins or accounts with the
+`share_links` capability; its native handoff contains text and the public URL,
+never credentials. Editing title, language, filing, sensitivity, or tags reloads
+authoritative detail and verifies each bulk-edit result. Tag creation is not a
+mobile operation. Sensitivity changes conceal revealed content before the next
+frame.
 
 The shell-owned `ApprovalsController` loads supported document-change approvals
 (title, filing category, and tag) and pending date intelligence independently
@@ -223,6 +226,10 @@ capacity checks for the free-space reserve; Runner also declares app-container
 timestamp access. Android disclosures cover Google Play services ML Kit
 diagnostics, usage analytics, identifiers, and pairing auto-zoom data. Suchi
 operates no ads, crash-reporting service, or document relay.
+
+Documents exposes a **Shared documents** scope backed by the server's
+`share_link=active` filter. The server remains authoritative for ownership,
+expiry, revocation, access, and trash filtering.
 
 About displays the installed version, application license, dependency notices,
 bundled font licenses, and one fixed external URL: `https://suchi.page/`. It

@@ -83,6 +83,15 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
   OfflineDocument? get _offlineEntry =>
       widget.offlineDocuments?.find(widget.session.identity, widget.documentId);
 
+  bool get _canCreateShareLink {
+    final user = widget.session.user;
+    return _offlineFallback == null &&
+        widget.session.state == SessionState.signedIn &&
+        identical(widget.session.client, widget.client) &&
+        user != null &&
+        (user.role == 'admin' || user.capabilities.contains('share_links'));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -219,6 +228,95 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
       }
     } finally {
       if (mounted) setState(() => _fileLoading = false);
+    }
+  }
+
+  Future<void> _shareDocument() async {
+    if (!_canCreateShareLink) {
+      await _openFile(share: true);
+      return;
+    }
+    final document = _document;
+    final identity = widget.session.identity;
+    final client = widget.client;
+    final generation = _generation;
+    if (document == null ||
+        identity == null ||
+        _fileLoading ||
+        _mutating ||
+        _offlineMutating) {
+      return;
+    }
+    final choice = await showModalBottomSheet<_ShareChoice>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: SuchiColors.of(context).paper,
+      sheetAnimationStyle: SuchiMotion.sheetStyle(context),
+      builder: (_) => const _ShareDocumentSheet(),
+    );
+    if (choice == null ||
+        !mounted ||
+        generation != _generation ||
+        widget.session.identity != identity ||
+        !identical(widget.session.client, client)) {
+      return;
+    }
+    if (!choice.createLink) {
+      await _openFile(share: true);
+      return;
+    }
+    setState(() => _fileLoading = true);
+    try {
+      final link = await client.createShareLink(
+        documentId: document.id,
+        label: document.title,
+        expiresInSeconds: choice.expiresInSeconds,
+        password: choice.password,
+      );
+      if (!mounted ||
+          generation != _generation ||
+          widget.session.identity != identity ||
+          !identical(widget.session.client, client)) {
+        return;
+      }
+      try {
+        await widget.files.shareLink(
+          title: document.title,
+          publicUrl: link.publicUrl,
+        );
+      } on PlatformException {
+        try {
+          await Clipboard.setData(
+            ClipboardData(text: link.publicUrl.toString()),
+          );
+        } on PlatformException {
+          _showFileError('The share sheet is unavailable.');
+          return;
+        }
+        if (mounted &&
+            generation == _generation &&
+            widget.session.identity == identity) {
+          _showFileError('Share sheet unavailable. Link copied instead.');
+        }
+      }
+    } on ApiException catch (error) {
+      if (!mounted ||
+          generation != _generation ||
+          widget.session.identity != identity) {
+        return;
+      }
+      if (error.expiresSession) widget.session.expire(error);
+      _showFileError(
+        friendlyApiMessage(
+          error,
+          fallback: 'The share link could not be created.',
+        ),
+      );
+    } finally {
+      if (mounted && generation == _generation) {
+        setState(() => _fileLoading = false);
+      }
     }
   }
 
@@ -828,7 +926,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
           onPressed:
               _mutating || _fileLoading || _offlineMutating || _document == null
               ? null
-              : () => _openFile(share: true),
+              : _shareDocument,
           icon: const Icon(Icons.ios_share_outlined),
         ),
         IconButton(
@@ -1725,4 +1823,140 @@ class _DetailSkeleton extends StatelessWidget {
       ),
     );
   }
+}
+
+final class _ShareChoice {
+  const _ShareChoice.link({
+    required this.expiresInSeconds,
+    required this.password,
+  }) : createLink = true;
+
+  const _ShareChoice.file()
+    : createLink = false,
+      expiresInSeconds = 0,
+      password = '';
+
+  final bool createLink;
+  final int expiresInSeconds;
+  final String password;
+}
+
+final class _ShareDocumentSheet extends StatefulWidget {
+  const _ShareDocumentSheet();
+
+  @override
+  State<_ShareDocumentSheet> createState() => _ShareDocumentSheetState();
+}
+
+final class _ShareDocumentSheetState extends State<_ShareDocumentSheet> {
+  final _password = TextEditingController();
+  int _expiresInSeconds = 0;
+  bool _passwordVisible = false;
+
+  @override
+  void dispose() {
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    padding: EdgeInsets.fromLTRB(
+      20,
+      20,
+      20,
+      20 + MediaQuery.viewInsetsOf(context).bottom,
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Share document',
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Anyone with the link can view and download this document without a Suchi account.',
+        ),
+        const SizedBox(height: 12),
+        ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: EdgeInsets.zero,
+          title: const Text('Link options'),
+          subtitle: Text(
+            '${switch (_expiresInSeconds) {
+              86400 => '1 day',
+              604800 => '7 days',
+              2592000 => '30 days',
+              _ => 'Never expires',
+            }} · ${_password.text.isEmpty ? 'No password' : 'Password protected'}',
+          ),
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 240,
+                child: DropdownButtonFormField<int>(
+                  initialValue: _expiresInSeconds,
+                  isExpanded: true,
+                  borderRadius: BorderRadius.circular(14),
+                  decoration: const InputDecoration(),
+                  items: const [
+                    DropdownMenuItem(value: 0, child: Text('Never expires')),
+                    DropdownMenuItem(value: 86400, child: Text('1 day')),
+                    DropdownMenuItem(value: 604800, child: Text('7 days')),
+                    DropdownMenuItem(value: 2592000, child: Text('30 days')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _expiresInSeconds = value);
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _password,
+              obscureText: !_passwordVisible,
+              maxLength: 1024,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Password (optional)',
+                suffixIcon: IconButton(
+                  tooltip: _passwordVisible ? 'Hide password' : 'Show password',
+                  onPressed: () =>
+                      setState(() => _passwordVisible = !_passwordVisible),
+                  icon: Icon(
+                    _passwordVisible
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: () => Navigator.pop(
+            context,
+            _ShareChoice.link(
+              expiresInSeconds: _expiresInSeconds,
+              password: _password.text,
+            ),
+          ),
+          icon: const Icon(Icons.link),
+          label: const Text('Create and share link'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.pop(context, const _ShareChoice.file()),
+          icon: const Icon(Icons.attach_file),
+          label: const Text('Share original file'),
+        ),
+      ],
+    ),
+  );
 }

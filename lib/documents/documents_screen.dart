@@ -82,6 +82,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   bool _loadingMore = false;
   bool _hasMore = false;
   bool _offlineSelected = false;
+  bool _sharedSelected = false;
 
   @override
   void initState() {
@@ -117,6 +118,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     if (oldWidget.client != widget.client) {
       _categoryId = null;
       _activeView = null;
+      _sharedSelected = false;
       _scopeError = null;
       _ordering = '-created_at';
       _offlineSelected =
@@ -400,6 +402,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
   void _activateSavedView(SavedView? view) {
     _offlineSelected = false;
+    _sharedSelected = false;
     _activeView = view;
     _categoryId = null;
     _scopeError = null;
@@ -464,6 +467,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         jdCategoryId: _categoryId,
         ordering: _ordering,
         savedViewFilter: activeView?.filter,
+        activeShareLinks: _sharedSelected,
       );
       if (!mounted || generation != _generation) return;
       setState(() {
@@ -549,11 +553,15 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   void _selectCategory(JDCategory? category, {bool closeDrawer = true}) {
     if (closeDrawer) Navigator.maybePop(context);
     final selected = category?.id;
-    if (!_offlineSelected && _activeView == null && selected == _categoryId) {
+    if (!_offlineSelected &&
+        !_sharedSelected &&
+        _activeView == null &&
+        selected == _categoryId) {
       return;
     }
     setState(() {
       _offlineSelected = false;
+      _sharedSelected = false;
       _activeView = null;
       _scopeError = null;
       _categoryId = selected;
@@ -569,12 +577,29 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     _cancelCopy();
     setState(() {
       _offlineSelected = true;
+      _sharedSelected = false;
       _activeView = null;
       _categoryId = null;
       _scopeError = null;
       _ordering = '-created_at';
     });
     _loadOffline();
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
+  void _selectShared() {
+    Navigator.maybePop(context);
+    if (_sharedSelected) return;
+    _cancelCopy();
+    setState(() {
+      _offlineSelected = false;
+      _sharedSelected = true;
+      _activeView = null;
+      _categoryId = null;
+      _scopeError = null;
+      _ordering = '-created_at';
+    });
+    _load(reset: true);
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
@@ -613,6 +638,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         0;
     final scopeName = _offlineSelected
         ? 'Saved offline'
+        : _sharedSelected
+        ? 'Shared documents'
         : _activeView?.name ?? selectedCategory?.label ?? 'All documents';
     final showDocumentCount =
         !_offlineSelected && !_loading && _error == null && _scopeError == null;
@@ -796,12 +823,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     includeAll: true,
     onAllSelected: () => _selectCategory(null),
     offlineSelected: _offlineSelected,
+    sharedSelected: _sharedSelected,
     offlineCount:
         widget.offlineDocuments?.entriesFor(widget.session.identity).length ??
         0,
     onOfflineSelected: widget.offlineDocuments == null
         ? null
         : () => _selectOffline(),
+    onSharedSelected: widget.client == null ? null : _selectShared,
     onSelected: _selectCategory,
   );
 
@@ -851,12 +880,18 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             EmptyState(
               title: _offlineSelected
                   ? 'No offline documents'
+                  : _sharedSelected
+                  ? 'No shared documents'
                   : 'No documents here',
               message: _offlineSelected
                   ? 'Make a document available offline while connected.'
+                  : _sharedSelected
+                  ? 'Documents with an active Suchi share link will appear here.'
                   : 'Scan a document or choose another JD category or Saved View.',
               icon: _offlineSelected
                   ? Icons.offline_pin_outlined
+                  : _sharedSelected
+                  ? Icons.link_outlined
                   : Icons.folder_open_outlined,
             ),
           ],

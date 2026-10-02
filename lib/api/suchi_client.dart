@@ -154,6 +154,7 @@ final class SuchiClient {
     int? splitOriginId,
     bool trashed = false,
     SavedViewFilter? savedViewFilter,
+    bool activeShareLinks = false,
   }) async {
     final query = <String, String>{
       'page': '$page',
@@ -162,6 +163,7 @@ final class SuchiClient {
       if (jdCategoryId != null) 'jd_category_id': '$jdCategoryId',
       if (splitOriginId != null) 'split_origin_id': '$splitOriginId',
       if (trashed) 'trashed': '1',
+      if (activeShareLinks) 'share_link': 'active',
       ...?savedViewFilter?.queryParameters,
     };
     final response = await _request(
@@ -182,6 +184,40 @@ final class SuchiClient {
       );
     }
     return result;
+  }
+
+  Future<CreatedShareLink> createShareLink({
+    required int documentId,
+    required String label,
+    required int expiresInSeconds,
+    required String password,
+  }) async {
+    final boundedLabel = _truncateUtf8(label, 200);
+    if (documentId <= 0 ||
+        boundedLabel.isEmpty ||
+        !const {0, 86400, 604800, 2592000}.contains(expiresInSeconds) ||
+        utf8.encode(password).length > 1024) {
+      throw const ApiException(
+        kind: ApiFailureKind.rejected,
+        message: 'The share link options are invalid.',
+      );
+    }
+    final response = await _request(
+      'POST',
+      '/api/share_links/',
+      jsonBody: {
+        'doc_ids': [documentId],
+        'label': boundedLabel,
+        'expires_in_sec': expiresInSeconds,
+        'password': password,
+      },
+      timeout: _readTimeout,
+      expectedStatuses: const {201},
+    );
+    return _parseSuccess(
+      response,
+      (value) => CreatedShareLink.fromJson(value, origin: origin),
+    );
   }
 
   Future<PageEnvelope<SavedView>> listSavedViews({
@@ -1263,6 +1299,24 @@ final class SuchiClient {
       !value.contains('/') &&
       !value.contains('\\') &&
       !value.runes.any((rune) => rune < 0x20 || rune == 0x7f);
+
+  static String _truncateUtf8(String value, int maximumBytes) {
+    var bytes = 0;
+    final runes = <int>[];
+    for (final rune in value.runes) {
+      final width = rune <= 0x7f
+          ? 1
+          : rune <= 0x7ff
+          ? 2
+          : rune <= 0xffff
+          ? 3
+          : 4;
+      if (bytes + width > maximumBytes) break;
+      runes.add(rune);
+      bytes += width;
+    }
+    return String.fromCharCodes(runes);
+  }
 
   static bool _validToken(String value) =>
       RegExp(r'^[0-9a-f]{64}$').hasMatch(value);

@@ -124,6 +124,22 @@ void main() {
     },
   );
 
+  test('shares a normalized Suchi link message without a file', () async {
+    await files.shareLink(
+      title: '  March\n electricity\tbill  ',
+      publicUrl: Uri.parse(
+        'https://suchi.example.com/s/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      ),
+    );
+
+    expect(calls.single.method, 'share_link');
+    expect(calls.single.arguments, {
+      'text':
+          'March electricity bill — shared with Suchi\n'
+          'https://suchi.example.com/s/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    });
+  });
+
   test(
     'an identity clear prevents a pending download from reaching native UI',
     () async {

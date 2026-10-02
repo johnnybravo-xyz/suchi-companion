@@ -42,6 +42,8 @@ class JdIndex extends StatefulWidget {
     this.offlineSelected = false,
     this.offlineCount = 0,
     this.onOfflineSelected,
+    this.sharedSelected = false,
+    this.onSharedSelected,
   });
 
   final JdCategoryStore store;
@@ -53,6 +55,8 @@ class JdIndex extends StatefulWidget {
   final bool offlineSelected;
   final int offlineCount;
   final VoidCallback? onOfflineSelected;
+  final bool sharedSelected;
+  final VoidCallback? onSharedSelected;
 
   @override
   State<JdIndex> createState() => _JdIndexState();
@@ -126,7 +130,9 @@ class _JdIndexState extends State<JdIndex> {
             ),
           ),
           const SizedBox(height: 12),
-          if (widget.includeAll || widget.onOfflineSelected != null)
+          if (widget.includeAll ||
+              widget.onOfflineSelected != null ||
+              widget.onSharedSelected != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18),
               child: Column(
@@ -135,7 +141,9 @@ class _JdIndexState extends State<JdIndex> {
                     ListTile(
                       minTileHeight: 52,
                       selected:
-                          widget.selectedId == null && !widget.offlineSelected,
+                          widget.selectedId == null &&
+                          !widget.offlineSelected &&
+                          !widget.sharedSelected,
                       leading: const Icon(Icons.all_inbox_outlined),
                       title: const Text('All documents'),
                       onTap: widget.onAllSelected,
@@ -148,6 +156,14 @@ class _JdIndexState extends State<JdIndex> {
                       title: const Text('Saved offline'),
                       trailing: Text('${widget.offlineCount}'),
                       onTap: widget.onOfflineSelected,
+                    ),
+                  if (widget.onSharedSelected != null)
+                    ListTile(
+                      minTileHeight: 52,
+                      selected: widget.sharedSelected,
+                      leading: const Icon(Icons.link_outlined),
+                      title: const Text('Shared documents'),
+                      onTap: widget.onSharedSelected,
                     ),
                 ],
               ),

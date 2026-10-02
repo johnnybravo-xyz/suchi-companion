@@ -108,6 +108,61 @@ final class UserSelf {
       scopes.contains('documents:read') && scopes.contains('documents:write');
 }
 
+final class CreatedShareLink {
+  const CreatedShareLink({
+    required this.id,
+    required this.token,
+    required this.publicUrl,
+  });
+
+  factory CreatedShareLink.fromJson(Object? value, {required Uri origin}) {
+    final json = _object(value, 'created share link');
+    final id = _positiveInteger(json, 'id');
+    final token = _string(json, 'token');
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(token)) {
+      throw const ApiFormatException(
+        'created share link token must be 64 lowercase hexadecimal characters',
+      );
+    }
+    final rawUrl = _nonEmptyString(json, 'public_url');
+    final parsed = Uri.tryParse(rawUrl);
+    if (parsed == null) {
+      throw const ApiFormatException(
+        'created share link public_url must be a valid URL',
+      );
+    }
+    late final Uri publicUrl;
+    if (!parsed.hasScheme) {
+      if (rawUrl != '/s/$token') {
+        throw const ApiFormatException(
+          'created share link relative public_url is invalid',
+        );
+      }
+      publicUrl = origin.resolveUri(parsed);
+    } else {
+      publicUrl = parsed;
+    }
+    final segments = publicUrl.pathSegments;
+    if (!const {'http', 'https'}.contains(publicUrl.scheme) ||
+        publicUrl.host.isEmpty ||
+        publicUrl.userInfo.isNotEmpty ||
+        publicUrl.hasQuery ||
+        publicUrl.hasFragment ||
+        segments.length < 2 ||
+        segments[segments.length - 2] != 's' ||
+        segments.last != token) {
+      throw const ApiFormatException(
+        'created share link public_url does not match its token',
+      );
+    }
+    return CreatedShareLink(id: id, token: token, publicUrl: publicUrl);
+  }
+
+  final int id;
+  final String token;
+  final Uri publicUrl;
+}
+
 final class PageEnvelope<T> {
   const PageEnvelope({
     required this.count,

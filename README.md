@@ -30,6 +30,8 @@ Current source line: **v0.1.0**. The app uses package ID
   updates.
 - Preview documents, protected email HTML and extracted text with sensitivity
   gates.
+- Create public Suchi links with optional expiry and password protection, or
+  share the original document file.
 - Use System, Light or Dark appearance and Standard, Compact or Detailed lists.
 
 Camera, picker, share, queue, temporary export and offline writes preserve a

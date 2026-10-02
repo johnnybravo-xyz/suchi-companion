@@ -57,6 +57,20 @@ internal object DocumentExport {
         }
 }
 
+internal object DocumentLinkShare {
+    fun intent(text: String): Intent {
+        require(
+            text.isNotBlank() &&
+                text.toByteArray(Charsets.UTF_8).size <= 8 * 1024 &&
+                text.none { (it.code < 0x20 && it != '\n') || it.code == 0x7f },
+        )
+        return Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+    }
+}
+
 class DocumentChannel(private val activity: MainActivity) {
     private var channel: MethodChannel? = null
 
@@ -75,6 +89,19 @@ class DocumentChannel(private val activity: MainActivity) {
     private fun handle(call: MethodCall, result: MethodChannel.Result) {
         if (call.method == "dismiss") {
             result.success(null)
+            return
+        }
+        if (call.method == "share_link") {
+            val text = call.argument<String>("text")
+            try {
+                val intent = DocumentLinkShare.intent(requireNotNull(text))
+                activity.startActivity(Intent.createChooser(intent, "Share Suchi link"))
+                result.success(null)
+            } catch (_: ActivityNotFoundException) {
+                result.error("share_unavailable", "The share sheet is unavailable.", null)
+            } catch (_: Exception) {
+                result.error("bad_document", "The share link handoff is invalid.", null)
+            }
             return
         }
         if (call.method != "open" && call.method != "share") {

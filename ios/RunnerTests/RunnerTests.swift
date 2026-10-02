@@ -35,6 +35,15 @@ final class RunnerTests: XCTestCase {
     )
   }
 
+  func testDocumentLinkShareAcceptsOnlyBoundedVisibleText() {
+    XCTAssertTrue(DocumentLinkShare.validText(
+      "March electricity bill — shared with Suchi\nhttps://suchi.example/s/token"
+    ))
+    XCTAssertFalse(DocumentLinkShare.validText(""))
+    XCTAssertFalse(DocumentLinkShare.validText("unsafe\u{0000}text"))
+    XCTAssertFalse(DocumentLinkShare.validText(String(repeating: "a", count: 8 * 1024 + 1)))
+  }
+
   func testDocumentExportsAcceptOnlyExactTemporaryAndOfflinePayloads() throws {
     let exportRoot = temporaryRoot.appendingPathComponent("suchi-document-exports", isDirectory: true)
     let offlineRoot = temporaryRoot.appendingPathComponent("suchi-offline-documents", isDirectory: true)

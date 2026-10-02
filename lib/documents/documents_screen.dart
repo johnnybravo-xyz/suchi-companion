@@ -7,6 +7,7 @@ import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import '../api/api_error.dart';
 import '../api/api_models.dart';
 import '../api/suchi_client.dart';
+import '../approvals/approvals_controller.dart';
 import '../auth/account_identity.dart';
 import '../auth/session_controller.dart';
 import '../offline/offline_document_store.dart';
@@ -33,6 +34,7 @@ class DocumentsScreen extends StatefulWidget {
     this.savedView,
     this.savedViewRevision = 0,
     this.refreshRevision = 0,
+    this.approvals,
     super.key,
   });
 
@@ -49,6 +51,7 @@ class DocumentsScreen extends StatefulWidget {
   final SavedView? savedView;
   final int savedViewRevision;
   final int refreshRevision;
+  final ApprovalsController? approvals;
 
   @override
   State<DocumentsScreen> createState() => _DocumentsScreenState();
@@ -405,6 +408,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
+  Future<void> _refresh() async {
+    final approvals = _offlineSelected ? null : widget.approvals;
+    await Future.wait([
+      _load(reset: true),
+      if (approvals != null) approvals.reload(),
+    ]);
+  }
+
   Future<void> _load({required bool reset}) async {
     if (_offlineSelected || widget.client == null) {
       _loadOffline();
@@ -579,6 +590,11 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
+  Widget _pageHeader() => SuchiPageHeader(
+    serverLabel: widget.session.user!.instanceHost,
+    userLabel: widget.session.user!.label,
+  );
+
   @override
   Widget build(BuildContext context) {
     final colors = SuchiColors.of(context);
@@ -616,10 +632,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SuchiPageHeader(
-              serverLabel: widget.session.user!.instanceHost,
-              userLabel: widget.session.user!.label,
-            ),
+            _pageHeader(),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
               child: Row(
@@ -831,7 +844,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     }
     if (_documents.isEmpty) {
       return RefreshIndicator(
-        onRefresh: () => _load(reset: true),
+        onRefresh: _refresh,
         child: ListView(
           children: [
             const SizedBox(height: 80),
@@ -851,7 +864,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       );
     }
     return RefreshIndicator(
-      onRefresh: () => _load(reset: true),
+      onRefresh: _refresh,
       child: ListView.builder(
         controller: _scroll,
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),

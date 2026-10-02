@@ -219,26 +219,25 @@ class SuchiPageHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Semantics(
-            label: 'Signed in as $userLabel on $serverLabel',
-            excludeSemantics: true,
-            child: CircleAvatar(
-              radius: 15,
-              backgroundColor: colors.manila,
-              foregroundColor: colors.ink,
-              child: Text(
-                initialsFor(userLabel),
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
+          _accountAvatar(colors),
         ],
       ),
     );
   }
+
+  Widget _accountAvatar(SuchiColors colors) => Semantics(
+    label: 'Signed in as $userLabel on $serverLabel',
+    excludeSemantics: true,
+    child: CircleAvatar(
+      radius: 15,
+      backgroundColor: colors.manila,
+      foregroundColor: colors.ink,
+      child: Text(
+        initialsFor(userLabel),
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+      ),
+    ),
+  );
 }
 
 class EmptyState extends StatelessWidget {

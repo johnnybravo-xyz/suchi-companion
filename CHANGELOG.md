@@ -22,6 +22,10 @@ browsing, and offline access to self-hosted Suchi accounts.
   Standard, Compact, or Detailed rows and configurable sorting.
 - Open and share full documents, read extracted text, preview email bodies in a
   sandboxed WebView, and edit titles, filing, language, sensitivity, and tags.
+- Review pending title, filing-category, tag, and important-date changes from a
+  manila card above the Inbox list. Review cards keep changes compact, group
+  supporting files under plain-language details, open the reviewed document
+  directly, and provide account-bound Accept and Dismiss actions.
 - Swipe right on an online Documents row to save or update its offline copy;
   swipe left on a saved row to open confirmed local removal.
 - Browse saved copies in **Offline documents**. A full left swipe opens removal

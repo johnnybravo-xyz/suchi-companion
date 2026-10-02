@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api/api_error.dart';
 import '../api/api_models.dart';
 import '../api/suchi_client.dart';
+import '../approvals/approvals_controller.dart';
 import '../auth/session_controller.dart';
 import '../documents/document_list_mode.dart';
 import '../documents/jd_category_store.dart';
@@ -21,6 +22,8 @@ class InboxScreen extends StatefulWidget {
     required this.listMode,
     this.refreshRevision = 0,
     this.onInitialLoadComplete,
+    this.approvals,
+    this.onOpenApprovals,
     super.key,
   });
 
@@ -31,6 +34,8 @@ class InboxScreen extends StatefulWidget {
   final ValueChanged<int> onOpenDocument;
   final DocumentListMode listMode;
   final int refreshRevision;
+  final ApprovalsController? approvals;
+  final VoidCallback? onOpenApprovals;
 
   /// True only when the first Inbox load succeeded with no documents.
   final ValueChanged<bool>? onInitialLoadComplete;
@@ -68,7 +73,7 @@ class _InboxScreenState extends State<InboxScreen> {
       _initialize();
       if (_scroll.hasClients) _scroll.jumpTo(0);
     } else if (oldWidget.refreshRevision != widget.refreshRevision) {
-      _refresh();
+      _refreshInbox();
       if (_scroll.hasClients) _scroll.jumpTo(0);
     }
   }
@@ -116,7 +121,14 @@ class _InboxScreenState extends State<InboxScreen> {
       reset: true,
     );
     if (mounted && generation == _generation) {
-      _completeInitialLoad(_error == null && _count == 0 && _documents.isEmpty);
+      final approvals = widget.approvals;
+      _completeInitialLoad(
+        _error == null &&
+            _count == 0 &&
+            _documents.isEmpty &&
+            !(approvals?.loading ?? false) &&
+            !(approvals?.hasPending ?? false),
+      );
     }
   }
 
@@ -127,6 +139,13 @@ class _InboxScreenState extends State<InboxScreen> {
   }
 
   Future<void> _refresh() async {
+    await Future.wait([
+      _refreshInbox(),
+      if (widget.approvals case final approvals?) approvals.reload(),
+    ]);
+  }
+
+  Future<void> _refreshInbox() async {
     final generation = ++_generation;
     setState(() {
       _loading = true;
@@ -302,10 +321,7 @@ class _InboxScreenState extends State<InboxScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SuchiPageHeader(
-          serverLabel: widget.session.user!.instanceHost,
-          userLabel: widget.session.user!.label,
-        ),
+        _pageHeader(),
         Padding(
           padding: const EdgeInsets.fromLTRB(17, 4, 17, 14),
           child: Row(
@@ -338,11 +354,33 @@ class _InboxScreenState extends State<InboxScreen> {
     ),
   );
 
+  Widget _pageHeader() => SuchiPageHeader(
+    serverLabel: widget.session.user!.instanceHost,
+    userLabel: widget.session.user!.label,
+  );
+
   Widget _body() {
+    final approvals = widget.approvals;
+    if (approvals == null) return _bodyFor(null);
+    return ListenableBuilder(
+      listenable: approvals,
+      builder: (context, _) => _bodyFor(
+        approvals.hasPending && widget.onOpenApprovals != null
+            ? approvals
+            : null,
+      ),
+    );
+  }
+
+  Widget _bodyFor(ApprovalsController? approvals) {
+    final approvalCard = approvals == null ? null : _approvalCard(approvals);
     if (_loading && _documents.isEmpty) {
       return ListView(
         padding: const EdgeInsets.symmetric(horizontal: 17),
-        children: [ListSkeleton(rows: 4, mode: widget.listMode)],
+        children: [
+          ?approvalCard,
+          ListSkeleton(rows: 4, mode: widget.listMode),
+        ],
       );
     }
     final error = _error;
@@ -350,6 +388,7 @@ class _InboxScreenState extends State<InboxScreen> {
       return ListView(
         padding: const EdgeInsets.symmetric(horizontal: 17),
         children: [
+          ?approvalCard,
           InlineError(
             message: friendlyApiMessage(
               error,
@@ -365,6 +404,7 @@ class _InboxScreenState extends State<InboxScreen> {
       return ListView(
         padding: const EdgeInsets.symmetric(horizontal: 17),
         children: [
+          ?approvalCard,
           InlineError(message: _configurationError!, onRetry: _initialize),
         ],
       );
@@ -373,9 +413,11 @@ class _InboxScreenState extends State<InboxScreen> {
       return RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(
-          children: const [
-            SizedBox(height: 80),
-            EmptyState(
+          padding: const EdgeInsets.symmetric(horizontal: 17),
+          children: [
+            ?approvalCard,
+            const SizedBox(height: 80),
+            const EmptyState(
               title: 'Inbox clear',
               message: 'New scans arrive here until you file them.',
               icon: Icons.inbox_outlined,
@@ -389,10 +431,12 @@ class _InboxScreenState extends State<InboxScreen> {
       child: ListView.builder(
         controller: _scroll,
         padding: const EdgeInsets.fromLTRB(17, 0, 17, 28),
-        itemCount: _documents.length + 2,
+        itemCount: _documents.length + 2 + (approvalCard == null ? 0 : 1),
         itemBuilder: (context, index) {
-          if (index < _documents.length) {
-            final document = _documents[index];
+          if (approvalCard != null && index == 0) return approvalCard;
+          final itemIndex = index - (approvalCard == null ? 0 : 1);
+          if (itemIndex < _documents.length) {
+            final document = _documents[itemIndex];
             return Padding(
               key: ValueKey(document.id),
               padding: EdgeInsets.only(
@@ -444,7 +488,7 @@ class _InboxScreenState extends State<InboxScreen> {
               ),
             );
           }
-          if (index == _documents.length) {
+          if (itemIndex == _documents.length) {
             return Padding(
               padding: const EdgeInsets.only(top: 2, bottom: 10),
               child: Text(
@@ -483,6 +527,54 @@ class _InboxScreenState extends State<InboxScreen> {
           }
           return const SizedBox.shrink();
         },
+      ),
+    );
+  }
+
+  Widget _approvalCard(ApprovalsController approvals) {
+    final colors = SuchiColors.of(context);
+    final count = approvals.documentChanges.length + approvals.dates.length;
+    final label = count == 1
+        ? '1 filing needs your approval'
+        : '$count filings need your approval';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: SuchiCard(
+        color: colors.manila,
+        child: InkWell(
+          key: const ValueKey('approvals-inbox-card'),
+          onTap: widget.onOpenApprovals,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 80),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+              child: Row(
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.surface,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const SizedBox.square(
+                      dimension: 48,
+                      child: Icon(Icons.fact_check_outlined, size: 24),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: Theme.of(context).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(Icons.chevron_right, color: colors.muted),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

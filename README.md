@@ -24,6 +24,8 @@ Current source line: **v0.1.0**. The app uses package ID
 - Import PDF, JPEG, PNG and HEIC/HEIF files from system pickers and share sheets.
 - Keep account-bound uploads in a protected, retryable queue.
 - Browse Inbox, Documents, Saved Views, Search and Trash; edit filing metadata.
+- Review pending title, filing-category, tag, and date suggestions from Inbox
+  or Documents, with explicit Accept and Dismiss actions.
 - Save verified files for offline use, with progress, cancellation and stale-copy
   updates.
 - Preview documents, protected email HTML and extracted text with sensitivity

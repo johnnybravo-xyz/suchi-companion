@@ -7,7 +7,10 @@ import 'package:flutter/services.dart';
 import '../api/api_models.dart';
 import '../api/suchi_client.dart';
 import '../app/app_services.dart';
+import '../approvals/approvals_controller.dart';
+import '../approvals/approvals_screen.dart';
 import '../auth/account_identity.dart';
+import '../auth/session_controller.dart';
 import '../detail/document_detail_screen.dart';
 import '../documents/document_list_mode.dart';
 import '../documents/documents_screen.dart';
@@ -40,12 +43,14 @@ class _SuchiShellState extends State<SuchiShell> {
   JdCategoryStore? _categories;
   SuchiClient? _categoryClient;
   late final SavedViewController _savedViews;
+  late final ApprovalsController _approvals;
   int _selected = 0;
   bool _startupInboxPending = true;
   int _searchFocusSerial = 0;
   int? _searchFocusRequest;
   SavedView? _requestedSavedView;
   int _savedViewRevision = 0;
+  bool _approvalsRouteOpen = false;
   bool _choosingCaptureMode = false;
   int _readerRevision = 0;
   late DocumentListMode _listMode;
@@ -63,6 +68,7 @@ class _SuchiShellState extends State<SuchiShell> {
     _updateClient();
     if (_client == null) _startupInboxPending = false;
     _savedViews = SavedViewController(session: widget.services.session);
+    _approvals = ApprovalsController(session: widget.services.session);
     _syncIdentity();
     widget.services.session.addListener(_sessionChanged);
     _queueSubscription = widget.services.queue.watchUploads().listen(
@@ -82,6 +88,7 @@ class _SuchiShellState extends State<SuchiShell> {
     _queueUnavailable.dispose();
     _categories?.dispose();
     _savedViews.dispose();
+    _approvals.dispose();
     super.dispose();
   }
 
@@ -239,6 +246,35 @@ class _SuchiShellState extends State<SuchiShell> {
     setState(() => _readerRevision++);
   }
 
+  Future<void> _openApprovals() async {
+    if (_approvalsRouteOpen) return;
+    final identity = _currentIdentity;
+    final client = _client;
+    if (!mounted ||
+        identity == null ||
+        client == null ||
+        widget.services.session.state != SessionState.signedIn) {
+      return;
+    }
+    _approvalsRouteOpen = true;
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          settings: const RouteSettings(name: '/approvals'),
+          builder: (context) => ApprovalsScreen(
+            controller: _approvals,
+            session: widget.services.session,
+            identity: identity,
+            client: client,
+            onOpenDocument: _openDocument,
+          ),
+        ),
+      );
+    } finally {
+      _approvalsRouteOpen = false;
+    }
+  }
+
   void _openSavedView(SavedView view) {
     if (_client == null) return;
     setState(() {
@@ -376,6 +412,8 @@ class _SuchiShellState extends State<SuchiShell> {
         onOpenDocument: _openDocument,
         onInitialLoadComplete: (empty) =>
             _initialInboxLoaded(client, startupIdentity, empty),
+        approvals: _approvals,
+        onOpenApprovals: _openApprovals,
       ),
       DocumentsScreen(
         key: const ValueKey('documents'),
@@ -392,6 +430,7 @@ class _SuchiShellState extends State<SuchiShell> {
         onOpenSearch: _openSearchFromDocuments,
         onOpenDocument: _openDocument,
         onOpenOfflineDocument: _openOfflineDocument,
+        approvals: _approvals,
       ),
       _scanQueueScreen(),
       SearchScreen(

@@ -42,6 +42,7 @@ final class DocumentFiles {
   Future<void> handoff({
     required SuchiClient client,
     required int documentId,
+    required String displayName,
     required bool share,
     bool reveal = false,
   }) async {
@@ -65,6 +66,7 @@ final class DocumentFiles {
     final operation = _handoff(
       client: client,
       documentId: documentId,
+      displayName: displayName,
       share: share,
       reveal: reveal,
       generation: generation,
@@ -108,6 +110,7 @@ final class DocumentFiles {
   Future<void> _handoff({
     required SuchiClient client,
     required int documentId,
+    required String displayName,
     required bool share,
     required bool reveal,
     required int generation,
@@ -131,10 +134,11 @@ final class DocumentFiles {
         abortTrigger: abort,
       );
       if (generation != _generation) return;
+      final extension = extensionForMimeType(download.mimeType);
       final file = await partial.rename(
         path.join(
           directory.path,
-          'document-$documentId${extensionForMimeType(download.mimeType)}',
+          _exportFilename(displayName, extension: extension),
         ),
       );
       if (generation != _generation) return;
@@ -187,6 +191,39 @@ final class DocumentFiles {
         await entry.delete(recursive: true);
       }
     }
+  }
+
+  static String _exportFilename(
+    String displayName, {
+    required String extension,
+  }) {
+    var base = displayName
+        .replaceAll(RegExp(r'[/\\:*?"<>|\u0000-\u001f]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (base.toLowerCase().endsWith(extension.toLowerCase())) {
+      base = base.substring(0, base.length - extension.length).trim();
+    }
+    base = base.replaceAll(RegExp(r'^[. ]+|[. ]+$'), '');
+    if (base.isEmpty) base = 'Document';
+    final maxBytes = 240 - extension.length;
+    var bytes = 0;
+    final runes = <int>[];
+    for (final rune in base.runes) {
+      final width = rune <= 0x7f
+          ? 1
+          : rune <= 0x7ff
+          ? 2
+          : rune <= 0xffff
+          ? 3
+          : 4;
+      if (bytes + width > maxBytes) break;
+      runes.add(rune);
+      bytes += width;
+    }
+    base = String.fromCharCodes(runes).replaceAll(RegExp(r'[. ]+$'), '');
+    if (base.isEmpty) base = 'Document';
+    return '$base$extension';
   }
 
   static String extensionForMimeType(String mimeType) => switch (mimeType) {

@@ -20,8 +20,9 @@ browsing, and offline access to self-hosted Suchi accounts.
 
 - Browse Inbox, document categories, Saved Views, Search, and Trash with
   Standard, Compact, or Detailed rows and configurable sorting.
-- Open and share full documents, read extracted text, preview email bodies in a
-  sandboxed WebView, and edit titles, filing, language, sensitivity, and tags.
+- Open and share full documents under their current title, read extracted text,
+  preview email bodies in a sandboxed WebView, and edit titles, filing,
+  language, sensitivity, and tags.
 - Review pending title, filing-category, tag, and important-date changes from a
   manila card above the Inbox list. Review cards keep changes compact, group
   supporting files under plain-language details, open the reviewed document

@@ -380,14 +380,17 @@ void main() {
     );
     expect(calls, hasLength(1));
     expect(calls.single.method, 'open');
+    final openedPath = (calls.single.arguments as Map)['path'] as String;
     expect(
-      await tester.runAsync(
-        () =>
-            File((calls.single.arguments as Map)['path'] as String)
-                .readAsBytes(),
-      ),
-      [37, 80, 68, 70],
+      File(openedPath).uri.pathSegments.last,
+      'March electricity bill.pdf',
     );
+    expect(await tester.runAsync(() => File(openedPath).readAsBytes()), [
+      37,
+      80,
+      68,
+      70,
+    ]);
 
     final share = tester.widget<IconButton>(
       find.widgetWithIcon(IconButton, Icons.ios_share_outlined),
@@ -395,6 +398,13 @@ void main() {
     expect(share.onPressed, isNotNull);
     await invokeAndWait(share.onPressed!, 2);
     expect(calls.last.method, 'share');
+    expect(
+      File((calls.last.arguments as Map)['path'] as String)
+          .uri
+          .pathSegments
+          .last,
+      'March electricity bill.pdf',
+    );
     expect(
       requests.where((request) => request.url.path.endsWith('/preview')),
       hasLength(1),

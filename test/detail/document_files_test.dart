@@ -70,13 +70,14 @@ void main() {
           return pdf();
         }),
         documentId: 91,
+        displayName: 'Electricity bill, March 2026',
         share: false,
         reveal: true,
       );
 
       expect(calls.single.method, 'open');
       final path = (calls.single.arguments as Map)['path'] as String;
-      expect(path.endsWith('/document-91.pdf'), true);
+      expect(path.endsWith('/Electricity bill, March 2026.pdf'), true);
       expect(await File(path).exists(), true);
       await files.clear();
       expect(calls.last.method, 'dismiss');
@@ -94,11 +95,15 @@ void main() {
         ),
       ),
       documentId: 91,
+      displayName: 'Account/statement.eml',
       share: false,
     );
 
     final arguments = calls.single.arguments as Map;
-    expect((arguments['path'] as String).endsWith('/document-91.eml'), isTrue);
+    expect(
+      (arguments['path'] as String).endsWith('/Account statement.eml'),
+      isTrue,
+    );
     expect(arguments['mime_type'], 'message/rfc822');
   });
 
@@ -112,6 +117,7 @@ void main() {
           return pdf();
         }),
         documentId: 91,
+        displayName: 'Current document title',
         share: true,
       );
       expect(calls.single.method, 'share');
@@ -129,6 +135,7 @@ void main() {
           return response.future;
         }),
         documentId: 91,
+        displayName: 'Current document title',
         share: true,
       );
       final failed = expectLater(handoff, throwsA(isA<ApiException>()));
@@ -151,6 +158,7 @@ void main() {
       files.handoff(
         client: client((_) async => pdf()),
         documentId: 91,
+        displayName: 'Current document title',
         share: false,
       ),
       throwsA(isA<PlatformException>()),
@@ -188,6 +196,7 @@ void main() {
       await files.handoff(
         client: client((_) async => pdf()),
         documentId: 91,
+        displayName: 'Current document title',
         share: false,
       );
       expect(calls.map((call) => call.method), ['dismiss', 'dismiss', 'open']);

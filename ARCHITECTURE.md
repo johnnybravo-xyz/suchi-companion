@@ -193,11 +193,13 @@ aggregate offline quota. Camera, picker/share, queue, PDF composition, export,
 and offline writers reserve 512 MiB of free space before publication.
 
 Temporary document exports live under protected application support, are capped
-at 64 MiB, and are removed on failure, cancellation, sign-out, startup, or after
-24 hours. Native document channels accept only regular non-linked files at the
-expected depth beneath export or committed offline roots. Android shares
-read-only FileProvider URIs; iOS uses Quick Look and the share sheet. Recipient
-apps may keep their own copies.
+at 64 MiB, and use the current document title with a MIME-accurate extension for
+native open and share surfaces. Unsafe filename characters are removed. Exports
+are removed on failure, cancellation, sign-out, startup, or after 24 hours.
+Native document channels accept only regular non-linked files at the expected
+depth beneath export or committed offline roots. Android shares read-only
+FileProvider URIs; iOS uses Quick Look and the share sheet. Recipient apps may
+keep their own copies.
 
 **Privacy & storage** reports account, quarantined, device-wide offline, queue,
 and free-space totals. Offline cleanup requires confirmation. Queue items remain

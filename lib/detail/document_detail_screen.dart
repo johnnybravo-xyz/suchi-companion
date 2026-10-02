@@ -184,6 +184,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
         await widget.files.handoff(
           client: widget.client,
           documentId: document.id,
+          displayName: document.title,
           reveal: document.isSensitive,
           share: share,
         );

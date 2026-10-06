@@ -8,15 +8,32 @@
   <b>Capture on your phone. Keep it in your archive.</b>
 </p>
 
-Suchi Companion is the Android and iPhone client for a user-owned
-[Suchi](https://suchi.page) document archive. It captures, imports, queues,
-files, searches and keeps selected documents available offline without routing
-archive data through a Suchi-operated service.
+<p align="center">
+  <a href="https://apps.apple.com/us/app/suchi-companion/id6817310696">App Store (iPhone)</a> ·
+  <a href="https://suchi.page/#mobile-showcase">Android beta</a> ·
+  <a href="https://github.com/johnnybravo-xyz/suchi">Suchi server</a> ·
+  <a href="https://suchi.page/?#privacy">Privacy</a>
+</p>
 
-Current source line: **v0.1.0**. The app uses package ID
-`page.suchi.companion`; iOS also ships
-`page.suchi.companion.ShareExtension` with App Group
-`group.page.suchi.companion`.
+<p align="center">
+  <img src=".github/readme/companion-screens.png" alt="Four Companion screens: Scan, the upload Queue, the Inbox of documents waiting to be filed, and Search results for warranty." width="860">
+</p>
+
+Suchi Companion is the iPhone and Android app for
+[Suchi](https://github.com/johnnybravo-xyz/suchi), a self-hosted document
+archive. Scan a sheet of paper or share a PDF from another app, and it goes
+straight to your own Suchi server. Uploads wait in a queue until there is a
+connection, and documents you choose stay readable offline.
+
+There is no Suchi account and nothing in between: the app talks only to the
+server you pair it with. You need a Suchi server reachable over HTTPS. The app
+is free, with no ads and no in-app purchases.
+
+- **iPhone:** available on the
+  [App Store](https://apps.apple.com/us/app/suchi-companion/id6817310696).
+- **Android:** in early-access beta before its Play Store release.
+  [Sign up on suchi.page](https://suchi.page/#mobile-showcase) with the email
+  address linked to your Google Play account.
 
 ## Capabilities
 
@@ -76,6 +93,11 @@ guide](https://developers.google.com/ml-kit/vision/barcode-scanning/code-scanner
 
 ## Development
 
+Current source line: **v0.1.0**. The app uses package ID
+`page.suchi.companion`; iOS also ships
+`page.suchi.companion.ShareExtension` with App Group
+`group.page.suchi.companion`.
+
 Use the pinned Flutter, Dart, Android and Xcode versions in
 [`tool/toolchain.json`](tool/toolchain.json):
 
@@ -101,4 +123,4 @@ licenses:
 
 - **[GNU Affero General Public License v3.0](LICENSE)** — free for everyone.
 - **Commercial license** — for distributors who cannot accept the AGPL terms.
-  Write to contact@suchi.page.
+  Write to <contact@suchi.page>.

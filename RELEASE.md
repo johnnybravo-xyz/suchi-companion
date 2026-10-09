@@ -11,12 +11,12 @@ A simulator, unsigned build, unit test, or source-file inspection does not repla
 an explicitly required signed-artifact, console, reviewer-server, or physical-device
 check.
 
-## v0.1.0 contract
+## v0.2.0 contract
 
 | Surface | Required value |
 | --- | --- |
-| Marketing version and source tag | `0.1.0` and signed annotated tag `v0.1.0` |
-| First submitted build | `1`; increment after any submitted-code change |
+| Marketing version and source tag | `0.2.0` and signed annotated tag `v0.2.0` |
+| Build number | `2`; increment after any submitted-code change |
 | iOS app | iPhone only, iOS 26.0 minimum, bundle ID `page.suchi.companion` |
 | iOS extension | `page.suchi.companion.ShareExtension` |
 | Shared App Group | `group.page.suchi.companion` on both iOS targets |
@@ -131,7 +131,7 @@ quality gate.
 Build a newly signed AAB with the backed-up upload key. Inspect the AAB and Play's
 generated APKs, not an older local artifact. Verify:
 
-- package `page.suchi.companion`, version `0.1.0`, current build number, minimum
+- package `page.suchi.companion`, version `0.2.0`, current build number, minimum
   API 31, target API 36, and only intended permissions/components;
 - Play App Signing and the registered upload certificate;
 - arm64 libraries and 16 KiB ELF/ZIP alignment on a 16 KiB device or emulator;
@@ -155,7 +155,7 @@ report, and signing identities. Verify:
   receipts; and
 - upload the regular App Store Connect build, install Apple's processed build
   through internal TestFlight, and pass the signed physical matrix before App
-  Store submission. External TestFlight is optional and omitted for v0.1.0.
+  Store submission. External TestFlight is optional and omitted for v0.2.0.
 
 ## Public service and reviewer gates
 
@@ -202,7 +202,7 @@ For Apple, register the app, Share Extension, and App Group; upload a regular
 App Store Connect build, not a TestFlight Internal Only build; install the
 processed build through internal TestFlight; rerun the signed physical-device
 matrix; then submit that same build for production App Review with manual
-release. External TestFlight is omitted for v0.1.0. Hold release until Google
+release. External TestFlight is omitted for v0.2.0. Hold release until Google
 production readiness.
 
 For Google, complete developer and physical-device verification, register the

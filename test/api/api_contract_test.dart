@@ -66,13 +66,14 @@ void main() {
       expect(replayed.idempotentReplay, isTrue);
       expect(tasks.results.single.documentId, 93);
       expect(tasks.documentChangeApprovals, isEmpty);
-      expect(approvals.documentChangeApprovals, hasLength(3));
+      expect(approvals.documentChangeApprovals, hasLength(4));
       expect(
         approvals.documentChangeApprovals.map((approval) => approval.field),
         [
           DocumentChangeField.title,
           DocumentChangeField.tag,
           DocumentChangeField.category,
+          DocumentChangeField.tag,
         ],
       );
       expect(
@@ -231,7 +232,7 @@ void main() {
       final documentChanges = await client.listDocumentChangeApprovals();
       final dates = await client.listPendingDates();
 
-      expect(documentChanges, hasLength(3));
+      expect(documentChanges, hasLength(4));
       expect(dates, hasLength(1));
       expect(requests[0].queryParameters, {
         'include': 'approvals',

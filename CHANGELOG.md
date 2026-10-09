@@ -1,6 +1,18 @@
 # Changelog
 
-## 0.1.0 (Unreleased)
+## 0.2.0 (2026-10-09)
+
+### Documents and review
+
+- Create public document links with optional expiry and password protection,
+  view active links under **Shared documents**, and preserve original-file
+  sharing.
+- Review account-bound title, filing-category, tag, and important-date
+  suggestions from Inbox, including grouped supporting files and direct
+  document access.
+- Use document titles for exported viewer filenames.
+
+## 0.1.0 (2026-10-07)
 
 Suchi Companion's first release brings secure mobile capture, upload, archive
 browsing, and offline access to self-hosted Suchi accounts.

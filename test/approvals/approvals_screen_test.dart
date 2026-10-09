@@ -51,7 +51,7 @@ void main() {
         find.byKey(const ValueKey('approvals-inbox-card')),
         findsOneWidget,
       );
-      expect(find.text('4 filings need your approval'), findsOneWidget);
+      expect(find.text('5 filings need your approval'), findsOneWidget);
       expect(find.textContaining('Suchi suggested'), findsNothing);
       expect(find.byIcon(Icons.compare_arrows), findsNothing);
       final cardBounds = tester.getRect(
@@ -79,7 +79,6 @@ void main() {
         '/approvals',
       );
       expect(find.text('Account 7 electricity bill'), findsOneWidget);
-      expect(find.text('Service agreement'), findsNothing);
       expect(find.text('Supplier invoice'), findsNothing);
       expect(find.text('Below review threshold'), findsNothing);
 
@@ -95,6 +94,14 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('document-change-approval-306')),
+        400,
+        scrollable: find.byType(Scrollable),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Service agreement'), findsOneWidget);
 
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('date-approval-401')),
@@ -309,6 +316,25 @@ void main() {
     );
 
     await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('accept-document-change-306')),
+      400,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('accept-document-change-306')));
+    await tester.pumpAndSettle();
+    expect(
+      jsonDecode(
+        backend.singleRequest('POST', '/api/approvals/tasks/306/resolve').body,
+      ),
+      {'choice': 'apply'},
+    );
+    expect(
+      find.byKey(const ValueKey('document-change-approval-306')),
+      findsNothing,
+    );
+
+    await tester.scrollUntilVisible(
       find.byKey(const ValueKey('dismiss-date-401')),
       400,
       scrollable: find.byType(Scrollable),
@@ -490,7 +516,7 @@ final class _ReviewBackend {
   final requests = <http.Request>[];
   int userId = 7;
   int taskReads = 0;
-  final pendingDocumentChangeIds = <int>{301, 302, 305};
+  final pendingDocumentChangeIds = <int>{301, 302, 305, 306};
   bool datePending = true;
   bool failDates = false;
   bool staleDocumentChangeOnce = false;
@@ -580,7 +606,7 @@ http.Response _tasksResponse(
   }
   approvals.removeWhere((value) {
     final id = (value! as Map<String, Object?>)['id'];
-    return const {301, 302, 305}.contains(id) &&
+    return const {301, 302, 305, 306}.contains(id) &&
         !pendingDocumentChangeIds.contains(id);
   });
   return http.Response(

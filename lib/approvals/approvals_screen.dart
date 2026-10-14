@@ -96,29 +96,26 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       generation == _generation &&
       !_identityChanged;
 
-  Future<void> _resolveDocumentChange(
-    DocumentChangeApprovalTask review,
-    ReviewDecision decision,
-  ) async {
+  Future<void> _resolveApproval(ApprovalTask review, String choice) async {
     final generation = _generation;
-    final fieldLabel = _fieldLabel(review.field);
+    final change = review.documentChange;
     try {
-      await widget.controller.resolveDocumentChange(review.id, decision);
+      await widget.controller.resolveApproval(review.id, choice);
       if (!_current(generation)) return;
-      _showNotice(
-        decision == ReviewDecision.accept
-            ? review.field == DocumentChangeField.tag
-                  ? 'Tag addition queued.'
-                  : '$fieldLabel change queued.'
-            : '$fieldLabel suggestion dismissed.',
-      );
+      final fieldLabel = change == null ? null : _fieldLabel(change);
+      _showNotice(switch (choice) {
+        'apply' when change?.field == DocumentChangeField.tag =>
+          'Tag addition queued.',
+        'apply' when fieldLabel != null => '$fieldLabel change queued.',
+        'reject' || 'dismiss' => 'Approval dismissed.',
+        _ => 'Approval decision queued.',
+      });
     } on ApiException catch (error) {
       if (!_current(generation)) return;
       _showNotice(
         friendlyApiMessage(
           error,
-          fallback:
-              'The ${fieldLabel.toLowerCase()} suggestion could not be updated.',
+          fallback: 'The approval could not be updated.',
         ),
       );
     }
@@ -160,7 +157,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     final controller = widget.controller;
     final showEmpty =
         !controller.loading &&
-        controller.documentChangeError == null &&
+        controller.approvalError == null &&
         controller.dateError == null &&
         !controller.hasPending;
     return Scaffold(
@@ -171,19 +168,19 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: [
-            const SectionLabel('Document suggestions'),
+            const SectionLabel('Approvals'),
             const SizedBox(height: 10),
-            if (controller.documentChangeError case final error?) ...[
+            if (controller.approvalError case final error?) ...[
               InlineError(message: error, onRetry: controller.reload),
               const SizedBox(height: 14),
             ],
-            if (controller.loadingDocumentChanges &&
-                controller.documentChanges.isEmpty) ...[
+            if (controller.loadingApprovals &&
+                controller.approvals.isEmpty) ...[
               const LinearProgressIndicator(),
               const SizedBox(height: 14),
             ],
-            for (final review in controller.documentChanges) ...[
-              _documentChangeCard(review),
+            for (final review in controller.approvals) ...[
+              _approvalCard(review),
               const SizedBox(height: 12),
             ],
             if (controller.canReviewDates) ...[
@@ -214,57 +211,54 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     );
   }
 
-  Widget _documentChangeCard(DocumentChangeApprovalTask review) {
-    final busy = widget.controller.documentChangeBusy(review.id);
-    final current = switch (review.field) {
-      DocumentChangeField.title =>
-        review.currentValue.isEmpty ? 'Untitled' : review.currentValue,
-      DocumentChangeField.category =>
-        review.currentValue.isEmpty ? 'Unfiled' : review.currentValue,
-      DocumentChangeField.tag =>
-        review.currentValue.isEmpty ? 'No existing tags' : review.currentValue,
-    };
-    final proposed = review.field == DocumentChangeField.tag
-        ? 'Add tag: ${review.proposedValue}'
-        : review.proposedValue;
+  Widget _approvalCard(ApprovalTask review) {
+    final change = review.documentChange;
+    final busy = widget.controller.approvalBusy(review.id);
+    final key = change == null
+        ? ValueKey('approval-${review.id}')
+        : ValueKey('document-change-approval-${review.id}');
     return SuchiCard(
-      key: ValueKey('document-change-approval-${review.id}'),
+      key: key,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _documentLink(review.documentId, review.documentTitle),
-          const SizedBox(height: 12),
-          SectionLabel(_fieldLabel(review.field)),
+          if (review.documentId case final documentId?) ...[
+            _documentLink(documentId, review.documentTitle!),
+            const SizedBox(height: 12),
+          ],
+          SectionLabel(
+            change == null ? _workflowLabel(review) : _fieldLabel(change),
+          ),
           const SizedBox(height: 6),
-          _changeValues(current, proposed),
+          if (change == null)
+            Text(review.prompt)
+          else ...[
+            _changeValues(_currentValue(change), _proposedValue(change)),
+            const SizedBox(height: 10),
+            _score(change.score),
+          ],
           const SizedBox(height: 10),
-          _score(review.score),
           _details(
-            key: ValueKey('document-change-details-${review.id}'),
+            key: ValueKey(
+              change == null
+                  ? 'approval-details-${review.id}'
+                  : 'document-change-details-${review.id}',
+            ),
             children: [
-              if (review.source != null)
-                _detailSummary(
-                  'Why this was suggested',
-                  _sourceLabel(review.source!),
-                ),
-              if (review.deadlineAt != null)
-                _detailLine('Deadline', _deadline(review.deadlineAt!)),
-              if (!review.sourceCurrent || review.reviewConflict)
+              if (change?.source case final source?)
+                _detailSummary('Why this was suggested', _sourceLabel(source)),
+              if (review.deadlineAt case final deadline?)
+                _detailLine('Deadline', _deadline(deadline)),
+              if (change != null &&
+                  (!change.sourceCurrent || change.reviewConflict))
                 _detailLine('Status', 'Document changed'),
-              if (review.evidenceSources.isNotEmpty)
-                _detailGroup('Similar documents', review.evidenceSources),
+              if (change != null && change.evidenceSources.isNotEmpty)
+                _detailGroup('Similar documents', change.evidenceSources),
+              if (change == null) _detailLine('Workflow', review.approvalName),
             ],
           ),
-          _actions(
-            busy: busy,
-            dismissKey: ValueKey('dismiss-document-change-${review.id}'),
-            acceptKey: ValueKey('accept-document-change-${review.id}'),
-            onDismiss: () =>
-                _resolveDocumentChange(review, ReviewDecision.dismiss),
-            onAccept: () =>
-                _resolveDocumentChange(review, ReviewDecision.accept),
-          ),
+          _approvalActions(review, busy: busy),
         ],
       ),
     );
@@ -445,6 +439,56 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     );
   }
 
+  Widget _approvalActions(ApprovalTask review, {required bool busy}) {
+    if (review.documentChange != null &&
+        review.choices.length == 2 &&
+        review.choices.contains('apply') &&
+        review.choices.contains('reject')) {
+      return _actions(
+        busy: busy,
+        dismissKey: ValueKey('dismiss-document-change-${review.id}'),
+        acceptKey: ValueKey('accept-document-change-${review.id}'),
+        onDismiss: () => _resolveApproval(review, 'reject'),
+        onAccept: () => _resolveApproval(review, 'apply'),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < review.choices.length; index++) ...[
+          if (index > 0) const SizedBox(height: 8),
+          if (index == 0)
+            FilledButton(
+              key: ValueKey('approval-${review.id}-${review.choices[index]}'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+              ),
+              onPressed: busy
+                  ? null
+                  : () => _resolveApproval(review, review.choices[index]),
+              child: busy
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(_choiceLabel(review.choices[index])),
+            )
+          else
+            OutlinedButton(
+              key: ValueKey('approval-${review.id}-${review.choices[index]}'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+              ),
+              onPressed: busy
+                  ? null
+                  : () => _resolveApproval(review, review.choices[index]),
+              child: Text(_choiceLabel(review.choices[index])),
+            ),
+        ],
+      ],
+    );
+  }
+
   Widget _actions({
     required bool busy,
     required Key dismissKey,
@@ -509,12 +553,47 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     _ => 'Other date',
   };
 
-  static String _fieldLabel(DocumentChangeField field) => switch (field) {
-    DocumentChangeField.title => 'Title',
-    DocumentChangeField.category => 'Category',
-    DocumentChangeField.tag => 'Tag',
-  };
+  static String _fieldLabel(DocumentChangeApproval change) =>
+      switch (change.field) {
+        DocumentChangeField.title => 'Title',
+        DocumentChangeField.category => 'Category',
+        DocumentChangeField.correspondent => 'Correspondent',
+        DocumentChangeField.tag => 'Tag',
+        DocumentChangeField.language => 'Language',
+        DocumentChangeField.customField => change.fieldName!,
+      };
 
+  static String _currentValue(DocumentChangeApproval change) {
+    if (change.currentValue.isNotEmpty) return change.currentValue;
+    return switch (change.field) {
+      DocumentChangeField.title => 'Untitled',
+      DocumentChangeField.category => 'Unfiled',
+      DocumentChangeField.correspondent => 'No correspondent',
+      DocumentChangeField.tag => 'No existing tags',
+      DocumentChangeField.language => 'No language',
+      DocumentChangeField.customField => 'Not set',
+    };
+  }
+
+  static String _proposedValue(DocumentChangeApproval change) =>
+      change.field == DocumentChangeField.tag
+      ? 'Add tag: ${change.proposedValue}'
+      : change.proposedValue;
+
+  static String _workflowLabel(ApprovalTask review) =>
+      review.approvalName == 'rescan-proposal'
+      ? 'Pipeline rescan'
+      : 'Workflow approval';
+
+  static String _choiceLabel(String choice) => switch (choice) {
+    'apply' => 'Accept',
+    'reject' => 'Reject',
+    'approve' => 'Approve',
+    'approve_all' || 'rescan_all' => 'Rescan all',
+    'approve_sample' || 'try_20' => 'Try 20 first',
+    'dismiss' => 'Dismiss',
+    _ => choice.replaceAll('-', ' ').replaceAll('_', ' '),
+  };
   static String _sourceLabel(String source) => switch (source) {
     'llm' => 'Model suggestion',
     'archive' => 'Archive match',

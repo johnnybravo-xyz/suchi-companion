@@ -7,9 +7,10 @@
 - Create public document links with optional expiry and password protection,
   view active links under **Shared documents**, and preserve original-file
   sharing.
-- Review account-bound title, filing-category, tag, and important-date
-  suggestions from Inbox, including grouped supporting files and direct
-  document access.
+- Review every account-bound workflow approval plus title, filing-category,
+  tag, correspondent, language, custom-field, and important-date suggestions
+  from Inbox. Cards keep secondary context collapsed and submit the server's
+  exact action choices.
 - Use document titles for exported viewer filenames.
 
 ## 0.1.0 (2026-10-07)

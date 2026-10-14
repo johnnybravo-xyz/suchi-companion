@@ -24,7 +24,7 @@ targets iPhone with iOS 26.0 as its minimum.
 | Share and picker intake               | `lib/share/`, `ScanQueueScreen`, native `ShareChannel` adapters, `ios/Shared/`              |
 | Archive screens and document detail   | `lib/documents/`, `lib/inbox/`, `lib/search/`, `lib/detail/`, `lib/trash/`                  |
 | Saved Views                           | `lib/search/saved_views.dart`, shell-owned `SavedViewController`                            |
-| Document and date approval review     | `lib/approvals/`, shell-owned `ApprovalsController`                                         |
+| Workflow and date approval review     | `lib/approvals/`, shell-owned `ApprovalsController`                                         |
 | Offline documents                     | `lib/offline/offline_document_store.dart` and native document channels                      |
 | Settings and presentation             | `lib/more/`, `lib/widgets/suchi_widgets.dart`, `lib/theme/suchi_theme.dart`                 |
 
@@ -157,16 +157,18 @@ authoritative detail and verifies each bulk-edit result. Tag creation is not a
 mobile operation. Sensitivity changes conceal revealed content before the next
 frame.
 
-The shell-owned `ApprovalsController` loads supported document-change approvals
-(title, filing category, and tag) and pending date intelligence independently
-for the active online account. Inbox shows one manila approvals card above its
-document list only while supported approvals are pending; the account avatar
+The shell-owned `ApprovalsController` loads every task returned in the server's
+`approval_tasks` list and pending date intelligence independently for the active
+online account. Document-change tasks render title, filing category, tag,
+correspondent, language, and custom-field proposals. Other workflows render
+their prompt and exact server-provided choices. Inbox shows one manila approvals
+card above its document list only while reviews are pending; the account avatar
 remains an inert identity indicator on every screen. The approvals route
 captures its originating identity and client, removes itself on an account
 transition, and never publishes late reads or mutations from a previous
 account. Rows remain until a mutation is confirmed; stale or conflicting
-reviews trigger an authoritative reload. Unsupported server approval types stay
-hidden rather than creating a second generic workflow.
+reviews trigger an authoritative reload. Secondary context stays collapsed by
+default, while actions remain visible.
 
 `message/rfc822` previews receive bounded authenticated HTML from Dart and load
 it into a credential-free WebView. JavaScript, navigation, forms, frames, and

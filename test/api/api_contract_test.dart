@@ -65,19 +65,21 @@ void main() {
       expect(created.created, isTrue);
       expect(replayed.idempotentReplay, isTrue);
       expect(tasks.results.single.documentId, 93);
-      expect(tasks.documentChangeApprovals, isEmpty);
-      expect(approvals.documentChangeApprovals, hasLength(4));
+      expect(tasks.approvals, isEmpty);
+      expect(approvals.approvals, hasLength(6));
       expect(
-        approvals.documentChangeApprovals.map((approval) => approval.field),
+        approvals.approvals.map((approval) => approval.documentChange?.field),
         [
           DocumentChangeField.title,
           DocumentChangeField.tag,
           DocumentChangeField.category,
+          null,
           DocumentChangeField.tag,
+          null,
         ],
       );
       expect(
-        approvals.documentChangeApprovals.first.proposedValue,
+        approvals.approvals.first.documentChange!.proposedValue,
         contains('March'),
       );
       expect(dates.results.single.precision, 'month');
@@ -128,20 +130,34 @@ void main() {
       expect(DocumentSummary.fromJson(document).splitIndex, 0);
     });
 
-    test('filters unsupported approvals before strict document parsing', () {
+    test('retains generic and unsupported approval rows', () {
+      final tasks = TasksResponse.fromJson(_fixture('tasks-approvals.json'));
+
+      expect(tasks.approvals, hasLength(6));
+      expect(tasks.approvals[3].approvalName, 'rescan-proposal');
+      expect(tasks.approvals[3].documentChange, isNull);
+      expect(tasks.approvals[5].approvalName, 'invoice-approval');
+      expect(tasks.approvals[5].documentChange, isNull);
+    });
+
+    test('parses every document-change field shown by the web app', () {
       final value = _fixture('tasks-approvals.json')! as Map<String, dynamic>;
-      final rows = value['approval_tasks']! as List<dynamic>;
-      rows[3] = {'approval_name': 'rescan-proposal'};
-      rows[4] = {
-        'approval_name': 'document-change',
-        'vars': {'field': 'document_type'},
-      };
-      rows[5] = {'approval_name': 'future-workflow'};
-      (value['counts']! as Map<String, dynamic>)['approvals_open'] = 999;
+      final template =
+          (value['approval_tasks']! as List<dynamic>).first
+              as Map<String, dynamic>;
 
-      final tasks = TasksResponse.fromJson(value);
+      for (final entry in const {
+        'correspondent': DocumentChangeField.correspondent,
+        'language': DocumentChangeField.language,
+        'custom_field': DocumentChangeField.customField,
+      }.entries) {
+        final row = jsonDecode(jsonEncode(template)) as Map<String, dynamic>;
+        final vars = row['vars']! as Map<String, dynamic>;
+        vars['field'] = entry.key;
+        if (entry.key == 'custom_field') vars['field_name'] = 'Account number';
 
-      expect(tasks.documentChangeApprovals, hasLength(3));
+        expect(ApprovalTask.fromJson(row).documentChange!.field, entry.value);
+      }
     });
 
     test('rejects malformed supported document and date rows', () {
@@ -209,7 +225,7 @@ void main() {
   });
 
   group('approval review contracts', () {
-    test('uses bounded generic feeds and filters supported rows', () async {
+    test('uses bounded generic approval and date feeds', () async {
       final requests = <Uri>[];
       final client = SuchiClient(
         origin: _origin,
@@ -229,10 +245,10 @@ void main() {
         }),
       );
 
-      final documentChanges = await client.listDocumentChangeApprovals();
+      final approvals = await client.listApprovals();
       final dates = await client.listPendingDates();
 
-      expect(documentChanges, hasLength(4));
+      expect(approvals, hasLength(6));
       expect(dates, hasLength(1));
       expect(requests[0].queryParameters, {
         'include': 'approvals',
@@ -272,8 +288,8 @@ void main() {
         }),
       );
 
-      await client.resolveDocumentChangeApproval(301, ReviewDecision.accept);
-      await client.resolveDocumentChangeApproval(302, ReviewDecision.dismiss);
+      await client.resolveApproval(301, 'apply');
+      await client.resolveApproval(302, 'reject');
       await client.resolvePendingDate(401, ReviewDecision.accept);
       await client.resolvePendingDate(402, ReviewDecision.dismiss);
 
@@ -311,7 +327,7 @@ void main() {
             200,
             headers: {'content-type': 'application/json'},
           ),
-        ).resolveDocumentChangeApproval(301, ReviewDecision.accept),
+        ).resolveApproval(301, 'apply'),
         throwsA(isA<ApiException>()),
       );
       await expectLater(
@@ -321,7 +337,7 @@ void main() {
             204,
             headers: {'content-type': 'application/json'},
           ),
-        ).resolveDocumentChangeApproval(301, ReviewDecision.accept),
+        ).resolveApproval(301, 'apply'),
         throwsA(
           isA<ApiException>().having(
             (error) => error.kind,

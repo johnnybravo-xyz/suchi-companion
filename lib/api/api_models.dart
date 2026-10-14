@@ -822,63 +822,130 @@ final class PostIngestTask {
   final int? nextRunAt;
 }
 
-enum DocumentChangeField { title, category, tag }
+enum DocumentChangeField {
+  title,
+  category,
+  correspondent,
+  tag,
+  language,
+  customField,
+}
 
-final class DocumentChangeApprovalTask {
-  const DocumentChangeApprovalTask({
+final class ApprovalTask {
+  const ApprovalTask({
     required this.id,
     required this.runId,
     required this.approvalId,
     required this.documentId,
     required this.documentTitle,
-    required this.field,
+    required this.stateKey,
+    required this.assignee,
+    required this.prompt,
+    required this.approvalName,
+    required this.choices,
     required this.status,
+    required this.deadlineAt,
+    required this.createdAt,
+    required this.documentChange,
+  });
+
+  factory ApprovalTask.fromJson(Object? value) {
+    final json = _object(value, 'approval task');
+    final approvalName = _nonEmptyString(json, 'approval_name');
+    final documentId = _optionalPositiveInteger(json, 'doc_id');
+    final documentTitle = _optionalString(json, 'doc_title');
+    if (documentId != null &&
+        (documentTitle == null || documentTitle.trim().isEmpty)) {
+      throw const ApiFormatException(
+        'document-bound approval task must include its document title',
+      );
+    }
+    final choices = _stringList(json, 'choices');
+    if (choices.isEmpty ||
+        choices.any((choice) => choice.trim().isEmpty) ||
+        choices.toSet().length != choices.length) {
+      throw const ApiFormatException(
+        'approval task choices must be non-empty and unique',
+      );
+    }
+    final status = _string(json, 'status');
+    if (status != 'open' && status != 'claimed') {
+      throw const ApiFormatException(
+        'approval task status must be open or claimed',
+      );
+    }
+    final rawVars = json['vars'];
+    DocumentChangeApproval? documentChange;
+    if (approvalName == 'document-change') {
+      if (rawVars is! Map<String, dynamic>) {
+        throw const ApiFormatException(
+          'document change approval vars must be an object',
+        );
+      }
+      documentChange = DocumentChangeApproval.maybeFromJson(rawVars);
+    }
+
+    return ApprovalTask(
+      id: _positiveInteger(json, 'id'),
+      runId: _positiveInteger(json, 'run_id'),
+      approvalId: _positiveInteger(json, 'approval_id'),
+      documentId: documentId,
+      documentTitle: documentTitle,
+      stateKey: _nonEmptyString(json, 'state_key'),
+      assignee: _nonEmptyString(json, 'assignee'),
+      prompt: _nonEmptyString(json, 'prompt'),
+      approvalName: approvalName,
+      choices: List.unmodifiable(choices),
+      status: status,
+      deadlineAt: _optionalNonNegativeInteger(json, 'deadline_at'),
+      createdAt: _nonNegativeInteger(json, 'created_at'),
+      documentChange: documentChange,
+    );
+  }
+
+  final int id;
+  final int runId;
+  final int approvalId;
+  final int? documentId;
+  final String? documentTitle;
+  final String stateKey;
+  final String assignee;
+  final String prompt;
+  final String approvalName;
+  final List<String> choices;
+  final String status;
+  final int? deadlineAt;
+  final int createdAt;
+  final DocumentChangeApproval? documentChange;
+}
+
+final class DocumentChangeApproval {
+  const DocumentChangeApproval({
+    required this.field,
+    required this.fieldName,
     required this.currentValue,
     required this.proposedValue,
     required this.score,
     required this.reason,
     required this.source,
     required this.threshold,
-    required this.deadlineAt,
     required this.sourceCurrent,
     required this.reviewConflict,
     required this.evidenceSources,
   });
 
-  static DocumentChangeApprovalTask? maybeFromJson(Object? value) {
-    if (value is! Map<String, dynamic> ||
-        value['approval_name'] != 'document-change') {
-      return null;
-    }
-    final rawVars = value['vars'];
-    if (rawVars is! Map<String, dynamic>) return null;
+  static DocumentChangeApproval? maybeFromJson(Map<String, dynamic> rawVars) {
     final field = switch (rawVars['field']) {
       'title' => DocumentChangeField.title,
       'jd_category' => DocumentChangeField.category,
+      'correspondent' => DocumentChangeField.correspondent,
       'tag' => DocumentChangeField.tag,
+      'language' => DocumentChangeField.language,
+      'custom_field' => DocumentChangeField.customField,
       _ => null,
     };
     if (field == null) return null;
 
-    final choices = _stringList(value, 'choices');
-    if (choices.length != 2 ||
-        !choices.contains('apply') ||
-        !choices.contains('reject')) {
-      throw const ApiFormatException(
-        'document change approval choices must be apply and reject',
-      );
-    }
-    final status = _string(value, 'status');
-    if (status != 'open' && status != 'claimed') {
-      throw const ApiFormatException(
-        'document change approval status must be open or claimed',
-      );
-    }
-    if (_string(value, 'state_key') != 'review') {
-      throw const ApiFormatException(
-        'document change approval state must be review',
-      );
-    }
     final reason = _string(rawVars, 'reason');
     if (reason != 'review_first' && reason != 'low_confidence') {
       throw const ApiFormatException(
@@ -927,45 +994,37 @@ final class DocumentChangeApprovalTask {
           return _nonEmptyString(sourceJson, 'title');
         })
         .toList(growable: false);
-    _nonEmptyString(value, 'assignee');
-    _nonEmptyString(value, 'prompt');
-    _nonNegativeInteger(value, 'created_at');
+    final fieldName = _optionalString(rawVars, 'field_name');
+    if (field == DocumentChangeField.customField &&
+        (fieldName == null || fieldName.trim().isEmpty)) {
+      throw const ApiFormatException(
+        'custom field approval must include its field name',
+      );
+    }
 
-    return DocumentChangeApprovalTask(
-      id: _positiveInteger(value, 'id'),
-      runId: _positiveInteger(value, 'run_id'),
-      approvalId: _positiveInteger(value, 'approval_id'),
-      documentId: _positiveInteger(value, 'doc_id'),
-      documentTitle: _nonEmptyString(value, 'doc_title'),
+    return DocumentChangeApproval(
       field: field,
-      status: status,
+      fieldName: fieldName,
       currentValue: _string(rawVars, 'current_value'),
       proposedValue: _nonEmptyString(rawVars, 'proposed_value'),
       score: score,
       reason: reason,
       source: source,
       threshold: threshold,
-      deadlineAt: _optionalNonNegativeInteger(value, 'deadline_at'),
       sourceCurrent: _boolean(rawVars, 'source_current'),
       reviewConflict: _boolean(rawVars, 'review_conflict'),
       evidenceSources: List.unmodifiable(evidenceSources),
     );
   }
 
-  final int id;
-  final int runId;
-  final int approvalId;
-  final int documentId;
-  final String documentTitle;
   final DocumentChangeField field;
-  final String status;
+  final String? fieldName;
   final String currentValue;
   final String proposedValue;
   final double score;
   final String reason;
   final String? source;
   final double? threshold;
-  final int? deadlineAt;
   final bool sourceCurrent;
   final bool reviewConflict;
   final List<String> evidenceSources;
@@ -1114,10 +1173,7 @@ final class ReviewMutationResult {
 }
 
 final class TasksResponse {
-  const TasksResponse({
-    required this.results,
-    required this.documentChangeApprovals,
-  });
+  const TasksResponse({required this.results, required this.approvals});
 
   factory TasksResponse.fromJson(Object? value) {
     final json = _object(value, 'tasks response');
@@ -1127,24 +1183,21 @@ final class TasksResponse {
         throw ApiFormatException('task count ${entry.key} is invalid');
       }
     }
-    final approvals = <DocumentChangeApprovalTask>[];
-    if (json.containsKey('approval_tasks')) {
-      for (final value in _list(json, 'approval_tasks')) {
-        final approval = DocumentChangeApprovalTask.maybeFromJson(value);
-        if (approval != null) approvals.add(approval);
-      }
-    }
     return TasksResponse(
       results: _list(
         json,
         'results',
       ).map(PostIngestTask.fromJson).toList(growable: false),
-      documentChangeApprovals: List.unmodifiable(approvals),
+      approvals: json.containsKey('approval_tasks')
+          ? List.unmodifiable(
+              _list(json, 'approval_tasks').map(ApprovalTask.fromJson),
+            )
+          : const [],
     );
   }
 
   final List<PostIngestTask> results;
-  final List<DocumentChangeApprovalTask> documentChangeApprovals;
+  final List<ApprovalTask> approvals;
 }
 
 Object? decodeJsonBody(String body) {

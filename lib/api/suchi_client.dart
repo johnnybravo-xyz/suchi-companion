@@ -493,45 +493,34 @@ final class SuchiClient {
     return _parseSuccess(response, TasksResponse.fromJson);
   }
 
-  Future<List<DocumentChangeApprovalTask>> listDocumentChangeApprovals() async {
+  Future<List<ApprovalTask>> listApprovals() async {
     final response = await _request(
       'GET',
       '/api/tasks/',
       query: const {'include': 'approvals', 'limit': '200'},
       timeout: _readTimeout,
     );
-    return _parseSuccess(
-      response,
-      TasksResponse.fromJson,
-    ).documentChangeApprovals;
+    return _parseSuccess(response, TasksResponse.fromJson).approvals;
   }
 
-  Future<void> resolveDocumentChangeApproval(
-    int id,
-    ReviewDecision decision,
-  ) async {
-    if (id <= 0) {
+  Future<void> resolveApproval(int id, String choice) async {
+    if (id <= 0 || choice.trim().isEmpty) {
       throw const ApiException(
         kind: ApiFailureKind.rejected,
-        message: 'The approval task is invalid.',
+        message: 'The approval task or choice is invalid.',
       );
     }
     final response = await _request(
       'POST',
       '/api/approvals/tasks/$id/resolve',
-      jsonBody: {
-        'choice': switch (decision) {
-          ReviewDecision.accept => 'apply',
-          ReviewDecision.dismiss => 'reject',
-        },
-      },
+      jsonBody: {'choice': choice},
       expectedStatuses: const {204},
       timeout: _readTimeout,
     );
     if (response.body.isNotEmpty) {
       throw _malformed(
         response,
-        'Suchi returned content after resolving the document suggestion.',
+        'Suchi returned content after resolving the approval.',
       );
     }
   }

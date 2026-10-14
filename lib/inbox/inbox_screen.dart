@@ -533,10 +533,10 @@ class _InboxScreenState extends State<InboxScreen> {
 
   Widget _approvalCard(ApprovalsController approvals) {
     final colors = SuchiColors.of(context);
-    final count = approvals.documentChanges.length + approvals.dates.length;
+    final count = approvals.approvals.length + approvals.dates.length;
     final label = count == 1
-        ? '1 filing needs your approval'
-        : '$count filings need your approval';
+        ? '1 approval needs your review'
+        : '$count approvals need your review';
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: SuchiCard(

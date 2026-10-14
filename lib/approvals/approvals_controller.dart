@@ -18,29 +18,29 @@ final class ApprovalsController extends ChangeNotifier {
 
   AccountIdentity? _identity;
   SuchiClient? _client;
-  List<DocumentChangeApprovalTask> _documentChanges = const [];
+  List<ApprovalTask> _approvals = const [];
   List<PendingDateReview> _dates = const [];
-  String? _documentChangeError;
+  String? _approvalError;
   String? _dateError;
-  Set<int> _busyDocumentChangeIds = const {};
+  Set<int> _busyApprovalIds = const {};
   Set<int> _busyDateIds = const {};
   bool _canReviewDates = false;
-  bool _loadingDocumentChanges = false;
+  bool _loadingApprovals = false;
   bool _loadingDates = false;
   bool _disposed = false;
   int _accountGeneration = 0;
   int _loadGeneration = 0;
 
-  List<DocumentChangeApprovalTask> get documentChanges => _documentChanges;
+  List<ApprovalTask> get approvals => _approvals;
   List<PendingDateReview> get dates => _dates;
-  String? get documentChangeError => _documentChangeError;
+  String? get approvalError => _approvalError;
   String? get dateError => _dateError;
-  bool get loadingDocumentChanges => _loadingDocumentChanges;
+  bool get loadingApprovals => _loadingApprovals;
   bool get loadingDates => _loadingDates;
-  bool get loading => _loadingDocumentChanges || _loadingDates;
-  bool get hasPending => _documentChanges.isNotEmpty || _dates.isNotEmpty;
+  bool get loading => _loadingApprovals || _loadingDates;
+  bool get hasPending => _approvals.isNotEmpty || _dates.isNotEmpty;
   bool get canReviewDates => _canReviewDates;
-  bool documentChangeBusy(int id) => _busyDocumentChangeIds.contains(id);
+  bool approvalBusy(int id) => _busyApprovalIds.contains(id);
   bool dateBusy(int id) => _busyDateIds.contains(id);
 
   void _sessionChanged() {
@@ -63,13 +63,13 @@ final class ApprovalsController extends ChangeNotifier {
     _canReviewDates = canReviewDates;
     _accountGeneration++;
     _loadGeneration++;
-    _documentChanges = const [];
+    _approvals = const [];
     _dates = const [];
-    _documentChangeError = null;
+    _approvalError = null;
     _dateError = null;
-    _busyDocumentChangeIds = const {};
+    _busyApprovalIds = const {};
     _busyDateIds = const {};
-    _loadingDocumentChanges = false;
+    _loadingApprovals = false;
     _loadingDates = false;
     notifyListeners();
     if (client != null && identity != null) unawaited(reload());
@@ -81,39 +81,34 @@ final class ApprovalsController extends ChangeNotifier {
     if (_disposed || client == null || identity == null) return;
     final accountGeneration = _accountGeneration;
     final loadGeneration = ++_loadGeneration;
-    _documentChangeError = null;
+    _approvalError = null;
     _dateError = null;
-    _loadingDocumentChanges = true;
+    _loadingApprovals = true;
     _loadingDates = _canReviewDates;
     if (!_canReviewDates) _dates = const [];
     notifyListeners();
 
     await Future.wait([
-      _reloadDocumentChanges(
-        client,
-        identity,
-        accountGeneration,
-        loadGeneration,
-      ),
+      _reloadApprovals(client, identity, accountGeneration, loadGeneration),
       if (_canReviewDates)
         _reloadDates(client, identity, accountGeneration, loadGeneration),
     ]);
   }
 
-  Future<void> _reloadDocumentChanges(
+  Future<void> _reloadApprovals(
     SuchiClient client,
     AccountIdentity identity,
     int accountGeneration,
     int loadGeneration,
   ) async {
     try {
-      final changes = await client.listDocumentChangeApprovals();
+      final approvals = await client.listApprovals();
       if (!_current(identity, client, accountGeneration) ||
           loadGeneration != _loadGeneration) {
         return;
       }
-      _requireUnique(changes.map((entry) => entry.id), 'document changes');
-      _documentChanges = List.unmodifiable(changes);
+      _requireUnique(approvals.map((entry) => entry.id), 'approvals');
+      _approvals = List.unmodifiable(approvals);
     } on ApiException catch (error) {
       if (!_current(identity, client, accountGeneration) ||
           loadGeneration != _loadGeneration) {
@@ -123,12 +118,11 @@ final class ApprovalsController extends ChangeNotifier {
         await session.expire(error);
         return;
       }
-      _documentChangeError =
-          'Document suggestions could not be loaded. ${error.message}';
+      _approvalError = 'Approvals could not be loaded. ${error.message}';
     } finally {
       if (_current(identity, client, accountGeneration) &&
           loadGeneration == _loadGeneration) {
-        _loadingDocumentChanges = false;
+        _loadingApprovals = false;
         notifyListeners();
       }
     }
@@ -167,26 +161,34 @@ final class ApprovalsController extends ChangeNotifier {
     }
   }
 
-  Future<void> resolveDocumentChange(int id, ReviewDecision decision) async {
+  Future<void> resolveApproval(int id, String choice) async {
     final client = _client;
     final identity = _identity;
+    ApprovalTask? approval;
+    for (final candidate in _approvals) {
+      if (candidate.id == id) {
+        approval = candidate;
+        break;
+      }
+    }
     if (_disposed ||
         client == null ||
         identity == null ||
-        _busyDocumentChangeIds.contains(id) ||
-        !_documentChanges.any((entry) => entry.id == id)) {
+        _busyApprovalIds.contains(id) ||
+        approval == null ||
+        !approval.choices.contains(choice)) {
       return;
     }
     final accountGeneration = _accountGeneration;
-    _busyDocumentChangeIds = {..._busyDocumentChangeIds, id};
+    _busyApprovalIds = {..._busyApprovalIds, id};
     notifyListeners();
     try {
-      await client.resolveDocumentChangeApproval(id, decision);
+      await client.resolveApproval(id, choice);
       if (!_current(identity, client, accountGeneration)) return;
-      _documentChanges = List.unmodifiable(
-        _documentChanges.where((entry) => entry.id != id),
+      _approvals = List.unmodifiable(
+        _approvals.where((entry) => entry.id != id),
       );
-      _documentChangeError = null;
+      _approvalError = null;
       notifyListeners();
       await reload();
     } on ApiException catch (error) {
@@ -199,7 +201,7 @@ final class ApprovalsController extends ChangeNotifier {
       if (_current(identity, client, accountGeneration)) rethrow;
     } finally {
       if (_current(identity, client, accountGeneration)) {
-        _busyDocumentChangeIds = {..._busyDocumentChangeIds}..remove(id);
+        _busyApprovalIds = {..._busyApprovalIds}..remove(id);
         notifyListeners();
       }
     }
@@ -280,9 +282,9 @@ final class ApprovalsController extends ChangeNotifier {
     _disposed = true;
     _accountGeneration++;
     _loadGeneration++;
-    _documentChanges = const [];
+    _approvals = const [];
     _dates = const [];
-    _busyDocumentChangeIds = const {};
+    _busyApprovalIds = const {};
     _busyDateIds = const {};
     session.removeListener(_sessionChanged);
     super.dispose();

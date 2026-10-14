@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:suchi_companion/api/suchi_client.dart';
 import 'package:suchi_companion/approvals/approvals_controller.dart';
 import 'package:suchi_companion/approvals/approvals_screen.dart';
 import 'package:suchi_companion/auth/session_controller.dart';
@@ -51,7 +50,7 @@ void main() {
         find.byKey(const ValueKey('approvals-inbox-card')),
         findsOneWidget,
       );
-      expect(find.text('5 filings need your approval'), findsOneWidget);
+      expect(find.text('7 approvals need your review'), findsOneWidget);
       expect(find.textContaining('Suchi suggested'), findsNothing);
       expect(find.byIcon(Icons.compare_arrows), findsNothing);
       final cardBounds = tester.getRect(
@@ -79,7 +78,6 @@ void main() {
         '/approvals',
       );
       expect(find.text('Account 7 electricity bill'), findsOneWidget);
-      expect(find.text('Supplier invoice'), findsNothing);
       expect(find.text('Below review threshold'), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('open-approval-document-93')));
@@ -96,12 +94,30 @@ void main() {
       expect(tester.takeException(), isNull);
 
       await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('approval-303')),
+        400,
+        scrollable: find.byType(Scrollable),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('PIPELINE RESCAN'), findsOneWidget);
+
+      await tester.scrollUntilVisible(
         find.byKey(const ValueKey('document-change-approval-306')),
         400,
         scrollable: find.byType(Scrollable),
       );
       await tester.pumpAndSettle();
       expect(find.text('Service agreement'), findsOneWidget);
+      expect(find.text('CORRESPONDENT'), findsOneWidget);
+      expect(find.text('Acme Utilities'), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('approval-304')),
+        400,
+        scrollable: find.byType(Scrollable),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Supplier invoice'), findsOneWidget);
 
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('date-approval-401')),
@@ -316,6 +332,25 @@ void main() {
     );
 
     await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('approval-303-rescan_all')),
+      400,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('approval-303-rescan_all')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('approval-303-rescan_all')));
+    await tester.pumpAndSettle();
+    expect(
+      jsonDecode(
+        backend.singleRequest('POST', '/api/approvals/tasks/303/resolve').body,
+      ),
+      {'choice': 'rescan_all'},
+    );
+    expect(find.byKey(const ValueKey('approval-303')), findsNothing);
+
+    await tester.scrollUntilVisible(
       find.byKey(const ValueKey('accept-document-change-306')),
       400,
       scrollable: find.byType(Scrollable),
@@ -333,6 +368,25 @@ void main() {
       find.byKey(const ValueKey('document-change-approval-306')),
       findsNothing,
     );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('approval-304-approve')),
+      400,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('approval-304-approve')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('approval-304-approve')));
+    await tester.pumpAndSettle();
+    expect(
+      jsonDecode(
+        backend.singleRequest('POST', '/api/approvals/tasks/304/resolve').body,
+      ),
+      {'choice': 'approve'},
+    );
+    expect(find.byKey(const ValueKey('approval-304')), findsNothing);
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('dismiss-date-401')),
@@ -426,17 +480,14 @@ void main() {
       final controller = ApprovalsController(session: harness.services.session);
       addTearDown(controller.dispose);
       await controller.reload();
-      String currentTitle() => controller.documentChanges
+      String currentTitle() => controller.approvals
           .singleWhere((review) => review.id == 301)
-          .documentTitle;
+          .documentTitle!;
       expect(currentTitle(), 'Account 7 electricity bill');
 
       final oldMutationResponse = Completer<http.Response>();
       backend.nextDocumentChangeMutation = oldMutationResponse;
-      final oldMutation = controller.resolveDocumentChange(
-        301,
-        ReviewDecision.accept,
-      );
+      final oldMutation = controller.resolveApproval(301, 'apply');
       await Future<void>.delayed(Duration.zero);
 
       expect(await harness.services.session.signOut(), isTrue);
@@ -516,7 +567,7 @@ final class _ReviewBackend {
   final requests = <http.Request>[];
   int userId = 7;
   int taskReads = 0;
-  final pendingDocumentChangeIds = <int>{301, 302, 305, 306};
+  final pendingApprovalIds = <int>{301, 302, 303, 304, 305, 306};
   bool datePending = true;
   bool failDates = false;
   bool staleDocumentChangeOnce = false;
@@ -534,10 +585,7 @@ final class _ReviewBackend {
         nextTasksRead = null;
         return pending.future;
       }
-      return _tasksResponse(
-        userId,
-        pendingDocumentChangeIds: pendingDocumentChangeIds,
-      );
+      return _tasksResponse(userId, pendingApprovalIds: pendingApprovalIds);
     }
     if (request.method == 'GET' && request.url.path == '/api/intelligence/') {
       if (failDates) {
@@ -569,7 +617,7 @@ final class _ReviewBackend {
       final response = pending == null
           ? http.Response('', 204)
           : await pending.future;
-      if (response.statusCode == 204) pendingDocumentChangeIds.remove(id);
+      if (response.statusCode == 204) pendingApprovalIds.remove(id);
       return response;
     }
     if (request.method == 'POST' &&
@@ -592,7 +640,7 @@ final class _ReviewBackend {
 
 http.Response _tasksResponse(
   int userId, {
-  required Set<int> pendingDocumentChangeIds,
+  required Set<int> pendingApprovalIds,
 }) {
   final payload = jsonDecode(
     File('test/fixtures/api/v1/tasks-approvals.json').readAsStringSync(),
@@ -602,12 +650,16 @@ http.Response _tasksResponse(
     final approval = value! as Map<String, Object?>;
     if (approval['id'] == 301) {
       approval['doc_title'] = 'Account $userId electricity bill';
+    } else if (approval['id'] == 306) {
+      final vars = approval['vars']! as Map<String, Object?>;
+      vars['field'] = 'correspondent';
+      vars['current_value'] = 'Acme Power';
+      vars['proposed_value'] = 'Acme Utilities';
     }
   }
   approvals.removeWhere((value) {
     final id = (value! as Map<String, Object?>)['id'];
-    return const {301, 302, 305, 306}.contains(id) &&
-        !pendingDocumentChangeIds.contains(id);
+    return !pendingApprovalIds.contains(id);
   });
   return http.Response(
     jsonEncode(payload),

@@ -1140,4 +1140,16 @@ void main() {
       );
     });
   });
+
+  test('names Companion uploads by the app and the uploader', () {
+    DocumentSource source(Map<String, Object?> json) => DocumentSource.fromJson(
+      {'kind': 'api', 'label': 'Ritesh', 'observed_at': 1, ...json},
+    );
+    expect(
+      source({'client': 'companion_app'}).displayName,
+      'Suchi Companion · Ritesh',
+    );
+    expect(source({}).displayName, 'Ritesh / api');
+    expect(source({}).client, '');
+  });
 }

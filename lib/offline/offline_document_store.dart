@@ -887,6 +887,7 @@ final class OfflineDocumentStore extends ChangeNotifier {
             'label': source.label,
             'detail': source.detail,
             'observed_at': source.observedAt,
+            'client': source.client,
           },
       ],
       'tags': document.tags,
@@ -942,12 +943,21 @@ final class OfflineDocumentStore extends ChangeNotifier {
         sources.any(
           (source) =>
               source is! Map<String, dynamic> ||
-              !_hasExactKeys(source, const {
-                'kind',
-                'label',
-                'detail',
-                'observed_at',
-              }),
+              // Entries saved before `client` existed lack the key.
+              !(_hasExactKeys(source, const {
+                    'kind',
+                    'label',
+                    'detail',
+                    'observed_at',
+                  }) ||
+                  _hasExactKeys(source, const {
+                    'kind',
+                    'label',
+                    'detail',
+                    'observed_at',
+                    'client',
+                  })) ||
+              (source['client'] != null && source['client'] is! String),
         ) ||
         correspondents is! List ||
         correspondents.length > 1000 ||

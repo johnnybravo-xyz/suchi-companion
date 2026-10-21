@@ -1065,7 +1065,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
       MapEntry('Added', _formatDate(document.addedAt)),
       MapEntry(
         'Source',
-        document.sources.isEmpty ? 'None' : _sourceName(document.sources.first),
+        document.sources.isEmpty ? 'None' : document.sources.first.displayName,
       ),
     ];
     return SuchiCard(
@@ -1575,14 +1575,6 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
     return document.jdCategoryCode == null
         ? label
         : '${document.jdCategoryCode} · $label';
-  }
-
-  static String _sourceName(DocumentSource source) {
-    final label = source.label.trim();
-    final kind = source.kind.trim();
-    if (label.isEmpty) return kind.isEmpty ? 'None' : kind;
-    if (kind.isEmpty || label.toLowerCase() == kind.toLowerCase()) return label;
-    return '$label / $kind';
   }
 
   static String _friendlyType(String mimeType) {

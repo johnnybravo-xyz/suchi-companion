@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Document details show uploads made with this app as **Suchi Companion ·
+  name**, using the server's `sources[].client`. Older servers keep the
+  previous label.
+
 ## 0.2.0 (2026-10-09)
 
 ### Documents and review

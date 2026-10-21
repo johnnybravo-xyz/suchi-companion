@@ -501,6 +501,7 @@ final class DocumentSource {
     required this.label,
     required this.detail,
     required this.observedAt,
+    this.client = '',
   });
 
   factory DocumentSource.fromJson(Object? value) {
@@ -510,6 +511,7 @@ final class DocumentSource {
       label: _string(json, 'label'),
       detail: _optionalString(json, 'detail'),
       observedAt: _nonNegativeInteger(json, 'observed_at'),
+      client: _optionalString(json, 'client') ?? '',
     );
   }
 
@@ -517,6 +519,23 @@ final class DocumentSource {
   final String label;
   final String? detail;
   final int observedAt;
+
+  /// The server sets `companion_app` for uploads made with this app's
+  /// pairing token; `label` stays the uploading person.
+  final String client;
+
+  String get displayName {
+    final name = label.trim();
+    final channel = kind.trim();
+    if (client == 'companion_app') {
+      return name.isEmpty ? 'Suchi Companion' : 'Suchi Companion · $name';
+    }
+    if (name.isEmpty) return channel.isEmpty ? 'None' : channel;
+    if (channel.isEmpty || name.toLowerCase() == channel.toLowerCase()) {
+      return name;
+    }
+    return '$name / $channel';
+  }
 }
 
 final class DocumentCorrespondent {

@@ -22,8 +22,9 @@
 Suchi Companion is the iPhone and Android app for
 [Suchi](https://github.com/johnnybravo-xyz/suchi), a self-hosted document
 archive. Scan a sheet of paper or share a PDF from another app, and it goes
-straight to your own Suchi server. Uploads wait in a queue until there is a
-connection, and documents you choose stay readable offline.
+straight to your own Suchi server. Account-bound uploads continue through
+OS-managed background work and otherwise remain queued until connectivity and
+execution time are available.
 
 There is no Suchi account and nothing in between: the app talks only to the
 server you pair it with. You need a Suchi server reachable over HTTPS. The app
@@ -39,7 +40,7 @@ is free, with no ads and no in-app purchases.
 
 - Scan cleaned-up documents or retain the full camera frame as a photo PDF.
 - Import PDF, JPEG, PNG and HEIC/HEIF files from system pickers and share sheets.
-- Keep account-bound uploads in a protected, retryable queue.
+- Keep account-bound uploads in a protected, retryable background queue.
 - Browse Inbox, Documents, Saved Views, Search and Trash; edit filing metadata.
 - Review every pending workflow approval plus title, filing-category, tag,
   correspondent, language, custom-field, and date suggestions from Inbox.

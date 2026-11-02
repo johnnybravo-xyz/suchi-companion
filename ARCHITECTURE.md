@@ -20,7 +20,7 @@ targets iPhone with iOS 26.0 as its minimum.
 | Origin validation and sessions        | `lib/auth/session_controller.dart`, `server_origin.dart`, `credential_vault.dart`           |
 | Pairing links and native QR input     | `lib/auth/pairing_link.dart`, `pair_screen.dart`, native `PairingChannel` adapters          |
 | HTTP contracts and response bounds    | `lib/api/suchi_client.dart`, `api_models.dart`, `api_error.dart`                            |
-| Capture, queueing, and upload         | `lib/scan/scan_capture_controller.dart`, `scan_queue_store.dart`, `upload_coordinator.dart` |
+| Capture, queueing, and upload         | `lib/scan/scan_capture_controller.dart`, `scan_queue_store.dart`, `upload_coordinator.dart`, `background_upload.dart` |
 | Share and picker intake               | `lib/share/`, `ScanQueueScreen`, native `ShareChannel` adapters, `ios/Shared/`              |
 | Archive screens and document detail   | `lib/documents/`, `lib/inbox/`, `lib/search/`, `lib/detail/`, `lib/trash/`                  |
 | Saved Views                           | `lib/search/saved_views.dart`, shell-owned `SavedViewController`                            |
@@ -129,6 +129,14 @@ Network loss pauses work. Failed items stay until the user retries or discards
 them. Successful history and deduplication receipts are limited to the newest
 20 and 30 days. The shell observes account-scoped completion transitions to
 refresh archive lists without treating historical results as new activity.
+
+When the app leaves the foreground, Android WorkManager or iOS background
+processing starts a headless Dart isolate that reuses `UploadCoordinator`.
+The worker performs an anonymous handshake before sending credentials, verifies
+identity, then uploads only rows matching the verified stored account. A
+durable permit stops work on identity transitions, and a SQLite lease prevents
+the foreground and background isolates from processing the queue concurrently.
+iOS scheduling remains system-controlled; interrupted work stays queued.
 
 ## Archive and document state
 
@@ -247,5 +255,5 @@ does not embed repository, privacy, security, support, or email destinations.
 - Tests live beside their feature under `test/`; native adapter tests cover path,
   link, depth, size, and manifest validation.
 - Simulator and mock tests do not establish physical scanner, camera, picker,
-  share, lifecycle, or signed-distribution behavior. Those gates require the
-  device evidence listed in [RELEASE.md](RELEASE.md).
+  share, background scheduling, lifecycle, or signed-distribution behavior.
+  Those gates require the device evidence listed in [RELEASE.md](RELEASE.md).

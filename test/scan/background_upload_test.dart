@@ -72,6 +72,44 @@ void main() {
   });
 
   test(
+    'headless worker refuses a queue after account work is paused',
+    () async {
+      final staged = await _stage(queue, temporary, _identity);
+      final gateway = _FakeGateway();
+      final scheduler = BackgroundUploadScheduler(
+        queue: queue,
+        gateway: gateway,
+        platform: BackgroundUploadPlatform.android,
+      );
+      await scheduler.resume(_identity);
+      await scheduler.pause();
+      await scheduler.close();
+      var clients = 0;
+
+      final result = await BackgroundUploadRunner(
+        gateway: gateway,
+        platform: BackgroundUploadPlatform.android,
+        vault: _MemoryVault(
+          StoredCredentials(
+            origin: _origin,
+            token: _token,
+            userSnapshot: _user,
+          ),
+        ),
+        openQueue: () async => queue,
+        clientFactory: (origin, token) {
+          clients++;
+          throw StateError('A paused worker must not construct a client.');
+        },
+      ).run();
+
+      expect(result, isTrue);
+      expect(clients, 0);
+      expect((await database.uploadById(staged.id))?.state, 'queued');
+    },
+  );
+
+  test(
     'headless worker verifies origin and identity before uploading',
     () async {
       final staged = await _stage(queue, temporary, _identity);

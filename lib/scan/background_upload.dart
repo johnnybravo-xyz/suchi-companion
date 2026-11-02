@@ -364,13 +364,20 @@ final class BackgroundUploadRunner {
         userId: snapshot.userId,
         systemId: snapshot.systemId,
       );
-      final before = pendingBackgroundUploads(
-        await queue.allUploads(),
-        storedIdentity,
-      );
-      if (before.isEmpty) return true;
       final permit = _encodeIdentity(storedIdentity);
       if (await queue.database.setting(_uploadPermitKey) != permit) return true;
+      final uploads = await queue.allUploads();
+      final before = pendingBackgroundUploads(uploads, storedIdentity);
+      if (before.isEmpty) {
+        if (uploads.any(
+          (upload) =>
+              upload.state == 'uploading' &&
+              queueUploadBelongsToIdentity(upload, storedIdentity),
+        )) {
+          await _scheduleRetry(_gateway, _platform);
+        }
+        return true;
+      }
 
       probe = _clientFactory(credentials.origin, null);
       await probe.handshake();

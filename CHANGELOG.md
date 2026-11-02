@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Queued documents now upload through OS-managed background work on Android
+  and iOS while remaining account-bound and retryable across interruptions.
 - Document details show uploads made with this app as **Suchi Companion ·
   name**, using the server's `sources[].client`. Older servers keep the
   previous label.

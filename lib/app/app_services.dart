@@ -46,6 +46,7 @@ final class AppServices {
   final ThumbnailMemoryCache thumbnails;
   final DocumentFiles documentFiles;
   bool _closed = false;
+  Future<void> _lifecycleTail = Future<void>.value();
 
   static Future<AppServices> create() async {
     final queue = await ScanQueueStore.open();
@@ -143,24 +144,31 @@ final class AppServices {
     }
   }
 
-  Future<void> onAppConcealed() async {
+  Future<void> onAppConcealed() => _enqueueLifecycle(() async {
     thumbnails.clear();
     await uploads.pause();
     await backgroundUploads.onBackgrounded();
-  }
+  });
 
-  Future<void> onAppResumed() async {
+  Future<void> onAppResumed() => _enqueueLifecycle(() async {
     await backgroundUploads.onForegrounded();
     if (session.state == SessionState.signedIn) {
       await uploads.resume();
     }
     await shareImport.processPending();
     await capture.recoverPending();
+  });
+
+  Future<void> _enqueueLifecycle(Future<void> Function() operation) {
+    final next = _lifecycleTail.then((_) => operation());
+    _lifecycleTail = next.onError((_, _) {});
+    return next;
   }
 
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    await _lifecycleTail;
     await uploads.pause();
     await offlineDocuments.close();
     await documentFiles.clear();

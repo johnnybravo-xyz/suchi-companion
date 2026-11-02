@@ -17,6 +17,7 @@ import 'package:suchi_companion/detail/document_files.dart';
 import 'package:suchi_companion/documents/thumbnail_cache.dart';
 import 'package:suchi_companion/more/app_settings_controller.dart';
 import 'package:suchi_companion/offline/offline_document_store.dart';
+import 'package:suchi_companion/scan/background_upload.dart';
 import 'package:suchi_companion/scan/network_monitor.dart';
 import 'package:suchi_companion/scan/scan_capture_controller.dart';
 import 'package:suchi_companion/scan/scan_database.dart';
@@ -141,6 +142,7 @@ final class MobileAppHarness {
         onUnauthorized: session.expire,
         now: now,
       ),
+      backgroundUploads: const NoopBackgroundUploadScheduler(),
       network: TestOnlineNetwork(),
       offlineDocuments: offlineDocuments,
       capture: ScanCaptureController(

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
 import '../api/api_error.dart';
 import '../api/api_models.dart';
@@ -32,6 +33,10 @@ final class UploadCoordinator extends ChangeNotifier {
   final Future<void> Function(ApiException error) _onUnauthorized;
   final DateTime Function() _now;
   final Duration pollInterval;
+  static const _leaseLifetime = Duration(minutes: 10);
+  static const _leaseRetryDelay = Duration(seconds: 1);
+
+  final String _leaseOwner = Uuid().v4();
 
   StreamSubscription<List<ScanUpload>>? _queueSubscription;
   StreamSubscription<bool>? _networkSubscription;
@@ -146,7 +151,36 @@ final class UploadCoordinator extends ChangeNotifier {
     final identity = _currentIdentity();
     if (client == null || identity == null) return;
 
+    final nowMs = _now().millisecondsSinceEpoch;
+    final acquired = await _store.database.tryAcquireUploadLease(
+      owner: _leaseOwner,
+      nowMs: nowMs,
+      expiresAtMs: nowMs + _leaseLifetime.inMilliseconds,
+    );
+    if (!acquired) {
+      _schedule(_leaseRetryDelay.inMilliseconds);
+      return;
+    }
+    try {
+      await _drainReadyWithLease(client, identity);
+    } finally {
+      await _store.database.releaseUploadLease(_leaseOwner);
+    }
+  }
+
+  Future<void> _drainReadyWithLease(
+    SuchiClient client,
+    AccountIdentity identity,
+  ) async {
     while (_active && !_disposed) {
+      final leaseNowMs = _now().millisecondsSinceEpoch;
+      final renewed = await _store.database.renewUploadLease(
+        owner: _leaseOwner,
+        nowMs: leaseNowMs,
+        expiresAtMs: leaseNowMs + _leaseLifetime.inMilliseconds,
+      );
+      if (!renewed) return;
+
       final uploads = await _store.allUploads();
       final candidates = uploads
           .where(
@@ -473,7 +507,7 @@ final class UploadCoordinator extends ChangeNotifier {
           ),
           bytesSent: const Value(0),
           nextAttemptAtMs: const Value(null),
-          lastErrorCode: Value(error.code ?? 'unauthorized'),
+          lastErrorCode: const Value('unauthorized'),
           lastErrorMessage: const Value('Pair this device to continue.'),
           requestId: Value(error.requestId),
           updatedAtMs: Value(nowMs),

@@ -4,6 +4,11 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>page.suchi.companion.background-upload.processing</string>
+		<string>page.suchi.companion.background-upload.continued.*</string>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -37,6 +42,10 @@
 	<string>Suchi Companion scans documents, takes photos for your archive, and reads pairing QR codes.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Suchi Companion connects directly to the document server you choose on your local network.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>processing</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

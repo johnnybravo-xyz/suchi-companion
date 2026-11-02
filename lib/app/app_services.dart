@@ -7,6 +7,7 @@ import '../documents/thumbnail_cache.dart';
 import '../detail/document_files.dart';
 import '../more/app_settings_controller.dart';
 import '../offline/offline_document_store.dart';
+import '../scan/background_upload.dart';
 import '../scan/network_monitor.dart';
 import '../scan/scan_capture_controller.dart';
 import '../scan/native_capture_store.dart';
@@ -22,6 +23,7 @@ final class AppServices {
     required this.settings,
     required this.session,
     required this.uploads,
+    required this.backgroundUploads,
     required this.capture,
     required this.network,
     required this.offlineDocuments,
@@ -35,6 +37,7 @@ final class AppServices {
   final AppSettingsController settings;
   final SessionController session;
   final UploadCoordinator uploads;
+  final BackgroundUploadScheduling backgroundUploads;
   final NetworkMonitor network;
   final OfflineDocumentStore offlineDocuments;
   final ScanCaptureController capture;
@@ -56,6 +59,7 @@ final class AppServices {
       documentFiles = await DocumentFiles.open();
       offlineDocuments = await OfflineDocumentStore.open(files: documentFiles);
       final network = ConnectivityNetworkMonitor();
+      final backgroundUploads = BackgroundUploadScheduler(queue: queue);
       late final SessionController session;
       late final UploadCoordinator uploads;
       late final ScanCaptureController capture;
@@ -68,6 +72,7 @@ final class AppServices {
         onPauseUploads: () async {
           offlineDocuments!.cancelPending();
           await uploads.pause();
+          await backgroundUploads.pause();
           await documentFiles!.clear();
         },
         onBeginOfflineSignOut: offlineDocuments.beginSignOut,
@@ -78,7 +83,12 @@ final class AppServices {
           capture.concealForIdentityTransition();
           shareImport.concealForIdentityTransition();
         },
-        onResumeUploads: () => uploads.resume(),
+        onResumeUploads: () async {
+          final identity = session.identity;
+          if (identity == null) return;
+          await backgroundUploads.resume(identity);
+          await uploads.resume();
+        },
       );
       final nativeCaptures = await NativeCaptureStore.open();
       uploads = UploadCoordinator(
@@ -108,6 +118,7 @@ final class AppServices {
         session: session,
         uploads: uploads,
         capture: capture,
+        backgroundUploads: backgroundUploads,
         shareBridge: shareBridge,
         shareImport: shareImport,
         network: network,
@@ -116,6 +127,7 @@ final class AppServices {
         documentFiles: documentFiles,
       );
       await uploads.start();
+      await backgroundUploads.start();
       await session.initialize();
       unawaited(capture.recoverPending());
       return services;
@@ -131,10 +143,19 @@ final class AppServices {
     }
   }
 
+  Future<void> onAppConcealed() async {
+    thumbnails.clear();
+    await uploads.pause();
+    await backgroundUploads.onBackgrounded();
+  }
+
   Future<void> onAppResumed() async {
+    await backgroundUploads.onForegrounded();
+    if (session.state == SessionState.signedIn) {
+      await uploads.resume();
+    }
     await shareImport.processPending();
     await capture.recoverPending();
-    await uploads.processNow();
   }
 
   Future<void> close() async {
@@ -150,6 +171,7 @@ final class AppServices {
     settings.dispose();
     thumbnails.clear();
     await shareBridge.close();
+    await backgroundUploads.close();
     await queue.close();
   }
 }

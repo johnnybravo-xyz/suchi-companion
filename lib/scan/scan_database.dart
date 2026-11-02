@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
@@ -242,4 +244,127 @@ WHERE created_at_ms < ?
 
   Future<void> deleteSetting(String key) =>
       (delete(appSettings)..where((row) => row.key.equals(key))).go();
+
+  static const uploadLeaseKey = 'upload_execution_lease_v1';
+
+  Future<bool> tryAcquireUploadLease({
+    required String owner,
+    required int nowMs,
+    required int expiresAtMs,
+  }) {
+    _validateLeaseArguments(owner, nowMs, expiresAtMs);
+    return transaction(() async {
+      final current = await setting(uploadLeaseKey);
+      final lease = _parseUploadLease(current);
+      if (lease != null && lease.expiresAtMs > nowMs && lease.owner != owner) {
+        return false;
+      }
+      if (current != null) {
+        final removed =
+            await (delete(appSettings)..where(
+                  (row) =>
+                      row.key.equals(uploadLeaseKey) &
+                      row.value.equals(current),
+                ))
+                .go();
+        if (removed == 0) return false;
+      }
+      final inserted = await into(appSettings).insert(
+        AppSettingsCompanion.insert(
+          key: uploadLeaseKey,
+          value: _encodeUploadLease(owner, expiresAtMs),
+        ),
+        mode: InsertMode.insertOrIgnore,
+      );
+      return inserted != 0;
+    });
+  }
+
+  Future<bool> renewUploadLease({
+    required String owner,
+    required int nowMs,
+    required int expiresAtMs,
+  }) {
+    _validateLeaseArguments(owner, nowMs, expiresAtMs);
+    return transaction(() async {
+      final current = await setting(uploadLeaseKey);
+      final lease = _parseUploadLease(current);
+      if (current == null ||
+          lease == null ||
+          lease.owner != owner ||
+          lease.expiresAtMs <= nowMs) {
+        return false;
+      }
+      final updated =
+          await (update(appSettings)..where(
+                (row) =>
+                    row.key.equals(uploadLeaseKey) & row.value.equals(current),
+              ))
+              .write(
+                AppSettingsCompanion(
+                  value: Value(_encodeUploadLease(owner, expiresAtMs)),
+                ),
+              );
+      return updated == 1;
+    });
+  }
+
+  Future<void> releaseUploadLease(String owner) async {
+    if (!_validLeaseOwner(owner)) {
+      throw ArgumentError.value(owner, 'owner', 'Invalid upload lease owner.');
+    }
+    final current = await setting(uploadLeaseKey);
+    final lease = _parseUploadLease(current);
+    if (current == null || lease?.owner != owner) return;
+    await (delete(appSettings)..where(
+          (row) => row.key.equals(uploadLeaseKey) & row.value.equals(current),
+        ))
+        .go();
+  }
+
+  Future<bool> hasActiveUploadLease(int nowMs) async {
+    if (nowMs <= 0) {
+      throw ArgumentError.value(nowMs, 'nowMs', 'Timestamp must be positive.');
+    }
+    final lease = _parseUploadLease(await setting(uploadLeaseKey));
+    return lease != null && lease.expiresAtMs > nowMs;
+  }
+
+  static void _validateLeaseArguments(
+    String owner,
+    int nowMs,
+    int expiresAtMs,
+  ) {
+    if (!_validLeaseOwner(owner) ||
+        nowMs <= 0 ||
+        expiresAtMs <= nowMs ||
+        expiresAtMs - nowMs > const Duration(minutes: 10).inMilliseconds) {
+      throw ArgumentError('Invalid upload lease.');
+    }
+  }
+
+  static bool _validLeaseOwner(String owner) =>
+      owner.isNotEmpty && owner.length <= 128 && !owner.contains(':');
+
+  static String _encodeUploadLease(String owner, int expiresAtMs) =>
+      jsonEncode({'owner': owner, 'expires_at_ms': expiresAtMs});
+
+  static ({String owner, int expiresAtMs})? _parseUploadLease(String? encoded) {
+    if (encoded == null || encoded.length > 512) return null;
+    try {
+      final value = jsonDecode(encoded);
+      if (value is! Map<String, dynamic> ||
+          value.length != 2 ||
+          value['owner'] is! String ||
+          value['expires_at_ms'] is! int) {
+        return null;
+      }
+      final owner = value['owner'] as String;
+      final expiresAtMs = value['expires_at_ms'] as int;
+      if (!_validLeaseOwner(owner) || expiresAtMs <= 0) return null;
+      return (owner: owner, expiresAtMs: expiresAtMs);
+    } on FormatException {
+      return null;
+    }
+  }
 }

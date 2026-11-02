@@ -22,6 +22,7 @@ import 'package:suchi_companion/documents/thumbnail_cache.dart';
 import 'package:suchi_companion/inbox/inbox_screen.dart';
 import 'package:suchi_companion/more/app_settings_controller.dart';
 import 'package:suchi_companion/offline/offline_document_store.dart';
+import 'package:suchi_companion/scan/background_upload.dart';
 import 'package:suchi_companion/scan/network_monitor.dart';
 import 'package:suchi_companion/scan/scan_capture_controller.dart';
 import 'package:suchi_companion/scan/scan_database.dart';
@@ -128,6 +129,7 @@ void main() {
         deviceOcrEnabled: () => false,
         onUnauthorized: session.expire,
       ),
+      backgroundUploads: const NoopBackgroundUploadScheduler(),
       network: _OnlineNetwork(),
       offlineDocuments: offlineDocuments,
       capture: ScanCaptureController(

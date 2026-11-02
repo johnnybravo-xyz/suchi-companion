@@ -4,10 +4,12 @@ import '../documents/document_list_mode.dart';
 import '../scan/scan_database.dart';
 import '../scan/scanner_bridge.dart';
 
+const serverOcrOnlySettingKey = 'server_ocr_only';
+
 final class AppSettingsController extends ChangeNotifier {
   AppSettingsController(this._database);
 
-  static const _serverOcrOnlyKey = 'server_ocr_only';
+  static const _serverOcrOnlyKey = serverOcrOnlySettingKey;
   static const _themeModeKey = 'theme_mode';
   static const _documentListModeKey = 'document_list_mode';
   static const _captureModeKey = 'capture_mode';

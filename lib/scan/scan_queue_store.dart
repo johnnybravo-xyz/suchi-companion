@@ -815,6 +815,8 @@ final class ScanQueueStore {
       }
     }
 
+    final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final uploadLeaseActive = await database.hasActiveUploadLease(nowMs);
     final rows = await database.allUploads();
     for (final upload in rows) {
       if (const {
@@ -825,14 +827,14 @@ final class ScanQueueStore {
       }.contains(upload.state)) {
         await deletePayloads(upload);
       }
-      if (upload.state == 'uploading') {
+      if (upload.state == 'uploading' && !uploadLeaseActive) {
         await (database.update(
           database.scanUploads,
         )..where((row) => row.id.equals(upload.id))).write(
           ScanUploadsCompanion(
             state: const Value('queued'),
             bytesSent: const Value(0),
-            updatedAtMs: Value(DateTime.now().toUtc().millisecondsSinceEpoch),
+            updatedAtMs: Value(nowMs),
           ),
         );
         demoted++;

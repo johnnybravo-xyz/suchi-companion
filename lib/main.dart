@@ -8,13 +8,15 @@ import 'app/app_services.dart';
 import 'app/lifecycle_privacy_shield.dart';
 import 'auth/pair_screen.dart';
 import 'auth/session_controller.dart';
+import 'scan/background_upload.dart';
 import 'scan/scan_database.dart';
 import 'shell/shell.dart';
 import 'theme/suchi_theme.dart';
 import 'widgets/suchi_widgets.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await const WorkmanagerBackgroundUploadTaskGateway().initialize();
   registerBundledLicenses();
   runApp(const _Bootstrap());
 }
@@ -114,7 +116,7 @@ class _SuchiMobileAppState extends State<SuchiMobileApp> {
 
   @override
   Widget build(BuildContext context) => LifecyclePrivacyShield(
-    onConceal: widget.services.thumbnails.clear,
+    onConceal: widget.services.onAppConcealed,
     onResume: widget.services.onAppResumed,
     child: ListenableBuilder(
       listenable: widget.services.settings,

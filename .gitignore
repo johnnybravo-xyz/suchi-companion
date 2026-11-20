@@ -10,6 +10,7 @@
 .pub/
 /build/
 /coverage/
+/dist/
 
 # Application source must remain visible even with a global lib/ ignore rule.
 !/lib/
@@ -20,6 +21,7 @@
 
 # Android
 /android/.gradle/
+/android/.kotlin/
 /android/captures/
 /android/local.properties
 /android/app/debug/

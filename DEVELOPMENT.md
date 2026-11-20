@@ -2,11 +2,16 @@
 
 ## Pinned tools
 
-Versions are recorded in `tool/toolchain.json`. Dart ships with Flutter; do not install or upgrade it separately.
+Versions are recorded in `tool/toolchain.json`. Dart ships with Flutter; do not install or upgrade it separately. Use the pinned Flutter archive rather than the moving Homebrew cask for release work.
 
 ```sh
-brew install --cask flutter android-commandlinetools
+brew install --cask android-commandlinetools
 brew install openjdk@17
+curl -fLO https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.47.9-stable.zip
+echo '6545b85938745dc5070e9faf2adf70233c1811009d87fe6d27bfcda5a04b7698  flutter_macos_arm64_3.47.9-stable.zip' | shasum -a 256 -c -
+unzip flutter_macos_arm64_3.47.9-stable.zip
+export FLUTTER_ROOT="$PWD/flutter"
+export PATH="$FLUTTER_ROOT/bin:$PATH"
 flutter --disable-analytics
 flutter config --android-sdk /opt/homebrew/share/android-commandlinetools
 flutter config --jdk-dir /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
@@ -38,9 +43,9 @@ sdkmanager \
 
 Suchi builds with API 31 as its minimum and compile/target API 36 with AGP
 9.1.0 and Gradle 9.3.1 even when a newer Android platform is installed.
-`flutter_secure_storage` stays on the compatible 10.3.1
-security line because 11.x requires compile SDK 37. Native share adapters remain
-in-repository.
+`flutter_secure_storage` stays on 10.3.1 for this release; move to 11.x only
+after physical v0.2.0-to-current credential upgrade tests. Native share adapters
+remain in-repository.
 
 Dependency reviews follow Suchi's `../suchi/hack/pin-bumper.sh`: previous stable
 release (N−1), no downgrades, and compatible parent constraints. Flutter and Dart
@@ -52,12 +57,53 @@ SDK-selected test packages and dependency-constrained analyzer,
 archive, and CLI utility versions stay with their owners; do not add overrides
 just to raise transitive version numbers.
 
-Install full Xcode 27.0 from the App Store, select it with `xcode-select`, run
+Install full Xcode 27.2 from the App Store, select it with `xcode-select`, run
 first-launch setup, and install the recorded simulator runtimes. Command Line
 Tools alone cannot build the iOS target. The deployment floor is explicitly
-iOS 26.0 for the iPhone app, share extension and native tests. Xcode 27.0 with
+iOS 26.0 for the iPhone app, share extension and native tests. Xcode 27.2 with
 the installed iOS 26.5 and iOS 27.0 simulator runtimes is the supported test
 range.
+
+## Debian Android release host
+
+`devlab` is Debian 13 x86-64 and builds only unsigned Android release assets.
+Install the pinned SDKs there; do not copy signing material to it:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y curl git openjdk-17-jdk unzip xz-utils
+
+mkdir -p "$HOME/.local"
+cd "$HOME/.local"
+curl -fLO https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.9-stable.tar.xz
+echo '25ed8c3c29d51a7353f2a944310b478af8214920639524b19c50a19e6c044c5a  flutter_linux_3.47.9-stable.tar.xz' | sha256sum -c -
+tar -xf flutter_linux_3.47.9-stable.tar.xz
+
+export ANDROID_SDK_ROOT="$HOME/.local/android-sdk"
+mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+curl -fLO https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip
+echo '4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583  commandlinetools-linux-15859902_latest.zip' | sha256sum -c -
+unzip commandlinetools-linux-15859902_latest.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
+mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export PATH="$HOME/.local/flutter/bin:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+flutter --disable-analytics
+flutter config --android-sdk "$ANDROID_SDK_ROOT"
+yes | sdkmanager --licenses
+sdkmanager \
+  'platform-tools' \
+  'platforms;android-36' \
+  'build-tools;36.0.0' \
+  'cmake;3.22.1' \
+  'ndk;28.2.13676358'
+flutter precache --android
+```
+
+Before a release build, verify `flutter --version`, `java -version`, and
+`sdkmanager --list_installed` against `tool/toolchain.json`. The exact build
+commands live in `RELEASE.md`; run them from a clean detached release tag only
+after its compatible Suchi server release is published.
 
 ## Verify the host
 
@@ -90,7 +136,7 @@ publishes the app. `make` lists these targets.
 
 Read [ARCHITECTURE.md](ARCHITECTURE.md) before changing feature boundaries and
 [AGENTS.md](AGENTS.md) for the repository's implementation and verification
-rules. The v0.1.0 release candidate pins an exact compatible server revision.
+rules. Each release candidate pins an exact compatible server revision.
 
 ```sh
 flutter pub get

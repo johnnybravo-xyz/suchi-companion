@@ -94,7 +94,7 @@ guide](https://developers.google.com/ml-kit/vision/barcode-scanning/code-scanner
 
 ## Development
 
-Current source line: **v0.2.0**. The app uses package ID
+Current source line: **v0.3.0**. The app uses package ID
 `page.suchi.companion`; iOS also ships
 `page.suchi.companion.ShareExtension` with App Group
 `group.page.suchi.companion`.

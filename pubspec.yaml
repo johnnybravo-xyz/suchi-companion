@@ -1,36 +1,36 @@
 name: suchi_companion
 description: Suchi Companion, a camera-first mobile client for a self-hosted Suchi archive.
 publish_to: none
-version: 0.2.0+2
+version: 0.3.0+3
 
 environment:
-  sdk: '>=3.13.2 <4.0.0'
+  sdk: '>=3.13.7 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  connectivity_plus: 7.3.1
-  crypto: 3.0.7
-  drift: 2.34.3
+  connectivity_plus: 7.3.2
+  crypto: 3.0.8
+  drift: 2.35.4
   drift_flutter: 0.3.1
   flutter_secure_storage: 10.3.1
   http: 1.6.0
   intl: 0.20.3
   path: 1.9.1
   path_provider: 2.1.6
-  package_info_plus: 10.2.1
-  pdf: 3.13.0
-  url_launcher: 6.3.2
+  package_info_plus: 10.2.2
+  pdf: 3.13.1
+  url_launcher: 6.3.3
   uuid: 4.6.0
-  webview_flutter: 4.14.0
+  webview_flutter: 4.14.1
   http_parser: 4.1.2
   workmanager: 0.10.10
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  build_runner: 2.16.1
-  drift_dev: 2.34.5
+  build_runner: 2.17.1
+  drift_dev: 2.35.3
   flutter_lints: 6.0.0
   flutter_launcher_icons: 0.14.4
   webview_flutter_platform_interface: 2.15.1

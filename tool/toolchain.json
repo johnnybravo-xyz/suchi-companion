@@ -6,26 +6,28 @@
     "architecture": "arm64"
   },
   "shared_tools": {
-    "git_version": "2.55.0",
-    "bun_version": "1.4.2",
-    "go_version": "1.27.1",
+    "git_version": "2.56.0",
+    "bun_version": "1.4.4",
+    "go_version": "1.27.3",
     "gnu_make_version": "4.4.1"
   },
   "flutter": {
-    "version": "3.47.2",
+    "version": "3.47.9",
     "channel": "stable",
-    "installation": "Homebrew cask",
-    "archive_url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.47.2-stable.zip",
-    "archive_sha256": "f456fd6733053d9301828a2e702d6cbec872923126809aa8c48eb0a696d6cc01",
-    "revision": "d3b14c876900e553bc736ca19295fc09e3853e8e",
-    "engine_revision": "a804b261645ef8c13eb3d5c44a5c2fb0340c5539",
-    "dart_version": "3.13.2",
+    "installation": "Pinned release archive",
+    "archive_url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.47.9-stable.zip",
+    "archive_sha256": "6545b85938745dc5070e9faf2adf70233c1811009d87fe6d27bfcda5a04b7698",
+    "linux_x64_archive_url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.9-stable.tar.xz",
+    "linux_x64_archive_sha256": "25ed8c3c29d51a7353f2a944310b478af8214920639524b19c50a19e6c044c5a",
+    "revision": "c197ca5199e9ee5661e865596c9c07294dfab51c",
+    "engine_revision": "89c39edfdfae2949f6806e4a315c0c08522238b7",
+    "dart_version": "3.13.7",
     "devtools_version": "2.60.0"
   },
   "java": {
     "distribution": "Homebrew OpenJDK",
-    "version": "17.0.20.1",
-    "build": "17.0.20.1+0"
+    "version": "17.0.21.0.3",
+    "build": "17.0.21.0.3+0"
   },
   "android": {
     "command_line_tools_version": "22.0",
@@ -51,22 +53,22 @@
     "deferred_packages": ["platforms;android-37.0"],
     "dependency_constraints": {
       "flutter_secure_storage": "10.3.1",
-      "reason": "11.x requires compile SDK 37; this release builds against API 36 with AGP 9.1.0"
+      "reason": "11.x requires physical v0.2.0 credential upgrade tests before release"
     }
   },
   "ios": {
     "deployment_target": "26.0",
-    "xcode_version": "27.0",
-    "xcode_build": "27A266a",
-    "swift_version": "6.4",
+    "xcode_version": "27.2",
+    "xcode_build": "27B52",
+    "swift_version": "6.4.2",
     "swift_driver_version": "1.168.6",
     "simulator_runtimes": ["iOS 26.5", "iOS 27.0"],
     "cocoapods": "not installed; Swift Package Manager build path verified"
   },
   "server": {
     "path": "../suchi",
-    "compatible_ref": "2ca97ca11759de7bc61b9b61ad6e596b373a1903",
-    "compatible_tag": "v0.2.0",
+    "compatible_ref": "d78e9b31c75af3cbc0c49d0b81b3c927728b86b1",
+    "compatible_tag": "v0.5.0",
     "api_version": 1,
     "mobile_contract": "suchi-companion-v1"
   }

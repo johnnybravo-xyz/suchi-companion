@@ -11,12 +11,12 @@ A simulator, unsigned build, unit test, or source-file inspection does not repla
 an explicitly required signed-artifact, console, reviewer-server, or physical-device
 check.
 
-## v0.2.0 contract
+## v0.3.0 contract
 
 | Surface | Required value |
 | --- | --- |
-| Marketing version and source tag | `0.2.0` and signed annotated tag `v0.2.0` |
-| Build number | `2`; increment after any submitted-code change |
+| Marketing version and source tag | `0.3.0` and signed annotated tag `v0.3.0` |
+| Build number | `3`; increment after any submitted-code change |
 | iOS app | iPhone only, iOS 26.0 minimum, bundle ID `page.suchi.companion` |
 | iOS extension | `page.suchi.companion.ShareExtension` |
 | Shared App Group | `group.page.suchi.companion` on both iOS targets |
@@ -50,9 +50,9 @@ source commits, signed tags, commands, artifact digests, devices/OS versions,
 console decisions, failures, and reruns. Never commit signing material, reviewer
 credentials, tokens, document data, device identifiers, or private console exports.
 
-## Source and automated gates
+## Source, build hosts, and automated gates
 
-Run from the mobile repository unless stated otherwise:
+Run source checks from the mobile repository with the pinned Flutter SDK:
 
 ```sh
 make deps
@@ -62,6 +62,28 @@ make android
 make ios
 make ios-canary
 ```
+
+Release assets are never built by GitHub Actions. The `devlab` Debian 13 x86-64
+host builds the unsigned Android AAB and APK from a clean checkout of the exact
+signed mobile tag. It contains no signing key. Run `make
+android-release-unsigned`, verify `dist/android-unsigned/SHA256SUMS`, and bring
+that directory back to the signing Mac.
+
+On `devlab`, from a clean detached `v0.3.0` checkout after Suchi v0.5.0 is
+published:
+
+```sh
+make deps
+make api-check SERVER_ROOT=/path/to/suchi-v0.5.0
+make check
+make android-release-unsigned
+(cd dist/android-unsigned && sha256sum -c SHA256SUMS)
+```
+
+iOS cannot be built on `devlab`: Apple requires Xcode on macOS. Build, sign, and
+export the iOS archive on the pinned local Mac from the same exact tag. This is
+the only platform exception to the devlab asset-build rule; GitHub Actions is
+not a fallback release builder.
 
 Before tagging, also require all of the following in CI or the named native tool:
 
@@ -78,9 +100,13 @@ Before tagging, also require all of the following in CI or the named native tool
 
 GitHub Actions repeats the source, pinned API-fixture, Android debug
 lint/build, iOS simulator build, and inherited-secret canary gates on pushes to
-`main`, pull requests, and manual dispatch. Signed artifacts, emulators,
-physical devices, store consoles, and external services remain separate gates
-because a hosted source workflow cannot establish them.
+`main`, pull requests, and manual dispatch. It never produces release assets.
+The hosted iOS build follows GitHub's rolling Xcode 27 image and Swift 6.4
+family. Release archives still require the exact local versions pinned in
+`tool/toolchain.json`.
+
+Signed artifacts, emulators, physical devices, store consoles, and external
+services remain separate gates.
 
 The archived Trust Gate Go and Dart engines are not companion dependencies and
 must not be copied into source or bundled into an app artifact. The companion
@@ -128,10 +154,40 @@ quality gate.
 
 ### Android App Bundle
 
-Build a newly signed AAB with the backed-up upload key. Inspect the AAB and Play's
-generated APKs, not an older local artifact. Verify:
+Build the unsigned AAB and APK on `devlab`, verify their transferred SHA-256
+digests on the signing Mac, then sign both with the backed-up upload key. Inspect
+the newly signed AAB and Play's generated APKs, not an older local artifact.
 
-- package `page.suchi.companion`, version `0.2.0`, current build number, minimum
+On the signing Mac:
+
+```sh
+cd dist/android-unsigned
+shasum -a 256 -c SHA256SUMS
+export KEYSTORE=/path/to/upload-key.jks
+export ALIAS=upload-key-alias
+export BT="$ANDROID_SDK_ROOT/build-tools/36.0.0"
+
+jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
+  -keystore "$KEYSTORE" \
+  -signedjar suchi-companion-v0.3.0-build3-android.aab \
+  suchi-companion-v0.3.0-build3-android-unsigned.aab "$ALIAS"
+jarsigner -verify -verbose -certs \
+  suchi-companion-v0.3.0-build3-android.aab
+
+"$BT/zipalign" -P 16 -f 4 \
+  suchi-companion-v0.3.0-build3-android-unsigned.apk \
+  suchi-companion-v0.3.0-build3-android-aligned.apk
+"$BT/apksigner" sign \
+  --ks "$KEYSTORE" \
+  --ks-key-alias "$ALIAS" \
+  --out suchi-companion-v0.3.0-build3-android.apk \
+  suchi-companion-v0.3.0-build3-android-aligned.apk
+"$BT/apksigner" verify --verbose --print-certs \
+  suchi-companion-v0.3.0-build3-android.apk
+```
+Verify:
+
+- package `page.suchi.companion`, version `0.3.0`, current build number, minimum
   API 31, target API 36, and only intended permissions/components;
 - Play App Signing and the registered upload certificate;
 - arm64 libraries and 16 KiB ELF/ZIP alignment on a 16 KiB device or emulator;
@@ -142,9 +198,22 @@ generated APKs, not an older local artifact. Verify:
 
 ### iOS archive
 
-Archive with the pinned Xcode version and paid distribution team. Inspect the
-archive, exported IPA, entitlements, embedded privacy manifests, generated privacy
-report, and signing identities. Verify:
+Archive with the pinned Xcode version and paid distribution team on the local
+Mac:
+
+```sh
+export FLUTTER_ROOT="$HOME/.local/flutter-sdks/3.47.9/flutter"
+export PATH="$FLUTTER_ROOT/bin:$PATH"
+flutter pub get --enforce-lockfile
+flutter build ipa \
+  --release \
+  --build-name 0.3.0 \
+  --build-number 3 \
+  --export-method app-store
+```
+
+Inspect the archive, exported IPA, entitlements, embedded privacy manifests,
+generated privacy report, and signing identities. Verify:
 
 - iPhone-only distribution; iOS 26.0 minimum; app, extension, and App Group IDs
   exactly match the contract above;
@@ -155,7 +224,7 @@ report, and signing identities. Verify:
   receipts; and
 - upload the regular App Store Connect build, install Apple's processed build
   through internal TestFlight, and pass the signed physical matrix before App
-  Store submission. External TestFlight is optional and omitted for v0.2.0.
+  Store submission. External TestFlight is optional and omitted for v0.3.0.
 
 ## Public service and reviewer gates
 
@@ -202,7 +271,7 @@ For Apple, register the app, Share Extension, and App Group; upload a regular
 App Store Connect build, not a TestFlight Internal Only build; install the
 processed build through internal TestFlight; rerun the signed physical-device
 matrix; then submit that same build for production App Review with manual
-release. External TestFlight is omitted for v0.2.0. Hold release until Google
+release. External TestFlight is omitted for v0.3.0. Hold release until Google
 production readiness.
 
 For Google, complete developer and physical-device verification, register the

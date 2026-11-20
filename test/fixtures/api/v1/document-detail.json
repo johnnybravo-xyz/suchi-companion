@@ -2,6 +2,7 @@
   "id": 91,
   "owner_id": 1,
   "title": "March electricity bill",
+  "title_owner": "human",
   "content": "",
   "content_source": "server",
   "original_blob": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

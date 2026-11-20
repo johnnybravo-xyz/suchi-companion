@@ -2,11 +2,15 @@
 
 ## Unreleased
 
+## 0.3.0 (2026-11-20)
+
 - Queued documents now upload through OS-managed background work on Android
   and iOS while remaining account-bound and retryable across interruptions.
 - Document details show uploads made with this app as **Suchi Companion ·
   name**, using the server's `sources[].client`. Older servers keep the
   previous label.
+- Builds now use Flutter 3.47.9 and Dart 3.13.7, including the upstream TLS
+  trust-store security fix.
 
 ## 0.2.0 (2026-10-09)
 

@@ -9,8 +9,18 @@ plugins {
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
+val allowUnsignedRelease =
+    providers.gradleProperty("allowUnsignedRelease").orNull == "true"
+
+if (keystorePropertiesFile.isFile) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
 gradle.taskGraph.whenReady {
-    if (allTasks.any { it.project == project && it.name.contains("Release", ignoreCase = true) }) {
+    if (
+        allTasks.any { it.project == project && it.name.contains("Release", ignoreCase = true) } &&
+            !allowUnsignedRelease
+    ) {
         require(keystorePropertiesFile.isFile) {
             "Release signing requires android/key.properties"
         }
@@ -23,10 +33,6 @@ gradle.taskGraph.whenReady {
             "Release signing requires an existing storeFile"
         }
     }
-}
-
-if (keystorePropertiesFile.isFile) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
 android {
@@ -50,17 +56,21 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties.getProperty("keyAlias")
-            keyPassword = keystoreProperties.getProperty("keyPassword")
-            storeFile = keystoreProperties.getProperty("storeFile")?.let { file(it) }
-            storePassword = keystoreProperties.getProperty("storePassword")
+        if (keystorePropertiesFile.isFile && !allowUnsignedRelease) {
+            create("release") {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = keystoreProperties.getProperty("storeFile")?.let { file(it) }
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
         }
     }
 
     buildTypes {
         getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
+            if (keystorePropertiesFile.isFile && !allowUnsignedRelease) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles("proguard-rules.pro")
         }
     }

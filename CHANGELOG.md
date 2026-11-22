@@ -11,6 +11,8 @@
   previous label.
 - Builds now use Flutter 3.47.9 and Dart 3.13.7, including the upstream TLS
   trust-store security fix.
+- Android releases are distributed as signed APKs through GitHub Releases with
+  published checksums; installation and updates are manual.
 
 ## 0.2.0 (2026-10-09)
 

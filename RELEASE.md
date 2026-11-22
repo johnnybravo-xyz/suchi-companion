@@ -22,8 +22,8 @@ check.
 | Shared App Group | `group.page.suchi.companion` on both iOS targets |
 | Android app | API 31 minimum, target API 36, application ID `page.suchi.companion` |
 | Mobile API | `suchi-companion-v1`, API version `1` |
-| Distribution | Free public app through Apple App Store and Google Play |
-| Rollout | Manual, coordinated 100% release after all mandatory gates pass |
+| Distribution | Free public iPhone app through Apple App Store and signed Android APK through GitHub Releases |
+| Rollout | Manual publication after all mandatory gates pass |
 
 `tool/toolchain.json` is the machine-readable authority for the compatible server
 tag, exact revision, API version, and pinned build tools. The exact tagged mobile
@@ -41,8 +41,8 @@ distributing its binaries.
 4. Update `tool/toolchain.json` to the released server commit and API contract;
    run the fixture compatibility check against that exact checkout.
 5. Build and verify the signed mobile artifacts from the reviewed mobile commit.
-6. Complete store testing and approvals. Release Apple and Google together only
-   after both production releases are ready.
+6. Complete Apple testing and approval, verify the GitHub release contents, and
+   publish both distribution channels only after all mandatory gates pass.
 
 Keep the release evidence outside the public repository when it contains account,
 device, reviewer, or console details. The evidence record must still identify the
@@ -152,11 +152,13 @@ quality gate.
 
 ## Signed artifact gates
 
-### Android App Bundle
+### Android APK and App Bundle
 
 Build the unsigned AAB and APK on `devlab`, verify their transferred SHA-256
-digests on the signing Mac, then sign both with the backed-up upload key. Inspect
-the newly signed AAB and Play's generated APKs, not an older local artifact.
+digests on the signing Mac, then sign both with the backed-up release key.
+Inspect the signed APK. Retain the signed AAB for possible future store
+distribution, but do not attach the AAB or unsigned artifacts to the public
+GitHub release.
 
 On the signing Mac:
 
@@ -189,12 +191,13 @@ Verify:
 
 - package `page.suchi.companion`, version `0.3.0`, current build number, minimum
   API 31, target API 36, and only intended permissions/components;
-- Play App Signing and the registered upload certificate;
+- the signing certificate matches the recorded release certificate fingerprint;
 - arm64 libraries and 16 KiB ELF/ZIP alignment on a 16 KiB device or emulator;
 - production HTTPS enforcement, release network policy, launcher icons, notices,
   ML Kit dependencies, and absence of debug/test configuration; and
-- installation and the functional matrix through Play internal testing, followed
-  by the required closed track and pre-launch report.
+- direct APK installation and the functional matrix on physical Android devices
+  at API 31 and a current release, including a download from the draft GitHub
+  release and the manual-update disclosure.
 
 ### iOS archive
 
@@ -251,36 +254,36 @@ source, screenshots, public issue trackers, or this runbook.
 
 ## Store preparation and publication
 
-For both stores:
+For Apple and GitHub distribution:
 
-- accept current account agreements; create records without changing the fixed
-  package/bundle identifiers; publish the exact corresponding source and notices;
+- publish the exact corresponding source and notices without changing the fixed
+  package or bundle identifiers;
 - prepare truthful English, phone-focused metadata and screenshots captured from
-  the signed release build; complete content, privacy/data, rights, encryption,
-  target-audience, advertising, and reviewer-access declarations from the final
+  the signed release build;
+- keep content, privacy/data, rights, encryption, target-audience, advertising,
+  reviewer-access, and Android ML Kit disclosures aligned with the final
   dependency and permission inventories;
-- record worldwide availability, free pricing with no ads or purchases, and the
-  confirmed EU Digital Services Act non-trader status in both consoles;
 - use only approved public privacy, support, security, source, and mobile URLs;
-- reassess mutable store rules, account verification, and DSA trader status on
-  submission day rather than relying on an old checklist; and
-- retain console decisions, tester feedback, pre-launch reports, and resulting
+- state that Android installation and updates are manual and provide the APK
+  SHA-256 and signing-certificate fingerprint; and
+- retain console decisions, tester feedback, review results, and resulting
   change records in the private release evidence.
 
-For Apple, register the app, Share Extension, and App Group; upload a regular
-App Store Connect build, not a TestFlight Internal Only build; install the
-processed build through internal TestFlight; rerun the signed physical-device
-matrix; then submit that same build for production App Review with manual
-release. External TestFlight is omitted for v0.3.0. Hold release until Google
-production readiness.
+For Apple, register the app, Share Extension, and App Group; accept current
+account agreements; confirm worldwide availability, free pricing with no ads or
+purchases, and EU Digital Services Act non-trader status; upload a regular App
+Store Connect build, not a TestFlight Internal Only build; install the processed
+build through internal TestFlight; rerun the signed physical-device matrix; then
+submit that same build for production App Review with manual release. External
+TestFlight is omitted for v0.3.0.
 
-For Google, complete developer and physical-device verification, register the
-package and signing certificate, enable Play App Signing, upload the inspected
-AAB, complete internal testing and the pre-launch report, then satisfy the current
-production-access closed-test requirement. For the current personal-account rule,
-plan for at least 12 opted-in testers continuously for 14 days, but recheck the
-console policy before starting and before applying for production access. Keep the
-closed track available for fixes.
+For GitHub, create the release from the signed `v0.3.0` tag and attach only the
+inspected signed APK and its `SHA256SUMS`. Release notes must name the minimum
+Android version, manual installation and update model, package ID, source tag,
+APK SHA-256, and signing-certificate SHA-256 fingerprint. Verify the published
+release and assets without authentication, recheck the downloaded checksum and
+signature, and install that downloaded APK on a physical Android phone before
+making the release public.
 
 ## Stop and rollback rules
 
@@ -290,8 +293,10 @@ reviewer server is inaccessible, or a data-loss/security defect remains unresolv
 After any submitted-code change, increment the build number and rerun affected
 automation, signed-artifact inspection, privacy, and physical-device gates.
 
-Release both stores manually at 100% only after both approvals are ready. Preserve
-signed artifacts, source archives, checksums, SBOMs, store metadata, reviewer-server
-digest, and prior releasable builds for emergency response. Stop distribution on
-a critical regression; revoke reviewer credentials when review ends; keep the
-closed track and rollback evidence available for a corrected build.
+Release Apple manually after App Review approval and publish the GitHub release
+only after both artifacts and the physical-device matrix are ready. Preserve
+signed artifacts, source archives, checksums, SBOMs, store metadata,
+reviewer-server digest, and prior releasable builds for emergency response. Stop
+distribution on a critical regression; revoke reviewer credentials when review
+ends; retain rollback evidence and the prior public artifacts for a corrected
+build.

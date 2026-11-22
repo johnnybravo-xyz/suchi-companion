@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://apps.apple.com/us/app/suchi-companion/id6817310696">App Store (iPhone)</a> ·
-  <a href="https://suchi.page/#mobile-showcase">Android beta</a> ·
+  <a href="https://github.com/johnnybravo-xyz/suchi-companion/releases/latest">Android APK</a> ·
   <a href="https://github.com/johnnybravo-xyz/suchi">Suchi server</a> ·
   <a href="https://suchi.page/?#privacy">Privacy</a>
 </p>
@@ -32,9 +32,9 @@ is free, with no ads and no in-app purchases.
 
 - **iPhone:** available on the
   [App Store](https://apps.apple.com/us/app/suchi-companion/id6817310696).
-- **Android:** in early-access beta before its Play Store release.
-  [Sign up on suchi.page](https://suchi.page/#mobile-showcase) with the email
-  address linked to your Google Play account.
+- **Android:** download the signed APK from
+  [GitHub Releases](https://github.com/johnnybravo-xyz/suchi-companion/releases/latest).
+  Android updates are manual; verify the published SHA-256 before installing.
 
 ## Capabilities
 

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'app/app_licenses.dart';
 import 'app/app_services.dart';
 import 'app/lifecycle_privacy_shield.dart';
+import 'app/display_environment.dart';
 import 'auth/pair_screen.dart';
 import 'auth/session_controller.dart';
 import 'scan/background_upload.dart';
@@ -18,7 +19,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await const WorkmanagerBackgroundUploadTaskGateway().initialize();
   registerBundledLicenses();
-  runApp(const _Bootstrap());
+  runApp(const DisplayEnvironmentScope(child: _Bootstrap()));
 }
 
 class _Bootstrap extends StatefulWidget {
@@ -166,7 +167,9 @@ Widget _themedSystemChrome(BuildContext context, Widget? child) {
           ? Brightness.light
           : Brightness.dark,
     ),
-    child: child ?? const SizedBox.shrink(),
+    child: DisplayEnvironmentMediaQuery(
+      child: child ?? const SizedBox.shrink(),
+    ),
   );
 }
 

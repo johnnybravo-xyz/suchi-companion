@@ -16,6 +16,7 @@ import 'package:suchi_companion/detail/document_files.dart';
 import 'package:suchi_companion/documents/jd_category_store.dart';
 import 'package:suchi_companion/documents/thumbnail_cache.dart';
 import 'package:suchi_companion/scan/storage_protection.dart';
+import 'package:suchi_companion/widgets/adaptive_layout.dart';
 import 'package:suchi_companion/theme/suchi_theme.dart';
 import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
 
@@ -831,6 +832,30 @@ void main() {
     await tester.pumpAndSettle();
     final password = find.widgetWithText(TextField, 'Password (optional)');
     await tester.enterText(password, 'family');
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pumpAndSettle();
+    final adaptivePadding = tester.widget<Padding>(
+      find
+          .descendant(
+            of: find.byType(AdaptiveSheetContent),
+            matching: find.byType(Padding),
+          )
+          .first,
+    );
+    expect(adaptivePadding.padding.resolve(TextDirection.ltr).bottom, 0);
+    final sheetScroll = tester.widget<SingleChildScrollView>(
+      find.descendant(
+        of: find.byType(AdaptiveSheetContent),
+        matching: find.byType(SingleChildScrollView),
+      ),
+    );
+    expect(
+      sheetScroll.padding?.resolve(TextDirection.ltr).bottom,
+      20 + 300 / tester.view.devicePixelRatio,
+    );
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
     expect(tester.widget<TextField>(password).obscureText, isTrue);
     await tester.tap(find.byTooltip('Show password'));
     await tester.pump();

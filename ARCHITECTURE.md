@@ -8,8 +8,8 @@ sharing, and file viewing.
 The application ID is `page.suchi.companion` on Android and iOS. The iOS Runner
 and Share Extension share `group.page.suchi.companion`. Platform channels use
 the `page.suchi.companion/` prefix with `pairing`, `documents`, `scan`, `share`,
-and `storage` suffixes. Android targets API 36 with API 31 as its minimum. iOS
-targets iPhone with iOS 26.0 as its minimum.
+`storage`, and `layout` suffixes. Android targets API 36 with API 31 as its
+minimum. iOS targets iPhone and iPad with iOS 26.0 as its minimum.
 
 ## Ownership
 
@@ -26,7 +26,7 @@ targets iPhone with iOS 26.0 as its minimum.
 | Saved Views                           | `lib/search/saved_views.dart`, shell-owned `SavedViewController`                            |
 | Workflow and date approval review     | `lib/approvals/`, shell-owned `ApprovalsController`                                         |
 | Offline documents                     | `lib/offline/offline_document_store.dart` and native document channels                      |
-| Settings and presentation             | `lib/more/`, `lib/widgets/suchi_widgets.dart`, `lib/theme/suchi_theme.dart`                 |
+| Settings and adaptive presentation    | `lib/more/`, `lib/widgets/adaptive_layout.dart`, `lib/app/display_environment.dart`, native iOS `LayoutChannel` |
 
 Screens own their loading, paging, error, and selection state. The shell passes
 explicit revision counters after successful mutations. Opening and closing a
@@ -39,6 +39,21 @@ and capture mode in Drift. `SuchiColors` supplies the shared light/dark palette,
 and motion helpers honor reduced-motion settings. More owns focused settings,
 account, privacy, and About sheets and closes account-bearing sheets when the
 identity changes.
+
+The shell uses one nested document navigator in compact and wide layouts, so
+Back, loaded pages, filters and scroll position survive resizing. Compact
+windows use the bottom dock; system-reported vertical controls move navigation
+to that edge; regular-width windows use a rail. Document destinations split
+into master and detail panes at 720 logical pixels. Other destinations use the
+full workspace, with readable-width content and bounded sheets.
+
+On iOS 27.1+, `LayoutChannel` maps UIKit reserved layout regions and the
+vertical-bar edge into immutable Flutter display state. Native and Flutter
+sources are merged into `MediaQuery.displayFeatures`; malformed or stale native
+payloads fail closed. A display division defines the exact document master and
+detail panes. Edge occlusions inset chrome and content without inventing extra
+margin. Older iOS versions report no native regions and retain size-based
+adaptation.
 
 ## Trust and account boundary
 

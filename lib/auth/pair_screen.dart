@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../offline/offline_document_store.dart';
 import '../theme/suchi_theme.dart';
+import '../widgets/adaptive_layout.dart';
 import '../widgets/suchi_widgets.dart';
 import 'session_controller.dart';
 import 'pairing_link.dart';
@@ -270,269 +271,277 @@ class _PairScreenState extends State<PairScreen> {
       final prepared = session.preparedOrigin;
       return Scaffold(
         body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(23, 22, 23, 28),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight:
-                    MediaQuery.sizeOf(context).height -
-                    MediaQuery.paddingOf(context).vertical -
-                    50,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      const BrandMark(size: 36),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Pair with Suchi',
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Your documents stay between this phone and your Suchi server.',
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: colors.muted),
-                  ),
-                  if (session.state == SessionState.expired) ...[
-                    const SizedBox(height: 18),
-                    const InlineError(
-                      message: 'Your session expired. Verify your server and pair this device again.',
-                    ),
-                  ],
-                  _offlineCleanup(),
-                  const SizedBox(height: 22),
-                  SuchiCard(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: AdaptiveCenteredContent(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(23, 22, 23, 28),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight:
+                      MediaQuery.sizeOf(context).height -
+                      MediaQuery.paddingOf(context).vertical -
+                      50,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
                       children: [
-                        const SectionLabel('Quick pairing'),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Generate a pairing code in the Suchi web app Settings.',
+                        const BrandMark(size: 36),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Pair with Suchi',
+                            style: Theme.of(context).textTheme.headlineMedium,
+                          ),
                         ),
-                        const SizedBox(height: 14),
-                        FilledButton.icon(
-                          onPressed: busy
-                              ? null
-                              : () => _readPairingLink(scan: true),
-                          icon: const Icon(Icons.qr_code_scanner),
-                          label: const Text('Scan QR code'),
-                        ),
-                        const SizedBox(height: 8),
-                        OutlinedButton.icon(
-                          onPressed: busy
-                              ? null
-                              : () => _readPairingLink(scan: false),
-                          icon: const Icon(Icons.content_paste),
-                          label: const Text('Paste pairing link'),
-                        ),
-                        if (_pairingError != null) ...[
-                          const SizedBox(height: 12),
-                          InlineError(message: _pairingError!),
-                        ],
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  SuchiCard(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SectionLabel('Enter server manually'),
-                        const SizedBox(height: 12),
-                        TextField(
-                          key: const ValueKey('pair-server'),
-                          controller: _server,
-                          focusNode: _serverFocus,
-                          enabled: !busy && prepared == null,
-                          keyboardType: TextInputType.url,
-                          textInputAction: TextInputAction.go,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          decoration: const InputDecoration(
-                            labelText: 'Server address',
-                            hintText: 'https://suchi.example.com',
-                            prefixIcon: Icon(Icons.dns_outlined),
-                          ),
-                          onSubmitted: prepared == null && !busy
-                              ? (_) => _verifyServer()
-                              : null,
-                        ),
-                        if (prepared == null) ...[
-                          const SizedBox(height: 13),
-                          OutlinedButton.icon(
-                            key: const ValueKey('verify-server'),
-                            onPressed: busy ? null : _verifyServer,
-                            icon: authenticating
-                                ? SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: colors.accent,
-                                    ),
-                                  )
-                                : const Icon(Icons.verified_user_outlined),
-                            label: Text(
-                              authenticating
-                                  ? 'Verifying server…'
-                                  : 'Verify server',
-                            ),
-                          ),
-                        ] else ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Your documents stay between this device and your Suchi server.',
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: colors.muted),
+                    ),
+                    if (session.state == SessionState.expired) ...[
+                      const SizedBox(height: 18),
+                      const InlineError(
+                        message: 'Your session expired. Verify your server and pair this device again.',
+                      ),
+                    ],
+                    _offlineCleanup(),
+                    const SizedBox(height: 22),
+                    SuchiCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SectionLabel('Quick pairing'),
                           const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.check_circle,
-                                size: 18,
-                                color: colors.success,
-                              ),
-                              const SizedBox(width: 7),
-                              Expanded(
-                                child: Text(
-                                  prepared.scheme == 'http'
-                                      ? 'Verified development connection · traffic is not encrypted'
-                                      : 'Verified Suchi server',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: prepared.scheme == 'http'
-                                            ? colors.warning
-                                            : colors.success,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: busy
-                                    ? null
-                                    : () {
-                                        widget.session.clearPreparedServer();
-                                        _serverFocus.requestFocus();
-                                      },
-                                child: const Text('Change'),
-                              ),
-                            ],
+                          const Text(
+                            'Generate a pairing code in the Suchi web app Settings.',
                           ),
-                          const SizedBox(height: 5),
-                          SegmentedButton<bool>(
-                            segments: const [
-                              ButtonSegment(
-                                value: false,
-                                label: Text('Email'),
-                                icon: Icon(Icons.person_outline),
-                              ),
-                              ButtonSegment(
-                                value: true,
-                                label: Text('API token'),
-                                icon: Icon(Icons.key_outlined),
-                              ),
-                            ],
-                            selected: {_useToken},
-                            onSelectionChanged: busy
+                          const SizedBox(height: 14),
+                          FilledButton.icon(
+                            onPressed: busy
                                 ? null
-                                : (selection) => setState(() {
-                                    _useToken = selection.single;
-                                    _password.clear();
-                                    _token.clear();
-                                  }),
+                                : () => _readPairingLink(scan: true),
+                            icon: const Icon(Icons.qr_code_scanner),
+                            label: const Text('Scan QR code'),
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                            'Email pairing uses a local Suchi password. OIDC accounts pair with a scoped API token created in the web app.',
-                            style: Theme.of(context).textTheme.bodySmall,
+                          OutlinedButton.icon(
+                            onPressed: busy
+                                ? null
+                                : () => _readPairingLink(scan: false),
+                            icon: const Icon(Icons.content_paste),
+                            label: const Text('Paste pairing link'),
                           ),
-                          const SizedBox(height: 13),
-                          if (_useToken)
-                            TextField(
-                              key: const ValueKey('pair-token'),
-                              controller: _token,
-                              enabled: !busy,
-                              obscureText: true,
-                              autocorrect: false,
-                              enableSuggestions: false,
-                              keyboardType: TextInputType.visiblePassword,
-                              textInputAction: TextInputAction.done,
-                              decoration: const InputDecoration(
-                                labelText: 'Suchi API token',
-                                prefixIcon: Icon(Icons.key_outlined),
-                              ),
-                              onSubmitted: busy ? null : (_) => _pair(),
-                            )
-                          else ...[
-                            TextField(
-                              key: const ValueKey('pair-email'),
-                              controller: _email,
-                              enabled: !busy,
-                              keyboardType: TextInputType.emailAddress,
-                              textInputAction: TextInputAction.next,
-                              autocorrect: false,
-                              decoration: const InputDecoration(
-                                labelText: 'Email address',
-                                prefixIcon: Icon(Icons.person_outline),
+                          if (_pairingError != null) ...[
+                            const SizedBox(height: 12),
+                            InlineError(message: _pairingError!),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SuchiCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SectionLabel('Enter server manually'),
+                          const SizedBox(height: 12),
+                          TextField(
+                            key: const ValueKey('pair-server'),
+                            controller: _server,
+                            focusNode: _serverFocus,
+                            enabled: !busy && prepared == null,
+                            keyboardType: TextInputType.url,
+                            textInputAction: TextInputAction.go,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            decoration: const InputDecoration(
+                              labelText: 'Server address',
+                              hintText: 'https://suchi.example.com',
+                              prefixIcon: Icon(Icons.dns_outlined),
+                            ),
+                            onSubmitted: prepared == null && !busy
+                                ? (_) => _verifyServer()
+                                : null,
+                          ),
+                          if (prepared == null) ...[
+                            const SizedBox(height: 13),
+                            OutlinedButton.icon(
+                              key: const ValueKey('verify-server'),
+                              onPressed: busy ? null : _verifyServer,
+                              icon: authenticating
+                                  ? SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: colors.accent,
+                                      ),
+                                    )
+                                  : const Icon(Icons.verified_user_outlined),
+                              label: Text(
+                                authenticating
+                                    ? 'Verifying server…'
+                                    : 'Verify server',
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              key: const ValueKey('pair-password'),
-                              controller: _password,
-                              enabled: !busy,
-                              obscureText: true,
-                              autocorrect: false,
-                              enableSuggestions: false,
-                              textInputAction: TextInputAction.done,
-                              decoration: const InputDecoration(
-                                labelText: 'Password',
-                                prefixIcon: Icon(Icons.lock_outline),
+                          ] else ...[
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.check_circle,
+                                  size: 18,
+                                  color: colors.success,
+                                ),
+                                const SizedBox(width: 7),
+                                Expanded(
+                                  child: Text(
+                                    prepared.scheme == 'http'
+                                        ? 'Verified development connection · traffic is not encrypted'
+                                        : 'Verified Suchi server',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: prepared.scheme == 'http'
+                                              ? colors.warning
+                                              : colors.success,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: busy
+                                      ? null
+                                      : () {
+                                          widget.session.clearPreparedServer();
+                                          _serverFocus.requestFocus();
+                                        },
+                                  child: const Text('Change'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            SegmentedButton<bool>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: false,
+                                  label: Text('Email'),
+                                  icon: Icon(Icons.person_outline),
+                                ),
+                                ButtonSegment(
+                                  value: true,
+                                  label: Text('API token'),
+                                  icon: Icon(Icons.key_outlined),
+                                ),
+                              ],
+                              selected: {_useToken},
+                              onSelectionChanged: busy
+                                  ? null
+                                  : (selection) => setState(() {
+                                      _useToken = selection.single;
+                                      _password.clear();
+                                      _token.clear();
+                                    }),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Email pairing uses a local Suchi password. OIDC accounts pair with a scoped API token created in the web app.',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 13),
+                            if (_useToken)
+                              TextField(
+                                key: const ValueKey('pair-token'),
+                                controller: _token,
+                                enabled: !busy,
+                                obscureText: true,
+                                autocorrect: false,
+                                enableSuggestions: false,
+                                keyboardType: TextInputType.visiblePassword,
+                                textInputAction: TextInputAction.done,
+                                decoration: const InputDecoration(
+                                  labelText: 'Suchi API token',
+                                  prefixIcon: Icon(Icons.key_outlined),
+                                ),
+                                onSubmitted: busy ? null : (_) => _pair(),
+                              )
+                            else ...[
+                              TextField(
+                                key: const ValueKey('pair-email'),
+                                controller: _email,
+                                enabled: !busy,
+                                keyboardType: TextInputType.emailAddress,
+                                textInputAction: TextInputAction.next,
+                                autocorrect: false,
+                                decoration: const InputDecoration(
+                                  labelText: 'Email address',
+                                  prefixIcon: Icon(Icons.person_outline),
+                                ),
                               ),
-                              onSubmitted: busy ? null : (_) => _pair(),
+                              const SizedBox(height: 12),
+                              TextField(
+                                key: const ValueKey('pair-password'),
+                                controller: _password,
+                                enabled: !busy,
+                                obscureText: true,
+                                autocorrect: false,
+                                enableSuggestions: false,
+                                textInputAction: TextInputAction.done,
+                                decoration: const InputDecoration(
+                                  labelText: 'Password',
+                                  prefixIcon: Icon(Icons.lock_outline),
+                                ),
+                                onSubmitted: busy ? null : (_) => _pair(),
+                              ),
+                            ],
+                            const SizedBox(height: 13),
+                            FilledButton(
+                              key: const ValueKey('pair-submit'),
+                              onPressed: busy ? null : _pair,
+                              child: Text(
+                                authenticating
+                                    ? 'Pairing…'
+                                    : 'Pair this device',
+                              ),
                             ),
                           ],
-                          const SizedBox(height: 13),
-                          FilledButton(
-                            key: const ValueKey('pair-submit'),
-                            onPressed: busy ? null : _pair,
-                            child: Text(
-                              authenticating ? 'Pairing…' : 'Pair this device',
-                            ),
-                          ),
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                  if (session.errorMessage != null) ...[
-                    const SizedBox(height: 14),
-                    InlineError(
-                      message: session.errorMessage!,
-                      requestId: session.requestId,
-                      onRetry: session.canRetryStoredCredentials && !busy
-                          ? session.retryStoredCredentials
-                          : null,
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.lock_outline, size: 18, color: colors.success),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Suchi Companion verifies product identity and API compatibility before credentials leave this device. Passwords are never stored.',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
+                    if (session.errorMessage != null) ...[
+                      const SizedBox(height: 14),
+                      InlineError(
+                        message: session.errorMessage!,
+                        requestId: session.requestId,
+                        onRetry: session.canRetryStoredCredentials && !busy
+                            ? session.retryStoredCredentials
+                            : null,
                       ),
                     ],
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.lock_outline,
+                          size: 18,
+                          color: colors.success,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Suchi Companion verifies product identity and API compatibility before credentials leave this device. Passwords are never stored.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

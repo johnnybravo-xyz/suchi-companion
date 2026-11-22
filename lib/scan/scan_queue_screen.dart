@@ -11,6 +11,7 @@ import '../auth/session_controller.dart';
 import '../more/app_settings_controller.dart';
 import '../share/share_import_controller.dart';
 import '../theme/suchi_theme.dart';
+import '../widgets/adaptive_layout.dart';
 import '../widgets/suchi_widgets.dart';
 import 'scan_capture_controller.dart';
 import 'scan_database.dart';
@@ -147,11 +148,15 @@ class _ScanQueueScreenState extends State<ScanQueueScreen> {
                 conceal();
                 return const SizedBox.shrink();
               }
-              return _SplitDocumentsPicker(
-                client: client,
-                originId: upload.splitOriginId,
-                ids: ids,
-                isCurrent: () => !invalidated && sameAccount(),
+              return AdaptiveSheetContent(
+                padding: EdgeInsets.zero,
+                includeKeyboardInset: false,
+                child: _SplitDocumentsPicker(
+                  client: client,
+                  originId: upload.splitOriginId,
+                  ids: ids,
+                  isCurrent: () => !invalidated && sameAccount(),
+                ),
               );
             },
           );

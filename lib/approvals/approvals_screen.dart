@@ -9,6 +9,7 @@ import '../api/suchi_client.dart';
 import '../auth/account_identity.dart';
 import '../auth/session_controller.dart';
 import '../theme/suchi_theme.dart';
+import '../widgets/adaptive_layout.dart';
 import '../widgets/suchi_widgets.dart';
 import 'approvals_controller.dart';
 
@@ -162,50 +163,52 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         !controller.hasPending;
     return Scaffold(
       appBar: AppBar(title: const Text('Approvals')),
-      body: RefreshIndicator(
-        onRefresh: controller.reload,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          children: [
-            const SectionLabel('Approvals'),
-            const SizedBox(height: 10),
-            if (controller.approvalError case final error?) ...[
-              InlineError(message: error, onRetry: controller.reload),
-              const SizedBox(height: 14),
-            ],
-            if (controller.loadingApprovals &&
-                controller.approvals.isEmpty) ...[
-              const LinearProgressIndicator(),
-              const SizedBox(height: 14),
-            ],
-            for (final review in controller.approvals) ...[
-              _approvalCard(review),
-              const SizedBox(height: 12),
-            ],
-            if (controller.canReviewDates) ...[
-              const SizedBox(height: 8),
-              const SectionLabel('Dates'),
+      body: AdaptiveCenteredContent(
+        child: RefreshIndicator(
+          onRefresh: controller.reload,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+            children: [
+              const SectionLabel('Approvals'),
               const SizedBox(height: 10),
-              if (controller.dateError case final error?) ...[
+              if (controller.approvalError case final error?) ...[
                 InlineError(message: error, onRetry: controller.reload),
                 const SizedBox(height: 14),
               ],
-              if (controller.loadingDates && controller.dates.isEmpty) ...[
+              if (controller.loadingApprovals &&
+                  controller.approvals.isEmpty) ...[
                 const LinearProgressIndicator(),
                 const SizedBox(height: 14),
               ],
-              for (final review in controller.dates) ...[
-                _dateCard(review),
+              for (final review in controller.approvals) ...[
+                _approvalCard(review),
                 const SizedBox(height: 12),
               ],
+              if (controller.canReviewDates) ...[
+                const SizedBox(height: 8),
+                const SectionLabel('Dates'),
+                const SizedBox(height: 10),
+                if (controller.dateError case final error?) ...[
+                  InlineError(message: error, onRetry: controller.reload),
+                  const SizedBox(height: 14),
+                ],
+                if (controller.loadingDates && controller.dates.isEmpty) ...[
+                  const LinearProgressIndicator(),
+                  const SizedBox(height: 14),
+                ],
+                for (final review in controller.dates) ...[
+                  _dateCard(review),
+                  const SizedBox(height: 12),
+                ],
+              ],
+              if (showEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 56),
+                  child: Center(child: Text('All caught up.')),
+                ),
             ],
-            if (showEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 56),
-                child: Center(child: Text('All caught up.')),
-              ),
-          ],
+          ),
         ),
       ),
     );

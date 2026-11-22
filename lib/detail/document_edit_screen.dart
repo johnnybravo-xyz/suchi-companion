@@ -5,6 +5,7 @@ import '../api/api_error.dart';
 import '../api/api_models.dart';
 import '../api/suchi_client.dart';
 import '../auth/session_controller.dart';
+import '../widgets/adaptive_layout.dart';
 import '../widgets/suchi_widgets.dart';
 
 class DocumentEditScreen extends StatefulWidget {
@@ -233,158 +234,161 @@ class _DocumentEditScreenState extends State<DocumentEditScreen> {
       title: const Text('Edit document', overflow: TextOverflow.ellipsis),
     ),
     body: SafeArea(
-      child: ListenableBuilder(
-        listenable: widget.session,
-        builder: (context, _) {
-          if (!_sameAccount) {
-            return const Padding(
-              padding: EdgeInsets.all(20),
-              child: Text(
-                'The account changed. Reopen the document to edit it.',
-              ),
-            );
-          }
-          final bySlug = {for (final tag in _tags) tag.slug: tag};
-          final search = _tagSearch.text.trim().toLowerCase();
-          final matches = search.isEmpty
-              ? <TagView>[]
-              : _tags
-                    .where(
-                      (tag) =>
-                          !_selectedTags.contains(tag.slug) &&
-                          (tag.name.toLowerCase().contains(search) ||
-                              tag.slug.toLowerCase().contains(search)),
-                    )
-                    .toList();
-          return Form(
-            key: _form,
-            onChanged: () => setState(() {}),
-            child: ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                TextFormField(
-                  controller: _title,
-                  enabled: !_saving,
-                  decoration: const InputDecoration(labelText: 'Title'),
-                  textCapitalization: TextCapitalization.sentences,
-                  minLines: 1,
-                  maxLines: 3,
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Enter a document title.'
-                      : null,
+      child: AdaptiveCenteredContent(
+        child: ListenableBuilder(
+          listenable: widget.session,
+          builder: (context, _) {
+            if (!_sameAccount) {
+              return const Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'The account changed. Reopen the document to edit it.',
                 ),
-                const SizedBox(height: 20),
-                Text('Tags', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                if (_selectedTags.isEmpty) const Text('No tags assigned.'),
-                if (_selectedTags.isNotEmpty)
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      for (final slug in _selectedTags)
-                        InputChip(
-                          label: Text(bySlug[slug]?.name ?? slug),
-                          deleteIcon: const Icon(Icons.close),
-                          deleteButtonTooltipMessage:
-                              'Remove ${bySlug[slug]?.name ?? slug}',
-                          onDeleted:
-                              _saving ||
-                                  _loadingTags ||
-                                  _catalogError != null ||
-                                  !bySlug.containsKey(slug)
-                              ? null
-                              : () =>
-                                    setState(() => _selectedTags.remove(slug)),
-                        ),
-                    ],
-                  ),
-                if (_loadingTags)
-                  const Text('Loading available tags…')
-                else if (_catalogError != null) ...[
-                  Text(_catalogError!),
-                  TextButton(
-                    onPressed: _loadTags,
-                    child: const Text('Retry tags'),
-                  ),
-                ] else ...[
-                  TextField(
-                    controller: _tagSearch,
+              );
+            }
+            final bySlug = {for (final tag in _tags) tag.slug: tag};
+            final search = _tagSearch.text.trim().toLowerCase();
+            final matches = search.isEmpty
+                ? <TagView>[]
+                : _tags
+                      .where(
+                        (tag) =>
+                            !_selectedTags.contains(tag.slug) &&
+                            (tag.name.toLowerCase().contains(search) ||
+                                tag.slug.toLowerCase().contains(search)),
+                      )
+                      .toList();
+            return Form(
+              key: _form,
+              onChanged: () => setState(() {}),
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  TextFormField(
+                    controller: _title,
                     enabled: !_saving,
-                    onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(
-                      labelText: 'Find existing tags',
-                      hintText: 'Search by name or slug',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Title'),
+                    textCapitalization: TextCapitalization.sentences,
+                    minLines: 1,
+                    maxLines: 3,
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Enter a document title.'
+                        : null,
                   ),
-                  if (search.isEmpty)
-                    const Text('Type to find existing tags.')
-                  else if (matches.isEmpty)
-                    const Text('No matching tags.'),
-                  for (final tag in matches.take(20))
-                    ListTile(
-                      dense: true,
-                      title: Text(tag.name),
-                      subtitle: tag.slug == tag.name ? null : Text(tag.slug),
-                      onTap: _saving
-                          ? null
-                          : () => setState(() => _selectedTags.add(tag.slug)),
-                    ),
-                  if (matches.length > 20)
-                    Text(
-                      'Showing 20 of ${matches.length} matches. Refine your search.',
-                    ),
-                ],
-                const SizedBox(height: 20),
-                TextFormField(
-                  controller: _languages,
-                  enabled: !_saving,
-                  decoration: const InputDecoration(
-                    labelText: 'Languages',
-                    hintText: 'en, de',
-                  ),
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  textCapitalization: TextCapitalization.none,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  widget.document.languagesLocked
-                      ? 'These languages were set manually.'
-                      : 'These languages were detected automatically.',
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Use language codes separated by commas. Changes keep your '
-                  'choice during processing. Clear this field to allow '
-                  'automatic detection again.',
-                ),
-                if (_error != null) ...[
                   const SizedBox(height: 20),
-                  Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                  Text('Tags', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  if (_selectedTags.isEmpty) const Text('No tags assigned.'),
+                  if (_selectedTags.isNotEmpty)
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final slug in _selectedTags)
+                          InputChip(
+                            label: Text(bySlug[slug]?.name ?? slug),
+                            deleteIcon: const Icon(Icons.close),
+                            deleteButtonTooltipMessage:
+                                'Remove ${bySlug[slug]?.name ?? slug}',
+                            onDeleted:
+                                _saving ||
+                                    _loadingTags ||
+                                    _catalogError != null ||
+                                    !bySlug.containsKey(slug)
+                                ? null
+                                : () => setState(
+                                    () => _selectedTags.remove(slug),
+                                  ),
+                          ),
+                      ],
+                    ),
+                  if (_loadingTags)
+                    const Text('Loading available tags…')
+                  else if (_catalogError != null) ...[
+                    Text(_catalogError!),
+                    TextButton(
+                      onPressed: _loadTags,
+                      child: const Text('Retry tags'),
+                    ),
+                  ] else ...[
+                    TextField(
+                      controller: _tagSearch,
+                      enabled: !_saving,
+                      onChanged: (_) => setState(() {}),
+                      decoration: const InputDecoration(
+                        labelText: 'Find existing tags',
+                        hintText: 'Search by name or slug',
                       ),
                     ),
+                    if (search.isEmpty)
+                      const Text('Type to find existing tags.')
+                    else if (matches.isEmpty)
+                      const Text('No matching tags.'),
+                    for (final tag in matches.take(20))
+                      ListTile(
+                        dense: true,
+                        title: Text(tag.name),
+                        subtitle: tag.slug == tag.name ? null : Text(tag.slug),
+                        onTap: _saving
+                            ? null
+                            : () => setState(() => _selectedTags.add(tag.slug)),
+                      ),
+                    if (matches.length > 20)
+                      Text(
+                        'Showing 20 of ${matches.length} matches. Refine your search.',
+                      ),
+                  ],
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: _languages,
+                    enabled: !_saving,
+                    decoration: const InputDecoration(
+                      labelText: 'Languages',
+                      hintText: 'en, de',
+                    ),
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textCapitalization: TextCapitalization.none,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    widget.document.languagesLocked
+                        ? 'These languages were set manually.'
+                        : 'These languages were detected automatically.',
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Use language codes separated by commas. Changes keep your '
+                    'choice during processing. Clear this field to allow '
+                    'automatic detection again.',
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 20),
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed:
+                        _saving ||
+                            !_changed ||
+                            (_tagsChanged &&
+                                (_loadingTags || _catalogError != null))
+                        ? null
+                        : _save,
+                    child: Text(_saving ? 'Saving…' : 'Save changes'),
                   ),
                 ],
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed:
-                      _saving ||
-                          !_changed ||
-                          (_tagsChanged &&
-                              (_loadingTags || _catalogError != null))
-                      ? null
-                      : _save,
-                  child: Text(_saving ? 'Saving…' : 'Save changes'),
-                ),
-              ],
-            ),
-          );
-        },
+              ),
+            );
+          },
+        ),
       ),
     ),
   );

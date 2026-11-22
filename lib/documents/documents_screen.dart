@@ -13,6 +13,7 @@ import '../auth/session_controller.dart';
 import '../offline/offline_document_store.dart';
 import '../scan/network_monitor.dart';
 import '../theme/suchi_theme.dart';
+import '../widgets/adaptive_layout.dart';
 import '../widgets/suchi_widgets.dart';
 import 'document_list_mode.dart';
 import 'jd_category_store.dart';
@@ -649,168 +650,175 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       backgroundColor: colors.paper,
       endDrawer: categories == null
           ? null
-          : Drawer(
-              backgroundColor: colors.paper,
-              width: MediaQuery.sizeOf(context).width * 0.9,
-              child: SafeArea(child: _scopeDrawer(categories)),
+          : LayoutBuilder(
+              builder: (context, constraints) => Drawer(
+                backgroundColor: colors.paper,
+                width: (constraints.maxWidth * 0.9)
+                    .clamp(0.0, 420.0)
+                    .toDouble(),
+                child: SafeArea(child: _scopeDrawer(categories)),
+              ),
             ),
       body: SafeArea(
         bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _pageHeader(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Tooltip(
-                      message: categories == null
-                          ? 'Offline documents'
-                          : 'Open JD Index',
-                      child: InkWell(
-                        onTap: categories == null
-                            ? null
-                            : () => _scaffoldKey.currentState?.openEndDrawer(),
-                        borderRadius: BorderRadius.circular(8),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(minHeight: 48),
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  scopeName,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium,
-                                ),
-                              ),
-                              if (categories != null) ...[
-                                const SizedBox(width: 6),
-                                Icon(Icons.expand_more, color: colors.ink),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (widget.client != null)
-                    IconButton(
-                      tooltip: 'Search documents',
-                      constraints: const BoxConstraints(
-                        minWidth: 48,
-                        minHeight: 48,
-                      ),
-                      onPressed: widget.onOpenSearch,
-                      icon: const Icon(Icons.search),
-                    ),
-                  PopupMenuButton<String>(
-                    tooltip: _activeView == null
-                        ? 'Sort documents'
-                        : 'Saved View controls sorting',
-                    enabled: _activeView == null,
-                    clipBehavior: Clip.antiAlias,
-                    initialValue: _ordering,
-                    onSelected: _selectSort,
-                    icon: const Icon(Icons.sort),
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size(48, 48),
-                    ),
-                    itemBuilder: (context) => [
-                      for (final entry in const {
-                        '-created_at': 'Newest first',
-                        'created_at': 'Oldest first',
-                        'title': 'Title A–Z',
-                        '-updated_at': 'Recently updated',
-                      }.entries)
-                        CheckedPopupMenuItem(
-                          value: entry.key,
-                          checked: _ordering == entry.key,
-                          child: Text(entry.value),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: showDocumentCount
-                        ? Padding(
-                            padding: EdgeInsets.only(
-                              top: widget.offlineDocuments == null ? 0 : 10,
-                            ),
-                            child: Text(
-                              '$_count ${_count == 1 ? 'document' : 'documents'}',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: colors.muted),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                  if (widget.offlineDocuments != null)
-                    Flexible(
-                      flex: 2,
-                      child: Align(
-                        alignment: Alignment.topRight,
-                        child: TextButton(
-                          onPressed: widget.client == null
+        child: AdaptiveCenteredContent(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _pageHeader(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Tooltip(
+                        message: categories == null
+                            ? 'Offline documents'
+                            : 'Open JD Index',
+                        child: InkWell(
+                          onTap: categories == null
                               ? null
-                              : () {
-                                  if (_offlineSelected) {
-                                    _selectCategory(null, closeDrawer: false);
-                                  } else {
-                                    _selectOffline(closeDrawer: false);
-                                  }
-                                },
-                          style: TextButton.styleFrom(
-                            foregroundColor: colors.accent,
-                            disabledForegroundColor: colors.accent,
-                            textStyle: Theme.of(context).textTheme.bodySmall,
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(48, 48),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (canReturnToAll)
-                                const Icon(
-                                  Icons.arrow_back,
-                                  size: 20,
-                                  semanticLabel: 'Back to',
-                                )
-                              else
-                                const Icon(
-                                  Icons.offline_pin_outlined,
-                                  size: 20,
+                              : () =>
+                                    _scaffoldKey.currentState?.openEndDrawer(),
+                          borderRadius: BorderRadius.circular(8),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 48),
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    scopeName,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineMedium,
+                                  ),
                                 ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: Text(
-                                  canReturnToAll
-                                      ? 'All documents'
-                                      : '$offlineCount saved offline',
-                                  textAlign: TextAlign.end,
-                                ),
-                              ),
-                            ],
+                                if (categories != null) ...[
+                                  const SizedBox(width: 6),
+                                  Icon(Icons.expand_more, color: colors.ink),
+                                ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                ],
+                    if (widget.client != null)
+                      IconButton(
+                        tooltip: 'Search documents',
+                        constraints: const BoxConstraints(
+                          minWidth: 48,
+                          minHeight: 48,
+                        ),
+                        onPressed: widget.onOpenSearch,
+                        icon: const Icon(Icons.search),
+                      ),
+                    PopupMenuButton<String>(
+                      tooltip: _activeView == null
+                          ? 'Sort documents'
+                          : 'Saved View controls sorting',
+                      enabled: _activeView == null,
+                      clipBehavior: Clip.antiAlias,
+                      initialValue: _ordering,
+                      onSelected: _selectSort,
+                      icon: const Icon(Icons.sort),
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                      ),
+                      itemBuilder: (context) => [
+                        for (final entry in const {
+                          '-created_at': 'Newest first',
+                          'created_at': 'Oldest first',
+                          'title': 'Title A–Z',
+                          '-updated_at': 'Recently updated',
+                        }.entries)
+                          CheckedPopupMenuItem(
+                            value: entry.key,
+                            checked: _ordering == entry.key,
+                            child: Text(entry.value),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Expanded(child: _body()),
-          ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: showDocumentCount
+                          ? Padding(
+                              padding: EdgeInsets.only(
+                                top: widget.offlineDocuments == null ? 0 : 10,
+                              ),
+                              child: Text(
+                                '$_count ${_count == 1 ? 'document' : 'documents'}',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: colors.muted),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                    if (widget.offlineDocuments != null)
+                      Flexible(
+                        flex: 2,
+                        child: Align(
+                          alignment: Alignment.topRight,
+                          child: TextButton(
+                            onPressed: widget.client == null
+                                ? null
+                                : () {
+                                    if (_offlineSelected) {
+                                      _selectCategory(null, closeDrawer: false);
+                                    } else {
+                                      _selectOffline(closeDrawer: false);
+                                    }
+                                  },
+                            style: TextButton.styleFrom(
+                              foregroundColor: colors.accent,
+                              disabledForegroundColor: colors.accent,
+                              textStyle: Theme.of(context).textTheme.bodySmall,
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(48, 48),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (canReturnToAll)
+                                  const Icon(
+                                    Icons.arrow_back,
+                                    size: 20,
+                                    semanticLabel: 'Back to',
+                                  )
+                                else
+                                  const Icon(
+                                    Icons.offline_pin_outlined,
+                                    size: 20,
+                                  ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    canReturnToAll
+                                        ? 'All documents'
+                                        : '$offlineCount saved offline',
+                                    textAlign: TextAlign.end,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Expanded(child: _body()),
+            ],
+          ),
         ),
       ),
     );

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://apps.apple.com/us/app/suchi-companion/id6817310696">App Store (iPhone)</a> ·
+  <a href="https://apps.apple.com/us/app/suchi-companion/id6817310696">App Store</a> ·
   <a href="https://github.com/johnnybravo-xyz/suchi-companion/releases/latest">Android APK</a> ·
   <a href="https://github.com/johnnybravo-xyz/suchi">Suchi server</a> ·
   <a href="https://suchi.page/?#privacy">Privacy</a>
@@ -19,7 +19,7 @@
   <img src=".github/readme/companion-screens.png" alt="Four Companion screens: Scan, the upload Queue, the Inbox of documents waiting to be filed, and Search results for warranty." width="860">
 </p>
 
-Suchi Companion is the iPhone and Android app for
+Suchi Companion is the iPhone, iPad and Android app for
 [Suchi](https://github.com/johnnybravo-xyz/suchi), a self-hosted document
 archive. Scan a sheet of paper or share a PDF from another app, and it goes
 straight to your own Suchi server. Account-bound uploads continue through
@@ -30,8 +30,8 @@ There is no Suchi account and nothing in between: the app talks only to the
 server you pair it with. You need a Suchi server reachable over HTTPS. The app
 is free, with no ads and no in-app purchases.
 
-- **iPhone:** available on the
-  [App Store](https://apps.apple.com/us/app/suchi-companion/id6817310696).
+- **Apple:** the current source supports iPhone and iPad. Released availability
+  is shown on the [App Store](https://apps.apple.com/us/app/suchi-companion/id6817310696).
 - **Android:** download the signed APK from
   [GitHub Releases](https://github.com/johnnybravo-xyz/suchi-companion/releases/latest).
   Android updates are manual; verify the published SHA-256 before installing.
@@ -51,6 +51,8 @@ is free, with no ads and no in-app purchases.
 - Create public Suchi links with optional expiry and password protection, or
   share the original document file.
 - Use System, Light or Dark appearance and Standard, Compact or Detailed lists.
+- Adapt navigation, document reading, settings and sheets to compact phones,
+  iPad windows and iPhone Duo display divisions without losing browsing state.
 
 Camera, picker, share, queue, temporary export and offline writes preserve a
 512 MiB free-space reserve. Individual staged or downloaded files are limited

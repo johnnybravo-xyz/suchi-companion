@@ -63,10 +63,13 @@ jobs:
         run: |
           xcode_version=$(xcodebuild -version)
           printf '%s\n' "$xcode_version"
-          case "$xcode_version" in
-            "Xcode 27."*) ;;
-            *) exit 1 ;;
-          esac
+          xcode_line=${xcode_version%%$'\n'*}
+          version=${xcode_line#Xcode }
+          major=${version%%.*}
+          minor=${version#*.}
+          minor=${minor%%.*}
+          test "$major" -eq 27
+          test "$minor" -ge 1
           swift_version=$(swift --version)
           printf '%s\n' "$swift_version"
           case "$swift_version" in

@@ -13,6 +13,7 @@ import '../documents/jd_index.dart';
 import '../documents/thumbnail_cache.dart';
 import '../offline/offline_document_store.dart';
 import '../theme/suchi_theme.dart';
+import '../widgets/adaptive_layout.dart';
 import '../widgets/suchi_widgets.dart';
 import 'document_files.dart';
 import 'email_preview.dart';
@@ -253,7 +254,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
       useSafeArea: true,
       backgroundColor: SuchiColors.of(context).paper,
       sheetAnimationStyle: SuchiMotion.sheetStyle(context),
-      builder: (_) => const _ShareDocumentSheet(),
+      builder: (_) => const AdaptiveSheetContent(
+        padding: EdgeInsets.zero,
+        includeKeyboardInset: false,
+        child: _ShareDocumentSheet(),
+      ),
     );
     if (choice == null ||
         !mounted ||
@@ -686,28 +691,31 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
       useSafeArea: true,
       backgroundColor: colors.paper,
       sheetAnimationStyle: SuchiMotion.sheetStyle(context),
-      builder: (sheetContext) => SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Sensitivity',
-                style: Theme.of(sheetContext).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 10),
-              for (final entry in _documentSensitivityOptions.entries)
-                ListTile(
-                  title: Text(entry.value),
-                  selected: entry.key == document.sensitivity,
-                  trailing: entry.key == document.sensitivity
-                      ? Icon(Icons.check, color: colors.accent)
-                      : null,
-                  onTap: () => Navigator.pop(sheetContext, entry.key),
+      builder: (sheetContext) => AdaptiveSheetContent(
+        padding: EdgeInsets.zero,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Sensitivity',
+                  style: Theme.of(sheetContext).textTheme.titleLarge,
                 ),
-            ],
+                const SizedBox(height: 10),
+                for (final entry in _documentSensitivityOptions.entries)
+                  ListTile(
+                    title: Text(entry.value),
+                    selected: entry.key == document.sensitivity,
+                    trailing: entry.key == document.sensitivity
+                        ? Icon(Icons.check, color: colors.accent)
+                        : null,
+                    onTap: () => Navigator.pop(sheetContext, entry.key),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -955,7 +963,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen>
         ),
       ],
     ),
-    body: SafeArea(top: false, child: _body()),
+    body: SafeArea(top: false, child: AdaptiveCenteredContent(child: _body())),
   );
 
   Widget _body() {

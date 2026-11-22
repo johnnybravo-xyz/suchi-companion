@@ -5,6 +5,7 @@ import '../api/api_error.dart';
 import '../api/api_models.dart';
 import '../api/suchi_client.dart';
 import '../auth/session_controller.dart';
+import '../widgets/adaptive_layout.dart';
 import '../widgets/suchi_widgets.dart';
 
 class TrashScreen extends StatefulWidget {
@@ -174,103 +175,105 @@ class _TrashScreenState extends State<TrashScreen> {
         ),
       ],
     ),
-    body: !_currentSession
-        ? const EmptyState(
-            title: 'Account changed',
-            message: 'Go back to continue with your current Suchi account.',
-            icon: Icons.lock_outline,
-          )
-        : RefreshIndicator(
-            onRefresh: () => _load(reset: true),
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(17, 8, 17, 30),
-              children: [
-                Text(
-                  'Documents can be restored for 30 days after deletion. Your server checks whether they are still available.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 16),
-                if (!_loading || _documents.isNotEmpty)
-                  SectionLabel('$_count in Trash'),
-                if (_restoreError case final error?) ...[
-                  const SizedBox(height: 12),
-                  InlineError(
-                    message: friendlyApiMessage(
-                      error,
-                      fallback: 'This document could not be restored. Try Restore again.',
-                    ),
-                    requestId: error.requestId,
+    body: AdaptiveCenteredContent(
+      child: !_currentSession
+          ? const EmptyState(
+              title: 'Account changed',
+              message: 'Go back to continue with your current Suchi account.',
+              icon: Icons.lock_outline,
+            )
+          : RefreshIndicator(
+              onRefresh: () => _load(reset: true),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(17, 8, 17, 30),
+                children: [
+                  Text(
+                    'Documents can be restored for 30 days after deletion. Your server checks whether they are still available.',
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
-                ],
-                for (final document in _documents)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: SuchiCard(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            document.title,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          if (document.trashedAt case final deletedAt?) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              'Deleted ${DateFormat.yMMMd().format(DateTime.fromMillisecondsSinceEpoch(deletedAt * 1000, isUtc: true).toLocal())}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                          const SizedBox(height: 8),
-                          OutlinedButton.icon(
-                            key: ValueKey('restore-${document.id}'),
-                            onPressed: _restoringId == null && !_loading
-                                ? () => _restore(document)
-                                : null,
-                            icon: const Icon(Icons.restore),
-                            label: Text(
-                              _restoringId == document.id
-                                  ? 'Restoring…'
-                                  : 'Restore',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                if (_loading)
-                  const Padding(
-                    padding: EdgeInsets.all(28),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (_error case final error?)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: InlineError(
+                  const SizedBox(height: 16),
+                  if (!_loading || _documents.isNotEmpty)
+                    SectionLabel('$_count in Trash'),
+                  if (_restoreError case final error?) ...[
+                    const SizedBox(height: 12),
+                    InlineError(
                       message: friendlyApiMessage(
                         error,
-                        fallback: 'Trash could not be loaded.',
+                        fallback: 'This document could not be restored. Try Restore again.',
                       ),
                       requestId: error.requestId,
-                      onRetry: () => _load(reset: _page == 0),
                     ),
-                  )
-                else if (_documents.isEmpty)
-                  const EmptyState(
-                    title: 'Trash is empty',
-                    message: 'Deleted documents will appear here while they can be recovered.',
-                    icon: Icons.delete_outline,
-                  )
-                else if (_hasMore)
-                  TextButton(
-                    onPressed: _restoringId == null
-                        ? () => _load(reset: false)
-                        : null,
-                    child: const Text('Load more'),
-                  ),
-              ],
+                  ],
+                  for (final document in _documents)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: SuchiCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              document.title,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            if (document.trashedAt case final deletedAt?) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                'Deleted ${DateFormat.yMMMd().format(DateTime.fromMillisecondsSinceEpoch(deletedAt * 1000, isUtc: true).toLocal())}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                            const SizedBox(height: 8),
+                            OutlinedButton.icon(
+                              key: ValueKey('restore-${document.id}'),
+                              onPressed: _restoringId == null && !_loading
+                                  ? () => _restore(document)
+                                  : null,
+                              icon: const Icon(Icons.restore),
+                              label: Text(
+                                _restoringId == document.id
+                                    ? 'Restoring…'
+                                    : 'Restore',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (_loading)
+                    const Padding(
+                      padding: EdgeInsets.all(28),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error case final error?)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: InlineError(
+                        message: friendlyApiMessage(
+                          error,
+                          fallback: 'Trash could not be loaded.',
+                        ),
+                        requestId: error.requestId,
+                        onRetry: () => _load(reset: _page == 0),
+                      ),
+                    )
+                  else if (_documents.isEmpty)
+                    const EmptyState(
+                      title: 'Trash is empty',
+                      message: 'Deleted documents will appear here while they can be recovered.',
+                      icon: Icons.delete_outline,
+                    )
+                  else if (_hasMore)
+                    TextButton(
+                      onPressed: _restoringId == null
+                          ? () => _load(reset: false)
+                          : null,
+                      child: const Text('Load more'),
+                    ),
+                ],
+              ),
             ),
-          ),
+    ),
   );
 }

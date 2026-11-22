@@ -590,6 +590,63 @@ final class RunnerTests: XCTestCase {
     }
   }
 
+  func testLayoutSnapshotSerializesKindsFramesAndVerticalEdge() throws {
+    let snapshot = LayoutSnapshot(
+      regions: [
+        LayoutRegionSnapshot(
+          kind: .division,
+          frame: CGRect(x: 390, y: 0, width: 12, height: 844)
+        ),
+        LayoutRegionSnapshot(
+          kind: .occlusion,
+          frame: CGRect(x: 0, y: 0, width: 120, height: 44)
+        ),
+      ],
+      verticalBarEdge: .trailing
+    )
+
+    let dictionary = snapshot.dictionary
+    XCTAssertEqual(dictionary["verticalBarEdge"] as? String, "trailing")
+    let regions = try XCTUnwrap(dictionary["regions"] as? [[String: Any]])
+    XCTAssertEqual(regions.count, 2)
+    XCTAssertEqual(regions[0]["kind"] as? String, "division")
+    XCTAssertEqual(regions[0]["x"] as? Double, 390)
+    XCTAssertEqual(regions[0]["width"] as? Double, 12)
+    XCTAssertEqual(regions[1]["kind"] as? String, "occlusion")
+    XCTAssertEqual(regions[1]["height"] as? Double, 44)
+  }
+
+  func testLayoutSnapshotEmitterSuppressesDuplicateUpdates() {
+    var emitted: [LayoutSnapshot] = []
+    let emitter = LayoutSnapshotEmitter { emitted.append($0) }
+    let first = LayoutSnapshot(
+      regions: [
+        LayoutRegionSnapshot(
+          kind: .division,
+          frame: CGRect(x: 390, y: 0, width: 12, height: 844)
+        )
+      ],
+      verticalBarEdge: .leading
+    )
+
+    emitter.publish(first)
+    emitter.publish(first)
+    emitter.publish(.empty)
+
+    XCTAssertEqual(emitted, [first, .empty])
+    XCTAssertEqual(emitter.lastSnapshot, .empty)
+  }
+
+  func testLayoutVerticalBarEdgeMapping() throws {
+    guard #available(iOS 27.1, *) else {
+      throw XCTSkip("UIVerticalBarEdge mapping requires iOS 27.1 or later")
+    }
+
+    XCTAssertEqual(LayoutSnapshot.verticalBarEdge(from: .leading), .leading)
+    XCTAssertEqual(LayoutSnapshot.verticalBarEdge(from: .trailing), .trailing)
+    XCTAssertEqual(LayoutSnapshot.verticalBarEdge(from: .unspecified), .unspecified)
+  }
+
   private func isoBaseMediaFile(
     majorBrand: String,
     compatibleBrand: String

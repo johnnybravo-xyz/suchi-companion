@@ -21,6 +21,7 @@ import 'package:suchi_companion/documents/documents_screen.dart';
 import 'package:suchi_companion/documents/thumbnail_cache.dart';
 import 'package:suchi_companion/inbox/inbox_screen.dart';
 import 'package:suchi_companion/more/app_settings_controller.dart';
+import 'package:suchi_companion/more/more_screen.dart';
 import 'package:suchi_companion/offline/offline_document_store.dart';
 import 'package:suchi_companion/scan/background_upload.dart';
 import 'package:suchi_companion/scan/network_monitor.dart';
@@ -185,8 +186,9 @@ void main() {
     WidgetTester tester, {
     TargetPlatform platform = TargetPlatform.android,
     double textScale = 1,
+    Size size = const Size(390, 844),
   }) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(
@@ -807,6 +809,106 @@ void main() {
       'tags__id__in': '2,4',
       'document_ids': '17,42',
     });
+  });
+
+  testNavigation('780px workspace keeps document list and detail together', (
+    tester,
+  ) async {
+    await showShell(tester, size: const Size(780, 844));
+    expect(find.byKey(const ValueKey('suchi-rail')), findsOneWidget);
+    expect(find.text('Select a document'), findsOneWidget);
+
+    await tester.tap(find.text('Documents').last);
+    await tester.pumpAndSettle();
+    await _scrollTo(tester, DocumentsScreen, 'Receipt 035');
+    await tester.tap(find.text('Receipt 035'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DocumentsScreen), findsOneWidget);
+    expect(find.byType(DocumentDetailScreen), findsOneWidget);
+    expect(find.text('Receipt 035').hitTestable(), findsWidgets);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(DocumentDetailScreen), findsNothing);
+    expect(find.text('Select a document'), findsOneWidget);
+    expect(find.byType(DocumentsScreen), findsOneWidget);
+  });
+
+  testNavigation('compact and iPad resize preserve list and detail state', (
+    tester,
+  ) async {
+    await showShell(tester);
+    await tester.tap(find.text('Documents').last);
+    await tester.pumpAndSettle();
+    await _scrollTo(tester, DocumentsScreen, 'Receipt 035');
+    final offset = _listOffset(tester, DocumentsScreen);
+    final requestsBefore = archive.listRequests.length;
+
+    await tester.tap(find.text('Receipt 035'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DocumentDetailScreen), findsOneWidget);
+    expect(find.byType(ScanDockButton), findsNothing);
+
+    await tester.binding.setSurfaceSize(const Size(1024, 1366));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('suchi-rail')), findsOneWidget);
+    expect(find.byType(DocumentsScreen), findsOneWidget);
+    expect(find.byType(DocumentDetailScreen), findsOneWidget);
+    expect(_listOffset(tester, DocumentsScreen), closeTo(offset, 0.1));
+    expect(archive.listRequests, hasLength(requestsBefore));
+
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('suchi-rail')), findsNothing);
+    expect(find.byType(DocumentDetailScreen), findsOneWidget);
+    expect(find.byType(ScanDockButton), findsNothing);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(DocumentDetailScreen), findsNothing);
+    expect(find.text('Receipt 035').hitTestable(), findsOneWidget);
+    expect(find.byType(ScanDockButton), findsOneWidget);
+    expect(_listOffset(tester, DocumentsScreen), closeTo(offset, 0.1));
+    expect(archive.listRequests, hasLength(requestsBefore));
+  });
+
+  testNavigation('More uses the full iPad workspace and two-column cards', (
+    tester,
+  ) async {
+    await showShell(tester, size: const Size(1024, 1366));
+    await tester.tap(find.text('More').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MoreScreen), findsOneWidget);
+    expect(find.text('Select a document'), findsNothing);
+    expect(tester.getSize(find.byType(MoreScreen)).width, closeTo(936, 0.1));
+    expect(
+      tester.getTopLeft(find.text('Appearance')).dx,
+      greaterThan(tester.getTopLeft(find.text('Trash')).dx),
+    );
+    expect(
+      tester.getTopLeft(find.text('Appearance')).dy,
+      lessThan(tester.getTopLeft(find.text('Trash')).dy),
+    );
+  });
+
+  testNavigation('More remains usable on a narrow screen at large text', (
+    tester,
+  ) async {
+    await showShell(tester, textScale: 2.0);
+    await tester.tap(find.text('More').last);
+    await tester.pumpAndSettle();
+    final scrollable = find.descendant(
+      of: find.byType(MoreScreen),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Sign out'),
+      200,
+      scrollable: scrollable,
+    );
+
+    expect(find.text('Sign out').hitTestable(), findsOneWidget);
   });
 
   testNavigation('iOS left-edge back preserves the filtered document archive', (

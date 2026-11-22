@@ -60,9 +60,13 @@ just to raise transitive version numbers.
 Install full Xcode 27.2 from the App Store, select it with `xcode-select`, run
 first-launch setup, and install the recorded simulator runtimes. Command Line
 Tools alone cannot build the iOS target. The deployment floor is explicitly
-iOS 26.0 for the iPhone app, share extension and native tests. Xcode 27.2 with
-the installed iOS 26.5 and iOS 27.0 simulator runtimes is the supported test
-range.
+iOS 26.0 for the universal iPhone/iPad app, share extension and native tests.
+Xcode 27.2 with the installed iOS 26.5 and iOS 27.0 simulator runtimes is the
+supported local test range. CI rejects Xcode older than 27.1. The display-region
+bridge compiles with Xcode 27.1+ and reports reserved layout regions and the
+system vertical-bar edge on iOS 27.1+; older runtimes deliberately return an
+empty environment. Verify those signals on an iOS 27.1+ Duo runtime or device
+before release.
 
 ## Debian Android release host
 
@@ -147,7 +151,9 @@ flutter test
 flutter build apk --debug
 ```
 
-Large-text behavior is covered by each feature's widget tests.
+Large-text behavior and compact-to-wide resizing are covered by feature widget
+tests. iPad simulator checks cover the universal target and adaptive shell;
+simulators do not replace the Duo and physical-device gates in `RELEASE.md`.
 
 ## Release gates
 

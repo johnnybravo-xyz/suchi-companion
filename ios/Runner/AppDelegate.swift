@@ -9,6 +9,7 @@ import workmanager_apple
   private let storageChannel = StorageChannel()
   private let documentChannel = DocumentChannel()
   private let pairingChannel = PairingChannel()
+  private let layoutChannel = LayoutChannel()
 
   override func application(
     _ application: UIApplication,
@@ -29,6 +30,11 @@ import workmanager_apple
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    if let registrar = engineBridge.pluginRegistry.registrar(
+      forPlugin: "SuchiLayoutChannel"
+    ) {
+      layoutChannel.register(registrar: registrar)
+    }
     scanChannel.register(
       binaryMessenger: engineBridge.applicationRegistrar.messenger()
     )

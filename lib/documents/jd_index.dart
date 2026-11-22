@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api_models.dart';
 import '../theme/suchi_theme.dart';
+import '../widgets/adaptive_layout.dart';
 import '../widgets/suchi_widgets.dart';
 import 'jd_category_store.dart';
 
@@ -18,12 +19,16 @@ Future<JDCategory?> showJdCategorySheet(
     sheetAnimationStyle: SuchiMotion.sheetStyle(context),
     builder: (context) => Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: FractionallySizedBox(
-        heightFactor: 0.86,
-        child: JdIndex(
-          store: store,
-          title: title,
-          onSelected: (category) => Navigator.pop(context, category),
+      child: AdaptiveSheetContent(
+        padding: EdgeInsets.zero,
+        includeKeyboardInset: false,
+        child: FractionallySizedBox(
+          heightFactor: 0.86,
+          child: JdIndex(
+            store: store,
+            title: title,
+            onSelected: (category) => Navigator.pop(context, category),
+          ),
         ),
       ),
     ),

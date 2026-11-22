@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../api/api_error.dart';
 import '../api/suchi_client.dart';
 import '../auth/session_controller.dart';
+import '../widgets/adaptive_layout.dart';
 import '../widgets/suchi_widgets.dart';
 
 class DocumentTextScreen extends StatefulWidget {
@@ -179,7 +180,7 @@ class _DocumentTextScreenState extends State<DocumentTextScreen>
     appBar: AppBar(
       title: const Text('Extracted text', overflow: TextOverflow.ellipsis),
     ),
-    body: SafeArea(child: _body()),
+    body: SafeArea(child: AdaptiveCenteredContent(child: _body())),
   );
 
   Widget _body() {

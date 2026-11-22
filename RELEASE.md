@@ -16,7 +16,7 @@ check.
 | Surface | Required value |
 | --- | --- |
 | Marketing version and source tag | `0.3.0` and signed annotated tag `v0.3.0` |
-| Build number | `3`; increment after any submitted-code change |
+| Build number | `3` (published) |
 | iOS app | iPhone only, iOS 26.0 minimum, bundle ID `page.suchi.companion` |
 | iOS extension | `page.suchi.companion.ShareExtension` |
 | Shared App Group | `group.page.suchi.companion` on both iOS targets |
@@ -29,6 +29,13 @@ check.
 tag, exact revision, API version, and pinned build tools. The exact tagged mobile
 source must be public at <https://github.com/johnnybravo-xyz/suchi-companion> before
 distributing its binaries.
+
+## Unreleased universal Apple cutover
+
+Current source after `v0.3.0` enables iPhone and iPad distribution plus adaptive
+iPhone Duo layouts. It must ship under a later marketing version and build;
+`v0.3.0` remains iPhone-only. The iPad/Duo physical, archive, and store gates
+below apply to that later release.
 
 ## Release order and evidence
 
@@ -101,9 +108,9 @@ Before tagging, also require all of the following in CI or the named native tool
 GitHub Actions repeats the source, pinned API-fixture, Android debug
 lint/build, iOS simulator build, and inherited-secret canary gates on pushes to
 `main`, pull requests, and manual dispatch. It never produces release assets.
-The hosted iOS build follows GitHub's rolling Xcode 27 image and Swift 6.4
-family. Release archives still require the exact local versions pinned in
-`tool/toolchain.json`.
+The hosted iOS build follows GitHub's rolling Xcode 27 image, requires Xcode
+27.1 or newer, and uses the Swift 6.4 family. Release archives still require the
+exact local versions pinned in `tool/toolchain.json`.
 
 Signed artifacts, emulators, physical devices, store consoles, and external
 services remain separate gates.
@@ -123,9 +130,9 @@ evidence, not substitutes.
 
 ## Functional and physical-device gates
 
-Exercise the release candidate against the immutable reviewer server on at least
-one physical iPhone and one physical Android phone. Record device and OS versions.
-Cover:
+For the first universal release after `v0.3.0`, exercise the release candidate
+against the immutable reviewer server on at least one physical iPhone, one
+physical iPad and one physical Android phone. Record device and OS versions. Cover:
 
 - QR and pasted-link pairing, device naming, token revocation, account switching,
   offline re-verification, and sign-out recovery;
@@ -142,6 +149,11 @@ Cover:
   write path;
 - Dynamic Type/text scaling, screen readers, focus/keyboard behavior, contrast,
   touch targets, destructive confirmations, and the lifecycle privacy shield;
+- compact iPhone, resizable iPad, rotation and multitasking layouts; master/detail
+  navigation, rail placement, modal widths and state preservation across resize;
+- iPhone Duo outer and inner displays, supported poses, exact display divisions,
+  edge controls and occlusions on an iOS 27.1+ Device Hub runtime or physical
+  device;
 - app-switcher behavior on Android API 31 and on a newer Android release; and
 - scanner latency, perspective, rotation, lighting, glare/curvature guidance,
   page review, OCR quality, repeated capture cycles, and interruption recovery.
@@ -201,7 +213,9 @@ Verify:
 
 ### iOS archive
 
-Archive with the pinned Xcode version and paid distribution team on the local
+The command below records the published `v0.3.0` archive inputs. For the first
+universal Apple release, assign a later marketing version and build number before
+archiving with the pinned Xcode version and paid distribution team on the local
 Mac:
 
 ```sh
@@ -218,16 +232,19 @@ flutter build ipa \
 Inspect the archive, exported IPA, entitlements, embedded privacy manifests,
 generated privacy report, and signing identities. Verify:
 
-- iPhone-only distribution; iOS 26.0 minimum; app, extension, and App Group IDs
-  exactly match the contract above;
+- universal iPhone/iPad distribution (`TARGETED_DEVICE_FAMILY = "1,2"`), iOS
+  26.0 minimum, with app, extension, and App Group IDs exactly matching the
+  `v0.3.0` contract above;
 - both targets are provisioned with only required capabilities and the App Group;
 - version/build, icons, permission strings, HTTPS policy, dependency notices,
   export-compliance answers, and absence of debug/test configuration;
 - inherited secret canaries are absent from Xcode activity logs and build
   receipts; and
+- iPhone and iPad icon slots, adaptive compact/regular layouts, and the iOS
+  27.1+ reserved-region bridge are present in the processed build; and
 - upload the regular App Store Connect build, install Apple's processed build
   through internal TestFlight, and pass the signed physical matrix before App
-  Store submission. External TestFlight is optional and omitted for v0.3.0.
+  Store submission. External TestFlight remains optional.
 
 ## Public service and reviewer gates
 
@@ -258,11 +275,16 @@ For Apple and GitHub distribution:
 
 - publish the exact corresponding source and notices without changing the fixed
   package or bundle identifiers;
-- prepare truthful English, phone-focused metadata and screenshots captured from
-  the signed release build;
+- prepare truthful English metadata and phone/iPad screenshots captured from the
+  signed release build;
 - keep content, privacy/data, rights, encryption, target-audience, advertising,
   reviewer-access, and Android ML Kit disclosures aligned with the final
   dependency and permission inventories;
+- before submitting the universal Apple build, the store owner must update
+  `store/listing.en-US.md`, `store/declarations.en-US.md`, App Store device
+  support and iPad screenshots to match the reviewed artifact;
+- record worldwide availability, free pricing with no ads or purchases, and the
+  confirmed EU Digital Services Act non-trader status in App Store Connect;
 - use only approved public privacy, support, security, source, and mobile URLs;
 - state that Android installation and updates are manual and provide the APK
   SHA-256 and signing-certificate fingerprint; and
@@ -275,7 +297,7 @@ purchases, and EU Digital Services Act non-trader status; upload a regular App
 Store Connect build, not a TestFlight Internal Only build; install the processed
 build through internal TestFlight; rerun the signed physical-device matrix; then
 submit that same build for production App Review with manual release. External
-TestFlight is omitted for v0.3.0.
+TestFlight remains optional.
 
 For GitHub, create the release from the signed `v0.3.0` tag and attach only the
 inspected signed APK and its `SHA256SUMS`. Release notes must name the minimum

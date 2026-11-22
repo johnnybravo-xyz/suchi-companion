@@ -9,6 +9,7 @@ import '../offline/offline_document_store.dart';
 import '../scan/scan_queue_store.dart';
 import '../scan/scanner_bridge.dart';
 import '../theme/suchi_theme.dart';
+import '../widgets/adaptive_layout.dart';
 import '../widgets/suchi_widgets.dart';
 import 'about_sheet.dart';
 import 'app_settings_controller.dart';
@@ -160,52 +161,58 @@ class _MoreScreenState extends State<MoreScreen> {
                 return const SizedBox.shrink();
               }
               final colors = SuchiColors.of(context);
-              return LayoutBuilder(
-                builder: (context, constraints) => ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * 0.85,
-                  ),
-                  child: Material(
-                    color: colors.paper,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  title,
-                                  style: Theme.of(context).textTheme.titleLarge,
+              return AdaptiveSheetContent(
+                padding: EdgeInsets.zero,
+                includeKeyboardInset: false,
+                child: LayoutBuilder(
+                  builder: (context, constraints) => ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: constraints.maxHeight * 0.85,
+                    ),
+                    child: Material(
+                      color: colors.paper,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    title,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              TextButton(
-                                style: TextButton.styleFrom(
-                                  minimumSize: const Size(48, 48),
+                                const SizedBox(width: 8),
+                                TextButton(
+                                  style: TextButton.styleFrom(
+                                    minimumSize: const Size(48, 48),
+                                  ),
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Close'),
                                 ),
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Close'),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Flexible(
-                          child: SingleChildScrollView(
-                            padding: EdgeInsets.fromLTRB(
-                              20,
-                              8,
-                              20,
-                              24 + MediaQuery.viewInsetsOf(context).bottom,
-                            ),
-                            child: ListTileTheme(
-                              data: _rowTheme(context),
-                              child: Builder(builder: builder),
+                              ],
                             ),
                           ),
-                        ),
-                      ],
+                          Flexible(
+                            child: SingleChildScrollView(
+                              padding: EdgeInsets.fromLTRB(
+                                20,
+                                8,
+                                20,
+                                24 + MediaQuery.viewInsetsOf(context).bottom,
+                              ),
+                              child: ListTileTheme(
+                                data: _rowTheme(context),
+                                child: Builder(builder: builder),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -506,169 +513,243 @@ class _MoreScreenState extends State<MoreScreen> {
             minTileHeight: 52,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16),
           ),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const ExcludeSemantics(child: BrandMark(size: 40)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Suchi Companion',
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Capture on your phone. Keep it in your archive.',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: colors.muted),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (user != null)
-                SuchiCard(
-                  elevated: false,
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: colors.manila,
-                      foregroundColor: colors.ink,
-                      child: Text(
-                        initialsFor(user.label),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
+          child: AdaptiveCenteredContent(
+            maxWidth: kSuchiMoreMaxWidth,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const ExcludeSemantics(child: BrandMark(size: 40)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Suchi Companion',
+                            style: Theme.of(context).textTheme.headlineMedium,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Capture here. Keep it in your archive.',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colors.muted),
+                          ),
+                        ],
                       ),
                     ),
-                    title: Text(user.instanceHost),
-                    subtitle: Text(user.label),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: _showAccountDetails,
-                  ),
-                ),
-              const SizedBox(height: 12),
-              if (offline) ...[
-                SuchiCard(
-                  elevated: false,
-                  child: ListTile(
-                    leading: const Icon(Icons.cloud_off_outlined),
-                    title: const Text('Working offline'),
-                    subtitle: const Text(
-                      'Saved documents and Scan remain available. Uploads wait for verification.',
-                    ),
-                    trailing: _retrying
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : TextButton(
-                            onPressed: widget.session.canRetryStoredCredentials
-                                ? _retryConnection
-                                : null,
-                            child: const Text('Retry'),
-                          ),
-                  ),
+                  ],
                 ),
                 const SizedBox(height: 12),
-              ],
-              SuchiCard(
-                elevated: false,
-                child: Column(
-                  children: [
-                    _PreferenceTile(
-                      icon: _themeIcon(widget.settings.themeMode),
-                      title: 'Appearance',
-                      value: _themeLabel(widget.settings.themeMode),
-                      enabled: widget.settings.loaded && !_savingTheme,
-                      onTap: _chooseTheme,
-                    ),
-                    Divider(height: 1, thickness: 1, color: colors.line),
-                    _PreferenceTile(
-                      icon: _viewIcon(widget.settings.documentListMode),
-                      title: 'Document view',
-                      value: _viewLabel(widget.settings.documentListMode),
-                      enabled:
-                          widget.settings.loaded && !_savingDocumentListMode,
-                      onTap: _chooseDocumentView,
-                    ),
-                    Divider(height: 1, thickness: 1, color: colors.line),
-                    _PreferenceTile(
-                      icon: Icons.photo_camera_outlined,
-                      title: 'Camera mode',
-                      value: widget.settings.captureMode == CaptureMode.scanner
-                          ? 'Scanner'
-                          : 'Photo',
-                      enabled: widget.settings.loaded && !_choosingCaptureMode,
-                      onTap: _chooseCaptureMode,
-                    ),
-                    Divider(height: 1, thickness: 1, color: colors.line),
-                    SwitchListTile(
-                      key: const ValueKey('server-ocr-only'),
-                      contentPadding: const EdgeInsets.fromLTRB(16, 0, 10, 0),
-                      title: const Text('Server OCR only'),
-                      secondary: const Icon(Icons.privacy_tip_outlined),
-                      value: widget.settings.serverOcrOnly,
-                      onChanged: widget.settings.loaded && !_savingOcr
-                          ? _setServerOcrOnly
-                          : null,
-                    ),
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final wide =
+                        constraints.maxWidth >= kSuchiWideBreakpoint - 40;
+                    final cardWidth = wide
+                        ? ((constraints.maxWidth - 12) / 2)
+                              .clamp(
+                                kSuchiMoreCardMinWidth,
+                                kSuchiMoreCardMaxWidth,
+                              )
+                              .toDouble()
+                        : constraints.maxWidth;
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        if (user != null)
+                          SizedBox(
+                            width: cardWidth,
+                            child: SuchiCard(
+                              elevated: false,
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: colors.manila,
+                                  foregroundColor: colors.ink,
+                                  child: Text(
+                                    initialsFor(user.label),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                title: Text(user.instanceHost),
+                                subtitle: Text(user.label),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: _showAccountDetails,
+                              ),
+                            ),
+                          ),
+                        if (offline)
+                          SizedBox(
+                            width: cardWidth,
+                            child: SuchiCard(
+                              elevated: false,
+                              child: ListTile(
+                                leading: const Icon(Icons.cloud_off_outlined),
+                                title: const Text('Working offline'),
+                                subtitle: const Text(
+                                  'Saved documents and Scan remain available. Uploads wait for verification.',
+                                ),
+                                trailing: _retrying
+                                    ? const SizedBox.square(
+                                        dimension: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : TextButton(
+                                        onPressed:
+                                            widget
+                                                .session
+                                                .canRetryStoredCredentials
+                                            ? _retryConnection
+                                            : null,
+                                        child: const Text('Retry'),
+                                      ),
+                              ),
+                            ),
+                          ),
+                        SizedBox(
+                          width: cardWidth,
+                          child: SuchiCard(
+                            elevated: false,
+                            child: Column(
+                              children: [
+                                _PreferenceTile(
+                                  icon: _themeIcon(widget.settings.themeMode),
+                                  title: 'Appearance',
+                                  value: _themeLabel(widget.settings.themeMode),
+                                  enabled:
+                                      widget.settings.loaded && !_savingTheme,
+                                  onTap: _chooseTheme,
+                                ),
+                                Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: colors.line,
+                                ),
+                                _PreferenceTile(
+                                  icon: _viewIcon(
+                                    widget.settings.documentListMode,
+                                  ),
+                                  title: 'Document view',
+                                  value: _viewLabel(
+                                    widget.settings.documentListMode,
+                                  ),
+                                  enabled:
+                                      widget.settings.loaded &&
+                                      !_savingDocumentListMode,
+                                  onTap: _chooseDocumentView,
+                                ),
+                                Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: colors.line,
+                                ),
+                                _PreferenceTile(
+                                  icon: Icons.photo_camera_outlined,
+                                  title: 'Camera mode',
+                                  value:
+                                      widget.settings.captureMode ==
+                                          CaptureMode.scanner
+                                      ? 'Scanner'
+                                      : 'Photo',
+                                  enabled:
+                                      widget.settings.loaded &&
+                                      !_choosingCaptureMode,
+                                  onTap: _chooseCaptureMode,
+                                ),
+                                Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: colors.line,
+                                ),
+                                SwitchListTile(
+                                  key: const ValueKey('server-ocr-only'),
+                                  contentPadding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    0,
+                                    10,
+                                    0,
+                                  ),
+                                  title: const Text('Server OCR only'),
+                                  secondary: const Icon(
+                                    Icons.privacy_tip_outlined,
+                                  ),
+                                  value: widget.settings.serverOcrOnly,
+                                  onChanged:
+                                      widget.settings.loaded && !_savingOcr
+                                      ? _setServerOcrOnly
+                                      : null,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: cardWidth,
+                          child: SuchiCard(
+                            elevated: false,
+                            child: Column(
+                              children: [
+                                ListTile(
+                                  leading: const Icon(Icons.delete_outline),
+                                  title: const Text('Trash'),
+                                  subtitle: offline
+                                      ? const Text('Available when connected')
+                                      : null,
+                                  trailing: const Icon(Icons.chevron_right),
+                                  onTap: offline ? null : widget.onOpenTrash,
+                                ),
+                                Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: colors.line,
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.shield_outlined),
+                                  title: const Text('Privacy & storage'),
+                                  trailing: const Icon(Icons.chevron_right),
+                                  onTap: _showPrivacyDetails,
+                                ),
+                                Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: colors.line,
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.info_outline),
+                                  title: const Text('About'),
+                                  trailing: const Icon(Icons.chevron_right),
+                                  onTap: _showAbout,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
-              ),
-              const SizedBox(height: 12),
-              SuchiCard(
-                elevated: false,
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.delete_outline),
-                      title: const Text('Trash'),
-                      subtitle: offline
-                          ? const Text('Available when connected')
-                          : null,
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: offline ? null : widget.onOpenTrash,
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: colors.danger,
+                      minimumSize: const Size(48, 48),
                     ),
-                    Divider(height: 1, thickness: 1, color: colors.line),
-                    ListTile(
-                      leading: const Icon(Icons.shield_outlined),
-                      title: const Text('Privacy & storage'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: _showPrivacyDetails,
-                    ),
-                    Divider(height: 1, thickness: 1, color: colors.line),
-                    ListTile(
-                      leading: const Icon(Icons.info_outline),
-                      title: const Text('About'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: _showAbout,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(
-                    foregroundColor: colors.danger,
-                    minimumSize: const Size(48, 48),
+                    onPressed: () => _signOut(context),
+                    icon: const Icon(Icons.logout),
+                    label: const Text('Sign out'),
                   ),
-                  onPressed: () => _signOut(context),
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Sign out'),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -872,7 +953,7 @@ class _StorageManagerState extends State<_StorageManager> {
           const SectionLabel('Server OCR only'),
           const SizedBox(height: 8),
           const Text(
-            'Uploads started while this is on omit text recognized on this phone. Suchi will extract or OCR the document instead.',
+            'Uploads started while this is on omit text recognized on this device. Suchi will extract or OCR the document instead.',
           ),
         ],
       );

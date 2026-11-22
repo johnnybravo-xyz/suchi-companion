@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../api/api_models.dart';
 import '../api/suchi_client.dart';
 import '../app/app_services.dart';
+import '../app/display_environment.dart';
 import '../approvals/approvals_controller.dart';
 import '../approvals/approvals_screen.dart';
 import '../auth/account_identity.dart';
@@ -28,6 +29,7 @@ import '../search/search_screen.dart';
 import '../share/share_import_controller.dart';
 import '../theme/suchi_theme.dart';
 import '../trash/trash_screen.dart';
+import '../widgets/adaptive_layout.dart';
 
 class SuchiShell extends StatefulWidget {
   const SuchiShell({required this.services, super.key});
@@ -59,6 +61,10 @@ class _SuchiShellState extends State<SuchiShell> {
   late final StreamSubscription<List<ScanUpload>> _queueSubscription;
   AccountIdentity? _observedIdentity;
   Map<String, String>? _previousQueueStates;
+  final _documentNavigatorKey = GlobalKey<NavigatorState>();
+  final _workspaceKey = GlobalKey(debugLabel: 'document-workspace');
+  bool _documentOpen = false;
+  int _documentRouteSerial = 0;
 
   @override
   void initState() {
@@ -127,11 +133,14 @@ class _SuchiShellState extends State<SuchiShell> {
     _observedIdentity = identity;
     if (previous != null) _startupInboxPending = false;
     _previousQueueStates = null;
-    if (previous != null && mounted) {
-      setState(() {
-        _requestedSavedView = null;
-        _savedViewRevision++;
-      });
+    if (previous != null) {
+      _clearDocumentDetail();
+      if (mounted) {
+        setState(() {
+          _requestedSavedView = null;
+          _savedViewRevision++;
+        });
+      }
     }
   }
 
@@ -160,13 +169,17 @@ class _SuchiShellState extends State<SuchiShell> {
     if (completed) _refreshArchive();
   }
 
-  void _openQueue() => setState(() {
-    _startupInboxPending = false;
-    _selected = 2;
-  });
+  void _openQueue() {
+    _clearDocumentDetail();
+    setState(() {
+      _startupInboxPending = false;
+      _selected = 2;
+    });
+  }
 
   void _select(int index) {
     _startupInboxPending = false;
+    _clearDocumentDetail();
     setState(() {
       _selected = index;
       _searchFocusRequest = null;
@@ -176,6 +189,7 @@ class _SuchiShellState extends State<SuchiShell> {
 
   void _openSearchFromDocuments() {
     _startupInboxPending = false;
+    _clearDocumentDetail();
     setState(() {
       _selected = 3;
       _searchFocusRequest = ++_searchFocusSerial;
@@ -266,7 +280,7 @@ class _SuchiShellState extends State<SuchiShell> {
             session: widget.services.session,
             identity: identity,
             client: client,
-            onOpenDocument: _openDocument,
+            onOpenDocument: _openRootDocument,
           ),
         ),
       );
@@ -277,6 +291,7 @@ class _SuchiShellState extends State<SuchiShell> {
 
   void _openSavedView(SavedView view) {
     if (_client == null) return;
+    _clearDocumentDetail();
     setState(() {
       _requestedSavedView = view;
       _savedViewRevision++;
@@ -284,25 +299,76 @@ class _SuchiShellState extends State<SuchiShell> {
     });
   }
 
-  Future<void> _openDocument(int id) {
+  Future<void> _openDocument(int id) async {
     final client = _client;
     final categories = _categories;
-    if (client == null || categories == null) return Future.value();
-    return Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        settings: RouteSettings(name: '/documents/$id'),
-        builder: (context) => DocumentDetailScreen(
-          documentId: id,
-          client: client,
-          session: widget.services.session,
-          cache: widget.services.thumbnails,
-          categories: categories,
-          files: widget.services.documentFiles,
-          offlineDocuments: widget.services.offlineDocuments,
-          onChanged: _refreshArchive,
-        ),
+    final identity = _currentIdentity;
+    final navigator = _documentNavigatorKey.currentState;
+    if (client == null ||
+        categories == null ||
+        identity == null ||
+        navigator == null) {
+      return;
+    }
+    final serial = ++_documentRouteSerial;
+    navigator.popUntil((route) => route.isFirst);
+    if (!_documentOpen && mounted) setState(() => _documentOpen = true);
+    await navigator.push<void>(
+      _documentRoute(
+        id: id,
+        client: client,
+        categories: categories,
+        identity: identity,
       ),
     );
+    if (mounted &&
+        serial == _documentRouteSerial &&
+        _currentIdentity == identity) {
+      setState(() => _documentOpen = false);
+    }
+  }
+
+  Future<void> _openRootDocument(int id) {
+    final client = _client;
+    final categories = _categories;
+    final identity = _currentIdentity;
+    if (client == null || categories == null || identity == null) {
+      return Future.value();
+    }
+    return Navigator.of(context, rootNavigator: true).push<void>(
+      _documentRoute(
+        id: id,
+        client: client,
+        categories: categories,
+        identity: identity,
+      ),
+    );
+  }
+
+  MaterialPageRoute<void> _documentRoute({
+    required int id,
+    required SuchiClient client,
+    required JdCategoryStore categories,
+    required AccountIdentity identity,
+  }) => MaterialPageRoute(
+    settings: RouteSettings(name: '/documents/$id'),
+    builder: (context) => DocumentDetailScreen(
+      key: ValueKey((identity, id)),
+      documentId: id,
+      client: client,
+      session: widget.services.session,
+      cache: widget.services.thumbnails,
+      categories: categories,
+      files: widget.services.documentFiles,
+      offlineDocuments: widget.services.offlineDocuments,
+      onChanged: _refreshArchive,
+    ),
+  );
+
+  void _clearDocumentDetail() {
+    _documentRouteSerial++;
+    _documentNavigatorKey.currentState?.popUntil((route) => route.isFirst);
+    _documentOpen = false;
   }
 
   Future<void> _openOfflineDocument(OfflineDocument entry) async {
@@ -394,9 +460,9 @@ class _SuchiShellState extends State<SuchiShell> {
           queue: widget.services.queue,
         ),
       ];
-      return Scaffold(
-        body: IndexedStack(index: offlineSelected, children: screens),
-        bottomNavigationBar: _queueDock(offlineOnly: true),
+      return _adaptiveShell(
+        master: IndexedStack(index: offlineSelected, children: screens),
+        offlineOnly: true,
       );
     }
     final startupIdentity = _currentIdentity;
@@ -451,9 +517,9 @@ class _SuchiShellState extends State<SuchiShell> {
         onOpenTrash: _openTrash,
       ),
     ];
-    return Scaffold(
-      body: IndexedStack(index: _selected, children: screens),
-      bottomNavigationBar: _queueDock(),
+    return _adaptiveShell(
+      master: IndexedStack(index: _selected, children: screens),
+      offlineOnly: false,
     );
   }
 
@@ -468,7 +534,197 @@ class _SuchiShellState extends State<SuchiShell> {
     onOpenDocument: _openDocument,
   );
 
-  Widget _queueDock({bool offlineOnly = false}) => ListenableBuilder(
+  Widget _adaptiveShell({required Widget master, required bool offlineOnly}) {
+    final environment = DisplayEnvironmentScope.of(context);
+    return PopScope<void>(
+      canPop: !_documentOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _documentOpen) {
+          unawaited(
+            _documentNavigatorKey.currentState?.maybePop() ??
+                Future<bool>.value(false),
+          );
+        }
+      },
+      child: Scaffold(
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final size = constraints.biggest;
+            final shellLayout = resolveSuchiShellLayout(
+              width: size.width,
+              verticalBarEdge: environment.verticalBarEdge,
+            );
+            final occlusionInsets = additionalOcclusionInsets(
+              occlusionInsetsFor(Offset.zero & size, environment.occlusions),
+              MediaQuery.paddingOf(context),
+            );
+            final documentWorkspace = _selected != 2 && _selected != 4;
+            Widget workspace(Offset origin) => _DocumentWorkspace(
+              key: _workspaceKey,
+              master: master,
+              detail: _documentNavigator(),
+              documentOpen: _documentOpen,
+              wide: shellLayout.isWide && documentWorkspace,
+              divisions: documentWorkspace
+                  ? environment.divisions
+                        .map((division) => division.shift(-origin))
+                        .toList(growable: false)
+                  : const <Rect>[],
+            );
+            Widget insetWorkspace(Offset origin, EdgeInsets padding) => Padding(
+              padding: padding,
+              child: workspace(origin + Offset(padding.left, padding.top)),
+            );
+
+            if (!shellLayout.isWide && _documentOpen) {
+              return insetWorkspace(Offset.zero, occlusionInsets);
+            }
+            if (shellLayout.mode == SuchiChromeMode.bottomDock) {
+              return Column(
+                children: [
+                  Expanded(
+                    child: insetWorkspace(
+                      Offset.zero,
+                      EdgeInsets.fromLTRB(
+                        occlusionInsets.left,
+                        occlusionInsets.top,
+                        occlusionInsets.right,
+                        0,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: occlusionInsets.left,
+                      right: occlusionInsets.right,
+                      bottom: occlusionInsets.bottom,
+                    ),
+                    child: _queueDock(offlineOnly: offlineOnly),
+                  ),
+                ],
+              );
+            }
+
+            final edgeInset = shellLayout.edge == SuchiHorizontalEdge.leading
+                ? occlusionInsets.left
+                : occlusionInsets.right;
+            final workspaceOrigin =
+                shellLayout.edge == SuchiHorizontalEdge.leading
+                ? Offset(kSuchiRailWidth + edgeInset, 0)
+                : Offset.zero;
+            final rail = Padding(
+              padding: EdgeInsets.only(
+                left: shellLayout.edge == SuchiHorizontalEdge.leading
+                    ? edgeInset
+                    : 0,
+                top: occlusionInsets.top,
+                right: shellLayout.edge == SuchiHorizontalEdge.trailing
+                    ? edgeInset
+                    : 0,
+                bottom: occlusionInsets.bottom,
+              ),
+              child: _queueRail(
+                offlineOnly: offlineOnly,
+                compact: shellLayout.mode == SuchiChromeMode.sideDock,
+              ),
+            );
+            final contentLeft = shellLayout.edge == SuchiHorizontalEdge.trailing
+                ? occlusionInsets.left
+                : 0.0;
+            final contentRight = shellLayout.edge == SuchiHorizontalEdge.leading
+                ? occlusionInsets.right
+                : 0.0;
+            final content = Expanded(
+              child: Column(
+                children: [
+                  Expanded(
+                    child: insetWorkspace(
+                      workspaceOrigin,
+                      EdgeInsets.fromLTRB(
+                        contentLeft,
+                        occlusionInsets.top,
+                        contentRight,
+                        0,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: contentLeft,
+                      right: contentRight,
+                      bottom: occlusionInsets.bottom,
+                    ),
+                    child: _queueActivity(),
+                  ),
+                ],
+              ),
+            );
+            return Row(
+              children: shellLayout.edge == SuchiHorizontalEdge.leading
+                  ? [rail, content]
+                  : [content, rail],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _documentNavigator() => Navigator(
+    key: _documentNavigatorKey,
+    onGenerateInitialRoutes: (_, _) => [
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/documents'),
+        builder: (_) => const _EmptyDocumentPane(),
+      ),
+    ],
+  );
+
+  Widget _queueDock({bool offlineOnly = false}) =>
+      _queueChromeBuilder((context, rows, pending, identity) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _activityBar(rows, identity),
+            _SuchiDock(
+              selected: _selected,
+              pendingCount: pending,
+              onSelected: _select,
+              captureMode: widget.services.settings.captureMode,
+              onChooseCaptureMode: _chooseCaptureMode,
+              offlineOnly: offlineOnly,
+            ),
+          ],
+        );
+      });
+
+  Widget _queueActivity() => _queueChromeBuilder((context, rows, _, identity) {
+    return _activityBar(rows, identity);
+  });
+
+  Widget _queueRail({required bool offlineOnly, required bool compact}) =>
+      _queueChromeBuilder((context, _, pending, _) {
+        return _SuchiRail(
+          selected: _selected,
+          pendingCount: pending,
+          onSelected: _select,
+          captureMode: widget.services.settings.captureMode,
+          onChooseCaptureMode: _chooseCaptureMode,
+          offlineOnly: offlineOnly,
+          compact: compact,
+        );
+      });
+
+  Widget _queueChromeBuilder(
+    Widget Function(
+      BuildContext context,
+      List<ScanUpload> rows,
+      int pending,
+      AccountIdentity? identity,
+    )
+    builder,
+  ) => ListenableBuilder(
     listenable: Listenable.merge([
       _queueRows,
       _queueUnavailable,
@@ -484,33 +740,122 @@ class _SuchiShellState extends State<SuchiShell> {
       final pending = rows
           .where((item) => item.state != 'filed' && item.state != 'duplicate')
           .length;
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ActivityBar(
-            // Replace the animation subtree immediately on account change.
-            key: ValueKey(identity),
-            rows: rows,
-            identity: identity,
-            offlineDocuments: widget.services.offlineDocuments,
-            importer: widget.services.shareImport,
-            uploadsEnabled: widget.services.uploads.isActive,
-            unavailable: _queueUnavailable.value,
-            onView: _openQueue,
-          ),
-          _SuchiDock(
-            selected: _selected,
-            pendingCount: pending,
-            onSelected: _select,
-            captureMode: widget.services.settings.captureMode,
-            onChooseCaptureMode: _chooseCaptureMode,
-            offlineOnly: offlineOnly,
-          ),
-        ],
+      return builder(context, rows, pending, identity);
+    },
+  );
+
+  Widget _activityBar(List<ScanUpload> rows, AccountIdentity? identity) =>
+      _ActivityBar(
+        // Replace the animation subtree immediately on account change.
+        key: ValueKey(identity),
+        rows: rows,
+        identity: identity,
+        offlineDocuments: widget.services.offlineDocuments,
+        importer: widget.services.shareImport,
+        uploadsEnabled: widget.services.uploads.isActive,
+        unavailable: _queueUnavailable.value,
+        onView: _openQueue,
+      );
+}
+
+class _DocumentWorkspace extends StatelessWidget {
+  const _DocumentWorkspace({
+    required this.master,
+    required this.detail,
+    required this.documentOpen,
+    required this.wide,
+    required this.divisions,
+    super.key,
+  });
+
+  final Widget master;
+  final Widget detail;
+  final bool documentOpen;
+  final bool wide;
+  final List<Rect> divisions;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final bounds = Offset.zero & constraints.biggest;
+      final layout = resolveSuchiWorkspaceLayout(
+        bounds: bounds,
+        wide: wide,
+        divisions: divisions,
+      );
+      final colors = SuchiColors.of(context);
+      final split = layout.isSplit;
+      final masterRect = split ? layout.master : bounds;
+      final detailRect = split ? layout.detail : bounds;
+      final detailBorder = split && layout.division == null
+          ? Border(
+              left: layout.axis == SuchiWorkspaceAxis.horizontal
+                  ? BorderSide(color: colors.line)
+                  : BorderSide.none,
+              top: layout.axis == SuchiWorkspaceAxis.vertical
+                  ? BorderSide(color: colors.line)
+                  : BorderSide.none,
+            )
+          : null;
+      return ColoredBox(
+        color: colors.paper,
+        child: Stack(
+          children: [
+            Positioned.fromRect(
+              rect: masterRect,
+              child: Offstage(offstage: !split && documentOpen, child: master),
+            ),
+            Positioned.fromRect(
+              rect: detailRect,
+              child: Offstage(
+                offstage: !split && !documentOpen,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(border: detailBorder),
+                  child: detail,
+                ),
+              ),
+            ),
+          ],
+        ),
       );
     },
   );
+}
+
+class _EmptyDocumentPane extends StatelessWidget {
+  const _EmptyDocumentPane();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = SuchiColors.of(context);
+    return ColoredBox(
+      color: colors.paper,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.description_outlined, size: 40, color: colors.muted),
+              const SizedBox(height: 12),
+              Text(
+                'Select a document',
+                style: Theme.of(context).textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Its preview and details will stay beside the list.',
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: colors.muted),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _Activity {
@@ -940,6 +1285,74 @@ class _ActivityBar extends StatelessWidget {
       curve: Curves.easeOutCubic,
       alignment: Alignment.topCenter,
       child: child,
+    );
+  }
+}
+
+class _SuchiRail extends StatelessWidget {
+  const _SuchiRail({
+    required this.selected,
+    required this.pendingCount,
+    required this.onSelected,
+    required this.captureMode,
+    required this.onChooseCaptureMode,
+    required this.offlineOnly,
+    required this.compact,
+  });
+
+  final int selected;
+  final int pendingCount;
+  final ValueChanged<int> onSelected;
+  final CaptureMode captureMode;
+  final ValueChanged<Rect> onChooseCaptureMode;
+  final bool offlineOnly;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = SuchiColors.of(context);
+    Widget item(String label, IconData icon, int index) => SizedBox(
+      width: kSuchiRailWidth,
+      height: 64,
+      child: _DockItem(
+        label: label,
+        icon: icon,
+        selected: selected == index,
+        onTap: () => onSelected(index),
+      ),
+    );
+    return ColoredBox(
+      key: ValueKey(compact ? 'suchi-side-dock' : 'suchi-rail'),
+      color: colors.surface,
+      child: SizedBox(
+        width: kSuchiRailWidth,
+        child: SafeArea(
+          left: false,
+          right: false,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (!offlineOnly) item('Inbox', Icons.inbox_outlined, 0),
+              item('Documents', Icons.folder_outlined, offlineOnly ? 0 : 1),
+              SizedBox(
+                width: kSuchiRailWidth,
+                height: 88,
+                child: Center(
+                  child: ScanDockButton(
+                    selected: selected == 2,
+                    pendingCount: pendingCount,
+                    onTap: () => onSelected(2),
+                    mode: captureMode,
+                    onLongPress: onChooseCaptureMode,
+                  ),
+                ),
+              ),
+              if (!offlineOnly) item('Search', Icons.search, 3),
+              item('More', Icons.more_horiz, 4),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

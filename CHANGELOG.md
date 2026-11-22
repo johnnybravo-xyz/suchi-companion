@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The iOS app now supports both iPhone and iPad, with adaptive navigation,
+  readable content widths, bounded sheets and stable master/detail state.
+- iPhone Duo layouts now consume iOS 27.1+ reserved regions and system edge
+  placement, keeping document panes and controls outside display divisions and
+  occlusions.
+
 ## 0.3.0 (2026-11-20)
 
 - Queued documents now upload through OS-managed background work on Android

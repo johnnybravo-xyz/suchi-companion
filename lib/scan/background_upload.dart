@@ -17,8 +17,8 @@ import 'upload_coordinator.dart';
 const backgroundUploadTaskName = 'suchi.background-upload';
 const backgroundUploadProcessingTask =
     'page.suchi.companion.background-upload.processing';
-const backgroundUploadContinuedTask =
-    'page.suchi.companion.background-upload.continued.*';
+const backgroundUploadContinuedTaskPrefix =
+    'page.suchi.companion.background-upload.continued';
 
 const _androidUploadWork = 'suchi-background-upload';
 const _androidUploadTag = 'suchi-background-upload';
@@ -41,7 +41,7 @@ abstract interface class BackgroundUploadTaskGateway {
 
   Future<void> scheduleIosProcessing({required Duration delay});
 
-  Future<void> scheduleIosContinued();
+  Future<void> scheduleIosContinued({required String taskId});
 
   Future<void> cancelUploadTasks();
 }
@@ -77,9 +77,9 @@ final class WorkmanagerBackgroundUploadTaskGateway
       );
 
   @override
-  Future<void> scheduleIosContinued() =>
+  Future<void> scheduleIosContinued({required String taskId}) =>
       Workmanager().registerContinuedProcessingTask(
-        backgroundUploadContinuedTask,
+        taskId,
         backgroundUploadTaskName,
         title: 'Uploading to Suchi',
         subtitle: 'Sending queued documents',
@@ -89,7 +89,6 @@ final class WorkmanagerBackgroundUploadTaskGateway
   Future<void> cancelUploadTasks() async {
     await Workmanager().cancelByUniqueName(_androidUploadWork);
     await Workmanager().cancelByUniqueName(backgroundUploadProcessingTask);
-    await Workmanager().cancelByUniqueName(backgroundUploadContinuedTask);
   }
 }
 
@@ -138,13 +137,21 @@ final class BackgroundUploadScheduler implements BackgroundUploadScheduling {
   Future<void> _tail = Future<void>.value();
   bool _backgrounded = false;
   bool _closed = false;
+  final Set<String> _continuedTaskIds = {};
 
   @override
   Future<void> start() async {
     if (_closed || _queueSubscription != null) return;
     _queueSubscription = _queue.watchUploads().listen((uploads) {
-      if (_backgrounded && _identity != null) {
-        _enqueue(() => _schedulePending(uploads, allowContinued: false));
+      if (_identity != null &&
+          (_backgrounded || _platform == BackgroundUploadPlatform.ios)) {
+        _enqueue(
+          () => _schedulePending(
+            uploads,
+            allowContinued:
+                !_backgrounded && _platform == BackgroundUploadPlatform.ios,
+          ),
+        );
       }
     });
   }
@@ -161,6 +168,7 @@ final class BackgroundUploadScheduler implements BackgroundUploadScheduling {
 
   @override
   Future<void> pause() => _serialize(() async {
+    _continuedTaskIds.clear();
     _identity = null;
     _backgrounded = false;
     await _queue.database.deleteSetting(_uploadPermitKey);
@@ -170,8 +178,11 @@ final class BackgroundUploadScheduler implements BackgroundUploadScheduling {
   @override
   Future<void> onBackgrounded() => _serialize(() async {
     if (_closed || _identity == null) return;
+    await _schedulePending(
+      await _queue.allUploads(),
+      allowContinued: _platform == BackgroundUploadPlatform.ios,
+    );
     _backgrounded = true;
-    await _schedulePending(await _queue.allUploads(), allowContinued: true);
   });
 
   @override
@@ -195,24 +206,42 @@ final class BackgroundUploadScheduler implements BackgroundUploadScheduling {
     final identity = _identity;
     if (identity == null) return;
     final pending = pendingBackgroundUploads(uploads, identity);
+    final uploading = uploads.any(
+      (upload) =>
+          upload.state == 'uploading' &&
+          queueUploadBelongsToIdentity(upload, identity),
+    );
     if (pending.isEmpty) {
-      if (!uploads.any(
-        (upload) =>
-            upload.state == 'uploading' &&
-            queueUploadBelongsToIdentity(upload, identity),
-      )) {
+      if (!uploading) {
+        _continuedTaskIds.clear();
         await _gateway.cancelUploadTasks();
       }
       return;
     }
-    final delay = backgroundUploadDelay(pending, now: _now());
+    final now = _now();
+    final delay = backgroundUploadDelay(pending, now: now);
     switch (_platform) {
       case BackgroundUploadPlatform.android:
         await _gateway.scheduleAndroid(delay: delay);
       case BackgroundUploadPlatform.ios:
         await _gateway.scheduleIosProcessing(delay: delay);
-        if (allowContinued && delay == Duration.zero) {
-          await _gateway.scheduleIosContinued();
+        if (allowContinued) {
+          final nowMs = now.millisecondsSinceEpoch;
+          for (final upload in pending) {
+            final due = upload.nextAttemptAtMs;
+            if (upload.state != 'queued' || due != null && due > nowMs) {
+              continue;
+            }
+            final taskId = backgroundUploadContinuedTaskIdentifier(upload.id);
+            if (!_continuedTaskIds.add(taskId)) break;
+            try {
+              await _gateway.scheduleIosContinued(taskId: taskId);
+            } catch (_) {
+              _continuedTaskIds.remove(taskId);
+              rethrow;
+            }
+            break;
+          }
         }
       case BackgroundUploadPlatform.unsupported:
         return;
@@ -286,12 +315,18 @@ Duration backgroundUploadDelay(
   return Duration(milliseconds: earliest - nowMs);
 }
 
+String backgroundUploadContinuedTaskIdentifier(String uploadId) =>
+    '$backgroundUploadContinuedTaskPrefix.$uploadId';
+
+bool isBackgroundUploadTask(String task) =>
+    task == backgroundUploadTaskName ||
+    task == backgroundUploadProcessingTask ||
+    task.startsWith('$backgroundUploadContinuedTaskPrefix.');
+
 @pragma('vm:entry-point')
 void backgroundUploadCallbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
-    if (task != backgroundUploadTaskName &&
-        task != backgroundUploadProcessingTask &&
-        task != backgroundUploadContinuedTask) {
+    if (!isBackgroundUploadTask(task)) {
       return true;
     }
     final platform = currentBackgroundUploadPlatform;
@@ -300,7 +335,11 @@ void backgroundUploadCallbackDispatcher() {
       return await BackgroundUploadRunner(
         gateway: gateway,
         platform: platform,
-      ).run();
+      ).run(
+        waitForForegroundTransfer: task.startsWith(
+          '$backgroundUploadContinuedTaskPrefix.',
+        ),
+      );
     } catch (_) {
       try {
         await _scheduleRetry(gateway, platform);
@@ -347,7 +386,7 @@ final class BackgroundUploadRunner {
   final SuchiClient Function(Uri origin, String? token) _clientFactory;
   final DateTime Function() _now;
 
-  Future<bool> run() async {
+  Future<bool> run({bool waitForForegroundTransfer = false}) async {
     ScanQueueStore? queue;
     SuchiClient? probe;
     SuchiClient? client;
@@ -368,12 +407,13 @@ final class BackgroundUploadRunner {
       if (await queue.database.setting(_uploadPermitKey) != permit) return true;
       final uploads = await queue.allUploads();
       final before = pendingBackgroundUploads(uploads, storedIdentity);
-      if (before.isEmpty) {
-        if (uploads.any(
-          (upload) =>
-              upload.state == 'uploading' &&
-              queueUploadBelongsToIdentity(upload, storedIdentity),
-        )) {
+      final uploading = uploads.any(
+        (upload) =>
+            upload.state == 'uploading' &&
+            queueUploadBelongsToIdentity(upload, storedIdentity),
+      );
+      if (before.isEmpty && (!waitForForegroundTransfer || !uploading)) {
+        if (uploading) {
           await _scheduleRetry(_gateway, _platform);
         }
         return true;
@@ -418,6 +458,18 @@ final class BackgroundUploadRunner {
             .whenComplete(() => checkingPermit = false);
       });
       await coordinator.resume();
+      if (waitForForegroundTransfer) {
+        while (await _hasDueOrUploadingTransfer(
+          queue,
+          storedIdentity,
+          now: _now(),
+        )) {
+          if (await queue.database.setting(_uploadPermitKey) != permit) break;
+          await Future<void>.delayed(_permitPollInterval);
+          if (await queue.database.setting(_uploadPermitKey) != permit) break;
+          await coordinator.processNow();
+        }
+      }
       await coordinator.pause();
 
       final remaining = pendingBackgroundUploads(
@@ -443,6 +495,24 @@ final class BackgroundUploadRunner {
       await queue?.close();
     }
   }
+}
+
+Future<bool> _hasDueOrUploadingTransfer(
+  ScanQueueStore queue,
+  AccountIdentity identity, {
+  required DateTime now,
+}) async {
+  final nowMs = now.millisecondsSinceEpoch;
+  for (final upload in await queue.allUploads()) {
+    if (!queueUploadBelongsToIdentity(upload, identity)) continue;
+    if (upload.state == 'uploading') return true;
+    if (upload.state == 'queued' &&
+        upload.lastErrorCode != 'unauthorized' &&
+        (upload.nextAttemptAtMs == null || upload.nextAttemptAtMs! <= nowMs)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 final class _TaskNetworkMonitor implements NetworkMonitor {

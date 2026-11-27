@@ -145,13 +145,16 @@ them. Successful history and deduplication receipts are limited to the newest
 20 and 30 days. The shell observes account-scoped completion transitions to
 refresh archive lists without treating historical results as new activity.
 
-When the app leaves the foreground, Android WorkManager or iOS background
-processing starts a headless Dart isolate that reuses `UploadCoordinator`.
-The worker performs an anonymous handshake before sending credentials, verifies
-identity, then uploads only rows matching the verified stored account. A
-durable permit stops work on identity transitions, and a SQLite lease prevents
-the foreground and background isolates from processing the queue concurrently.
-iOS scheduling remains system-controlled; interrupted work stays queued.
+Android schedules WorkManager after the app backgrounds. On iOS, a queued
+user-started transfer submits a concrete continued-processing request while the
+app is still foregrounded; the lifecycle waits for that submission before
+pausing the foreground coordinator. iOS background processing remains the
+system-controlled retry fallback. Both paths start a headless Dart isolate that
+reuses `UploadCoordinator`, performs an anonymous handshake before sending
+credentials, verifies identity, and processes only rows matching the verified
+stored account. A durable permit stops work on identity transitions, and a
+SQLite lease prevents foreground and background isolates from processing the
+queue concurrently. Interrupted work stays queued.
 
 ## Archive and document state
 

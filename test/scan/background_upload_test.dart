@@ -72,6 +72,34 @@ void main() {
   });
 
   test(
+    'submits a concrete iOS continuation while the app is foregrounded',
+    () async {
+      final gateway = _FakeGateway();
+      final scheduler = BackgroundUploadScheduler(
+        queue: queue,
+        gateway: gateway,
+        platform: BackgroundUploadPlatform.ios,
+        now: () => DateTime.utc(2026, 11, 2, 12),
+      );
+      addTearDown(scheduler.close);
+
+      await scheduler.start();
+      await scheduler.resume(_identity);
+      final staged = await _stage(queue, temporary, _identity);
+      await Future<void>.delayed(Duration.zero);
+      await scheduler.onForegrounded();
+
+      final taskId = backgroundUploadContinuedTaskIdentifier(staged.id);
+      expect(gateway.iosContinuedTaskIds, [taskId]);
+      expect(taskId, isNot(endsWith('.*')));
+      expect(isBackgroundUploadTask(taskId), isTrue);
+
+      await scheduler.pause();
+      expect(gateway.cancellations, 1);
+    },
+  );
+
+  test(
     'headless worker refuses a queue after account work is paused',
     () async {
       final staged = await _stage(queue, temporary, _identity);
@@ -123,46 +151,7 @@ void main() {
       await scheduler.close();
 
       final requests = <http.Request>[];
-      final transport = MockClient((request) async {
-        requests.add(request);
-        if (request.url.path == '/api/handshake') {
-          expect(request.headers['Authorization'], isNull);
-          return http.Response(
-            jsonEncode({
-              'product': 'suchi',
-              'mobile_contracts': ['suchi-companion-v1'],
-            }),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        if (request.url.path == '/api/whoami') {
-          return http.Response(
-            jsonEncode(_user.toJson()),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        if (request.method == 'POST' && request.url.path == '/api/documents/') {
-          return http.Response(
-            jsonEncode({
-              'id': 93,
-              'sha256': staged.sha256,
-              'size': staged.byteSize,
-              'mime_type': staged.mimeType,
-              'title': 'Document',
-              'restored': false,
-              'deduplicated': false,
-            }),
-            201,
-            headers: {
-              'content-type': 'application/json',
-              'location': '/api/documents/93',
-            },
-          );
-        }
-        return http.Response('{}', 404);
-      });
+      final transport = _uploadTransport(staged, requests);
 
       final result = await BackgroundUploadRunner(
         gateway: gateway,
@@ -189,6 +178,63 @@ void main() {
       expect(gateway.androidDelays.last, const Duration(seconds: 2));
     },
   );
+
+  test(
+    'continued worker waits for the foreground lease before taking over',
+    () async {
+      final staged = await _stage(queue, temporary, _identity);
+      final gateway = _FakeGateway();
+      final scheduler = BackgroundUploadScheduler(
+        queue: queue,
+        gateway: gateway,
+        platform: BackgroundUploadPlatform.ios,
+      );
+      await scheduler.resume(_identity);
+      await scheduler.close();
+
+      final now = DateTime.utc(2026, 11, 2, 12);
+      expect(
+        await database.tryAcquireUploadLease(
+          owner: 'foreground',
+          nowMs: now.millisecondsSinceEpoch,
+          expiresAtMs: now
+              .add(const Duration(minutes: 5))
+              .millisecondsSinceEpoch,
+        ),
+        isTrue,
+      );
+
+      final requests = <http.Request>[];
+      final transport = _uploadTransport(staged, requests);
+      final run = BackgroundUploadRunner(
+        gateway: gateway,
+        platform: BackgroundUploadPlatform.ios,
+        vault: _MemoryVault(
+          StoredCredentials(
+            origin: _origin,
+            token: _token,
+            userSnapshot: _user,
+          ),
+        ),
+        openQueue: () async => queue,
+        clientFactory: (origin, token) =>
+            SuchiClient(origin: origin, token: token, httpClient: transport),
+        now: () => now,
+      ).run(waitForForegroundTransfer: true);
+
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      expect(requests.where((request) => request.method == 'POST'), isEmpty);
+      await database.releaseUploadLease('foreground');
+      final result = await run;
+
+      expect(result, isTrue);
+      expect(
+        requests.map((request) => '${request.method} ${request.url.path}'),
+        ['GET /api/handshake', 'GET /api/whoami', 'POST /api/documents/'],
+      );
+      expect((await database.uploadById(staged.id))?.state, 'processingServer');
+    },
+  );
 }
 
 const _user = UserSelf(
@@ -206,6 +252,48 @@ const _user = UserSelf(
   capabilities: [],
   scopes: ['documents:read', 'documents:write'],
 );
+
+MockClient _uploadTransport(ScanUpload staged, List<http.Request> requests) =>
+    MockClient((request) async {
+      requests.add(request);
+      if (request.url.path == '/api/handshake') {
+        expect(request.headers['Authorization'], isNull);
+        return http.Response(
+          jsonEncode({
+            'product': 'suchi',
+            'mobile_contracts': ['suchi-companion-v1'],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      if (request.url.path == '/api/whoami') {
+        return http.Response(
+          jsonEncode(_user.toJson()),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      if (request.method == 'POST' && request.url.path == '/api/documents/') {
+        return http.Response(
+          jsonEncode({
+            'id': 93,
+            'sha256': staged.sha256,
+            'size': staged.byteSize,
+            'mime_type': staged.mimeType,
+            'title': 'Document',
+            'restored': false,
+            'deduplicated': false,
+          }),
+          201,
+          headers: {
+            'content-type': 'application/json',
+            'location': '/api/documents/93',
+          },
+        );
+      }
+      return http.Response('{}', 404);
+    });
 
 Future<ScanUpload> _stage(
   ScanQueueStore queue,
@@ -234,7 +322,7 @@ Future<ScanUpload> _stage(
 final class _FakeGateway implements BackgroundUploadTaskGateway {
   final androidDelays = <Duration>[];
   final iosProcessingDelays = <Duration>[];
-  var continued = 0;
+  final iosContinuedTaskIds = <String>[];
   var cancellations = 0;
 
   @override
@@ -251,8 +339,8 @@ final class _FakeGateway implements BackgroundUploadTaskGateway {
   }
 
   @override
-  Future<void> scheduleIosContinued() async {
-    continued++;
+  Future<void> scheduleIosContinued({required String taskId}) async {
+    iosContinuedTaskIds.add(taskId);
   }
 
   @override

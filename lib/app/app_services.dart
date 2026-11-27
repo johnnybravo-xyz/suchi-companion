@@ -146,8 +146,8 @@ final class AppServices {
 
   Future<void> onAppConcealed() => _enqueueLifecycle(() async {
     thumbnails.clear();
-    await uploads.pause();
     await backgroundUploads.onBackgrounded();
+    await uploads.pause();
   });
 
   Future<void> onAppResumed() => _enqueueLifecycle(() async {

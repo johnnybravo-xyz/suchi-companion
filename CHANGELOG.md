@@ -7,6 +7,9 @@
 - iPhone Duo layouts now consume iOS 27.1+ reserved regions and system edge
   placement, keeping document panes and controls outside display divisions and
   occlusions.
+- User-started iOS uploads now submit a concrete continued-processing task
+  before foreground work pauses, allowing transfer to continue without reopening
+  when iOS grants background execution.
 
 ## 0.3.0 (2026-11-20)
 

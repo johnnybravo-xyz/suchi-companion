@@ -667,7 +667,7 @@ class _CaptureHero extends StatelessWidget {
         'The captured pages are becoming one PDF.',
       ScanCaptureState.staging =>
         'Files and checksums are being committed to the durable queue.',
-      ScanCaptureState.complete => capture.warningMessage ?? 'Saved to the queue. Uploads resume while Suchi Companion is open and the server is reachable.',
+      ScanCaptureState.complete => capture.warningMessage ?? 'Saved safely. Upload continues in the background when the system allows and resumes when you return.',
       ScanCaptureState.failed =>
         capture.errorMessage ?? 'The scan could not be prepared.',
       ScanCaptureState.idle =>

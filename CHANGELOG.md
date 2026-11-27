@@ -10,6 +10,7 @@
 - User-started iOS uploads now submit a concrete continued-processing task
   before foreground work pauses, allowing transfer to continue without reopening
   when iOS grants background execution.
+- Mobile contract fixtures are verified against and pinned to Suchi v0.6.0.
 
 ## 0.3.0 (2026-11-20)
 
